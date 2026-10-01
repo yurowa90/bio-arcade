@@ -1,6 +1,9 @@
 /* 에너지 런 — 쿠키런 오마주. 달리는 주인공은 온몸을 도는 혈액(적혈구 “혈구”)이다.
- * 규칙 = 세포 호흡: 포도당 1 + 산소 1 → 에너지 +10, 이산화 탄소 +1 (자동)
- * 소장 구간: 영양소 흡수 · 폐 구간: 산소 얻고 이산화 탄소 내보냄 · 콩팥 구간: 요소 걸러 냄 · 근육 구간: 에너지를 많이 씀
+ * 소장 구간: 포도당·아미노산을 받는다 · 폐 구간: 산소를 받고 이산화 탄소를 내보낸다
+ * 근육·콩팥 구간: 세포에 닿으면 영양소 1 + 산소 1을 전해 준다 → 세포가 세포 호흡으로 에너지를 얻고
+ *   혈액에 이산화 탄소 +1을 내놓는다(아미노산을 썼으면 요소도 +1) · 콩팥 구간: 혈액의 요소를 걸러 낸다
+ * 아이템은 구간마다 정해진 묶음(DECK)의 순서만 섞어 내보낸다. 판마다 공급량이 같아서
+ * 다 받고 세포마다 다 전해 주면 운과 상관없이 완주한다.
  */
 (function () {
   const A = window.Arcade;
@@ -9,54 +12,84 @@
   const W = cv.width, H = cv.height, GROUND = H - 60;
   const DURATION = 60;
   const ZONES = [
-    { id: 'gut', name: '소장', desc: '소장의 융털 모세 혈관: 포도당·아미노산을 흡수한다', bg: '#f6d6c9', deco: '#e8a88f', drain: 5 },
-    { id: 'lung', name: '폐', desc: '폐포의 모세 혈관: 산소를 받고 이산화 탄소를 내보낸다', bg: '#dcecf7', deco: '#a9cbe6', drain: 5 },
-    { id: 'muscle', name: '근육', desc: '근육 세포: 에너지를 많이 쓴다. 장애물 조심!', bg: '#f2c6c6', deco: '#d98c8c', drain: 8 },
-    { id: 'kidney', name: '콩팥', desc: '콩팥의 사구체: 요소 같은 노폐물을 걸러 오줌으로 내보낸다', bg: '#e6d2e8', deco: '#c29bc7', drain: 5 },
+    { id: 'gut', name: '소장', desc: '소장의 융털 모세 혈관: 포도당·아미노산을 흡수한다', bg: '#f6d6c9', deco: '#e8a88f', drain: 4 },
+    { id: 'lung', name: '폐', desc: '폐포의 모세 혈관: 산소를 받고 이산화 탄소를 내보낸다', bg: '#dcecf7', deco: '#a9cbe6', drain: 4 },
+    { id: 'muscle', name: '근육', desc: '근육: 세포에 산소·영양소를 주고 이산화 탄소를 받는다', bg: '#f2c6c6', deco: '#d98c8c', drain: 7 },
+    { id: 'kidney', name: '콩팥', desc: '콩팥: 혈액의 요소를 걸러 낸다. 세포에 산소·영양소도 준다', bg: '#e6d2e8', deco: '#c29bc7', drain: 4 },
   ];
   const ZONE_LEN = 6; // 초
+  // 구간 하나(6초) 동안 나오는 아이템 묶음. 근육·콩팥에서는 산소·영양소를 받지 않고 세포에 전해 준다.
+  const DECK = {
+    gut: ['glu', 'glu', 'glu', 'glu', 'glu', 'glu', 'amino', 'amino', 'wall'],
+    lung: ['o2', 'o2', 'o2', 'o2', 'o2', 'o2', 'o2', 'wall', 'wall'],
+    muscle: ['cell', 'cell', 'cell', 'cell', 'wall', 'wall', 'wall', 'wall'],
+    kidney: ['cell', 'cell', 'cell', 'wall', 'wall', 'wall'],
+  };
+  const PX = 110, BASE_SPEED = 230;            // 주인공의 x 위치, 기본 달리기 속도(px/초)
+  const LEAD = (W + 30 - PX) / BASE_SPEED;     // 아이템이 오른쪽 끝에서 주인공까지 오는 시간
+  const HEIGHTS = [GROUND - 20, GROUND - 95, GROUND - 165];
+  const E_MAX = 100, GAIN = 25, CARRY = 10;    // 세포 에너지 상한, 세포 하나에 전해 줄 때 얻는 에너지, 혈액이 실을 수 있는 양
+  const zoneAt = t => ZONES[Math.floor(t / ZONE_LEN) % ZONES.length];
+  let CELLS = 0; // 한 판(60초)에 나오는 세포 수
+  for (let k = 0; k * ZONE_LEN < DURATION; k++) CELLS += DECK[ZONES[k % ZONES.length].id].filter(x => x === 'cell').length;
+  const STAR2 = CELLS - 3, STAR3 = CELLS - 1; // 세포 14개 기준 11개·13개
   let S, running = false, last = 0;
 
-  function reset() {
-    S = { t: 0, x: 0, y: GROUND, vy: 0, jumps: 0, E: 70, N: 3, O: 3, C: 0, U: 0, made: 0, items: [], nextSpawn: 0.6, hurt: 0,
-      stats: { glucose: 0, protein: 0, o2: 0, hits: 0, noO2: 0, wasteSlow: 0, exhaled: 0, filtered: 0 }, respT: 0, warned: {} };
+  function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  // 한 판의 아이템 일정: 구간마다 묶음을 섞어 고르게 배치한다. at = 주인공에게 닿는 시각
+  function makeQueue() {
+    const q = [];
+    for (let k = 0; k * ZONE_LEN < DURATION; k++) {
+      const z = ZONES[k % ZONES.length], deck = shuffle(DECK[z.id].slice());
+      const t0 = k * ZONE_LEN + (k ? 0.4 : 1.0), gap = ((k + 1) * ZONE_LEN - 0.4 - t0) / (deck.length - 1);
+      deck.forEach((kind, i) => q.push({ at: t0 + i * gap + (Math.random() - 0.5) * 0.1, k: kind, z: z.id,
+        y: kind === 'wall' ? GROUND : HEIGHTS[Math.floor(Math.random() * 3)] }));
+    }
+    return q;
   }
-  const zoneAt = t => ZONES[Math.floor(t / ZONE_LEN) % ZONES.length];
+  function reset() {
+    S = { t: 0, x: 0, y: GROUND, vy: 0, jumps: 0, E: E_MAX, nut: ['glu', 'glu', 'glu'], O: 3, C: 0, U: 0, made: 0, items: [], queue: makeQueue(), hurt: 0,
+      stats: { glucose: 0, amino: 0, o2: 0, hits: 0, cellsMet: 0, cellsNoO2: 0, cellsNoNut: 0, cellsEmpty: 0, wasteSlow: 0, exhaled: 0, filtered: 0 }, warned: {} };
+    spawn();
+  }
   let toastT;
   function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 2200); }
+  function warnOnce(key, text) { if (!S.warned[key]) { S.warned[key] = true; toast(text); } }
 
+  // 일정에서 화면 오른쪽 끝에 들어올 때가 된 아이템을 꺼낸다
   function spawn() {
-    const z = zoneAt(S.t + 1.2); // 화면 오른쪽 끝은 약 1.2초 뒤의 구간
-    const r = Math.random();
-    const h = [GROUND - 20, GROUND - 95, GROUND - 165][Math.floor(Math.random() * 3)];
-    let item;
-    if (z.id === 'gut') item = r < 0.62 ? { k: 'glu', y: h } : r < 0.85 ? { k: 'pro', y: h } : { k: 'wall', y: GROUND };
-    else if (z.id === 'lung') item = r < 0.75 ? { k: 'o2', y: h } : { k: 'wall', y: GROUND };
-    else if (z.id === 'muscle') item = r < 0.45 ? { k: 'wall', y: GROUND } : r < 0.72 ? { k: 'glu', y: h } : { k: 'o2', y: h };
-    else item = r < 0.3 ? { k: 'wall', y: GROUND } : { k: r < 0.65 ? 'o2' : 'glu', y: h };
-    item.x = W + 30;
-    S.items.push(item);
+    while (S.queue.length && S.queue[0].at - LEAD <= S.t) {
+      const it = S.queue.shift();
+      it.x = PX + BASE_SPEED * (it.at - S.t);
+      S.items.push(it);
+    }
   }
   function speed() { return (S.C >= 8 || S.U >= 8) ? 170 : 230; }
+
+  // 세포에 닿았을 때: 영양소 1 + 산소 1을 전해 주면 세포가 세포 호흡을 하고 노폐물을 혈액에 내놓는다
+  function deliver(it) {
+    S.stats.cellsMet++;
+    const hasN = S.nut.length > 0, hasO = S.O >= 1;
+    if (hasN && hasO) {
+      const n = S.nut.shift(); S.O--;
+      S.E = Math.min(E_MAX, S.E + GAIN); S.C = Math.min(10, S.C + 1); S.made++; it.fed = true;
+      if (n === 'amino') { S.U = Math.min(10, S.U + 1); warnOnce('amino', '세포가 아미노산을 쓰면 암모니아가 생기고, 간에서 요소로 바뀐다'); }
+      else warnOnce('fed', '세포에 전달! 세포가 세포 호흡으로 에너지를 얻고 이산화 탄소를 내놓았다');
+    }
+    else if (hasN) { S.stats.cellsNoO2++; warnOnce('o2', '산소가 없어 세포가 세포 호흡을 못 했다! 폐에서 산소를 받아 오자'); }
+    else if (hasO) { S.stats.cellsNoNut++; warnOnce('nut', '영양소가 없어 세포가 에너지를 못 얻었다! 소장에서 받아 오자'); }
+    else { S.stats.cellsEmpty++; warnOnce('empty', '세포에 전해 줄 산소도 영양소도 없다!'); }
+  }
 
   function update(dt) {
     const z = zoneAt(S.t);
     S.t += dt;
     const v = speed();
     S.x += v * dt;
-    // 대사: 가만히 있어도 에너지를 쓴다
+    // 대사: 세포는 가만히 있어도 에너지를 쓴다
     const wasteHeavy = S.C >= 8 || S.U >= 8;
     S.E -= (z.drain + (wasteHeavy ? 3 : 0)) * dt;
-    if (wasteHeavy) { S.stats.wasteSlow += dt; if (!S.warned.waste) { S.warned.waste = true; toast('노폐물이 쌓였다! 몸이 무거워진다 — 폐와 콩팥에서 내보내자'); } }
-    // 세포 호흡(자동)
-    S.respT += dt;
-    if (S.respT >= 0.4) {
-      S.respT = 0;
-      if (S.E < 95) {
-        if (S.N >= 1 && S.O >= 1) { S.N--; S.O--; S.E = Math.min(100, S.E + 10); S.C = Math.min(10, S.C + 1); S.made++; }
-        else if (S.N >= 1 && S.O < 1) { S.stats.noO2 += 0.4; if (!S.warned.o2) { S.warned.o2 = true; toast('영양소가 있어도 산소가 없으면 에너지를 만들 수 없다!'); } }
-      }
-    }
+    if (wasteHeavy) { S.stats.wasteSlow += dt; warnOnce('waste', '노폐물이 쌓였다! 몸이 무거워진다 — 폐와 콩팥에서 내보내자'); }
     // 폐: 이산화 탄소 배출, 콩팥: 요소 배설
     if (z.id === 'lung' && S.C > 0) { const d = Math.min(S.C, 2.5 * dt); S.C -= d; S.stats.exhaled += d; }
     if (z.id === 'kidney' && S.U > 0) { const d = Math.min(S.U, 2 * dt); S.U -= d; S.stats.filtered += d; }
@@ -65,27 +98,28 @@
     if (S.y >= GROUND) { S.y = GROUND; S.vy = 0; S.jumps = 0; }
     if (S.hurt > 0) S.hurt -= dt;
     // 아이템
-    S.nextSpawn -= dt;
-    if (S.nextSpawn <= 0) { spawn(); S.nextSpawn = 0.45 + Math.random() * 0.4; }
-    const px = 110;
+    spawn();
     for (const it of S.items) {
       it.x -= v * dt;
       if (it.got) continue;
+      if (it.k === 'cell' && it.x < PX - 26) { it.got = true; S.stats.cellsMet++; continue; } // 닿지 못하고 지나친 세포
       const hitY = it.k === 'wall' ? S.y > GROUND - 40 : Math.abs((S.y - 22) - it.y) < 34;
-      if (Math.abs(it.x - px) < 26 && hitY) {
-        it.got = true;
+      if (Math.abs(it.x - PX) < 26 && hitY) {
+        it.got = true; it.touched = true;
         if (it.k === 'wall') { if (S.hurt <= 0) { S.E -= 12; S.hurt = 0.8; S.stats.hits++; toast('쿵! 좁아진 혈관에 부딪혔다'); } }
-        else if (it.k === 'glu') { S.N = Math.min(10, S.N + 1); S.stats.glucose++; }
-        else if (it.k === 'pro') { S.N = Math.min(10, S.N + 1); S.U = Math.min(10, S.U + 1); S.stats.protein++; if (!S.warned.pro) { S.warned.pro = true; toast('단백질을 에너지로 쓰면 질소 노폐물(요소)이 생긴다'); } }
-        else if (it.k === 'o2') { S.O = Math.min(10, S.O + 1); S.stats.o2++; }
+        else if (it.k === 'cell') deliver(it);
+        else if (it.k === 'glu') { if (S.nut.length < CARRY) S.nut.push('glu'); S.stats.glucose++; }
+        else if (it.k === 'amino') { if (S.nut.length < CARRY) S.nut.push('amino'); S.stats.amino++; }
+        else if (it.k === 'o2') { S.O = Math.min(CARRY, S.O + 1); S.stats.o2++; }
       }
     }
-    S.items = S.items.filter(it => it.x > -40 && !(it.got && it.k !== 'wall'));
+    S.items = S.items.filter(it => it.x > -40 && !(it.got && it.k !== 'wall' && it.k !== 'cell'));
   }
 
-  function draw() {
-    const z = zoneAt(S.t);
-    ctx.fillStyle = z.bg; ctx.fillRect(0, 0, W, H);
+  // 구간 배경 하나를 x0~x1 사이에 그린다
+  function drawZone(z, x0, x1) {
+    ctx.save(); ctx.beginPath(); ctx.rect(x0, 0, x1 - x0, H); ctx.clip();
+    ctx.fillStyle = z.bg; ctx.fillRect(x0, 0, x1 - x0, H);
     // 배경 장식(구간마다 다른 무늬가 흘러간다)
     ctx.fillStyle = z.deco;
     const off = (S.x * 0.4) % 80;
@@ -96,13 +130,34 @@
       else if (z.id === 'muscle') { ctx.fillRect(bx, 20, 10, H - 100); ctx.fillRect(bx + 40, 20, 10, H - 100); }            // 근육 줄무늬
       else { ctx.beginPath(); ctx.arc(bx + 40, 50, 20, 0, Math.PI * 2); ctx.lineWidth = 8; ctx.strokeStyle = z.deco; ctx.stroke(); } // 사구체
     }
+    ctx.restore();
+  }
+  function drawCell(it) {
+    const muscle = it.z === 'muscle';
+    ctx.fillStyle = it.fed ? '#6aa84f' : it.touched ? '#9e9e9e' : muscle ? '#c0392b' : '#8e5ea2';
+    ctx.beginPath();
+    if (muscle) ctx.ellipse(it.x, it.y, 24, 14, 0, 0, Math.PI * 2); else ctx.arc(it.x, it.y, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(it.fed ? '✓' : it.touched ? '×' : '세포', it.x, it.y + 4);
+  }
+
+  function draw() {
+    const z = zoneAt(S.t), v = speed(), k = Math.floor(S.t / ZONE_LEN);
+    // 구간 경계도 아이템과 같은 속도로 흘러온다: 화면 오른쪽에는 곧 들어갈 구간이 보인다
+    for (let j = Math.max(0, k - 1); j <= k + 1; j++) {
+      const x0 = j === 0 ? 0 : PX + v * (j * ZONE_LEN - S.t), x1 = PX + v * ((j + 1) * ZONE_LEN - S.t);
+      if (x1 > 0 && x0 < W) drawZone(ZONES[j % ZONES.length], Math.max(0, x0), Math.min(W, x1));
+    }
     // 혈관 바닥
     ctx.fillStyle = '#b03a2e'; ctx.fillRect(0, GROUND + 18, W, H - GROUND - 18);
     ctx.fillStyle = '#8a2a21'; for (let i = 0; i < 12; i++) ctx.fillRect(((i * 60 - S.x) % 720 + 720) % 720 - 60, GROUND + 30, 30, 6);
     // 아이템
     for (const it of S.items) {
       if (it.k === 'wall') { ctx.fillStyle = '#f1c232'; ctx.beginPath(); ctx.moveTo(it.x - 22, GROUND + 18); ctx.quadraticCurveTo(it.x, GROUND - 40, it.x + 22, GROUND + 18); ctx.fill(); continue; }
-      const col = { glu: '#e0a412', pro: '#8e7cc3', o2: '#3d85c6' }[it.k], lab = { glu: '포', pro: '단', o2: 'O₂' }[it.k];
+      if (it.k === 'cell') { drawCell(it); continue; }
+      const col = { glu: '#e0a412', amino: '#8e7cc3', o2: '#3d85c6' }[it.k], lab = { glu: '포', amino: '아', o2: 'O₂' }[it.k];
       ctx.fillStyle = col;
       if (it.k === 'glu') { ctx.beginPath(); for (let k = 0; k < 6; k++) { const a = Math.PI / 3 * k; ctx.lineTo(it.x + 16 * Math.cos(a), it.y + 16 * Math.sin(a)); } ctx.fill(); }
       else if (it.k === 'o2') { ctx.beginPath(); ctx.arc(it.x, it.y, 15, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(it.x - 5, it.y - 5, 4, 0, Math.PI * 2); ctx.fill(); }
@@ -110,7 +165,7 @@
       ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(lab, it.x, it.y + 4);
     }
     // 주인공: 적혈구 “혈구”(가운데가 오목한 원반)
-    const px = 110, py = S.y - 22;
+    const px = PX, py = S.y - 22;
     ctx.globalAlpha = S.hurt > 0 && Math.floor(S.hurt * 10) % 2 ? 0.4 : 1;
     ctx.fillStyle = '#d7263d'; ctx.beginPath(); ctx.ellipse(px, py, 26, 22, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#a4161a'; ctx.beginPath(); ctx.ellipse(px, py, 12, 9, 0, 0, Math.PI * 2); ctx.fill();
@@ -122,11 +177,11 @@
   }
   function hud() {
     const set = (id, v, max) => { $(id + '-v').textContent = Math.round(v); $(id + '-b').style.width = `${Math.max(0, Math.min(100, v / max * 100))}%`; };
-    set('e', S.E, 100); set('n', S.N, 10); set('o', S.O, 10); set('c', S.C, 10); set('u', S.U, 10);
+    set('e', S.E, E_MAX); set('n', S.nut.length, CARRY); set('o', S.O, CARRY); set('c', S.C, 10); set('u', S.U, 10);
     $('dist').textContent = `${Math.round(S.x / 10)} m`;
     $('time').textContent = `${Math.max(0, Math.ceil(DURATION - S.t))}초`;
     const z = zoneAt(S.t); $('zone').textContent = z.desc;
-    const eq = $('eq'); const noO = S.O < 1 && S.N >= 1;
+    const eq = $('eq'); const noO = S.O < 1 && S.nut.length >= 1;
     eq.classList.toggle('off', noO);
     eq.textContent = noO ? '포도당 + 산소(없음!) → 에너지를 만들 수 없다' : '포도당 + 산소 → 에너지 + 이산화 탄소 + 물';
   }
@@ -142,14 +197,17 @@
   function finish() {
     running = false;
     const survived = S.E > 0 && S.t >= DURATION;
-    const stars = !survived ? 0 : S.made >= 30 ? 3 : S.made >= 22 ? 2 : 1;
+    const stars = !survived ? 0 : S.made >= STAR3 ? 3 : S.made >= STAR2 ? 2 : 1;
+    const st = S.stats;
     A.finish($('overlay'), {
       id: 'run', stars, score: Math.round(S.x / 10),
-      detail: { survived, seconds: +S.t.toFixed(1), energyMade: S.made, ...S.stats },
-      lines: [survived ? `60초 완주! 거리 ${Math.round(S.x / 10)} m` : `${Math.round(S.t)}초에 에너지가 바닥났다.`,
-        `세포 호흡으로 에너지를 ${S.made}번 만들었다. 포도당 ${S.stats.glucose + S.stats.protein} · 산소 ${S.stats.o2}개를 모았다.`,
-        S.stats.noO2 > 1 ? `영양소는 있는데 산소가 모자라 에너지를 못 만든 시간이 ${S.stats.noO2.toFixed(1)}초. 호흡계 없이는 소화계도 소용없다!` : '',
-        S.stats.wasteSlow > 1 ? `노폐물 때문에 느려진 시간 ${S.stats.wasteSlow.toFixed(1)}초. 폐와 콩팥이 쉬지 않는 까닭이다.` : ''].filter(Boolean),
+      detail: { survived, seconds: +S.t.toFixed(1), energyMade: S.made, ...st },
+      lines: [survived ? `60초 완주! 거리 ${Math.round(S.x / 10)} m` : `${Math.round(S.t)}초에 세포의 에너지가 바닥났다.`,
+        `만난 세포 ${st.cellsMet}개 가운데 ${S.made}개에 산소와 영양소를 전해 주었다(세포 호흡 ${S.made}번).`,
+        `받은 것: 포도당 ${st.glucose} · 아미노산 ${st.amino} · 산소 ${st.o2}개`,
+        st.cellsNoO2 ? `영양소는 있는데 산소가 없어 세포 호흡을 못 한 세포가 ${st.cellsNoO2}개. 호흡계 없이는 소화계도 소용없다!` : '',
+        st.cellsNoNut ? `산소는 있는데 영양소가 없어 에너지를 못 얻은 세포가 ${st.cellsNoNut}개. 소화계 없이는 호흡계도 소용없다!` : '',
+        st.wasteSlow > 1 ? `노폐물 때문에 느려진 시간 ${st.wasteSlow.toFixed(1)}초. 폐와 콩팥이 쉬지 않는 까닭이다.` : ''].filter(Boolean),
       quiz: { q: '세포 호흡으로 에너지를 얻는 데 반드시 필요한 두 가지 물질은?', options: ['포도당(영양소)과 산소', '포도당과 이산화 탄소'], answer: 0,
         explain: '소화계가 흡수한 영양소와 호흡계가 받아들인 산소를 순환계가 세포까지 운반해야 세포 호흡이 일어난다. 이산화 탄소는 세포 호흡의 결과로 생기는 노폐물이다.' },
       reflection: '에너지 런에서 에너지가 계속 만들어지려면 소화계, 호흡계, 순환계, 배설계가 각각 어떤 일을 해야 했나요? 네 기관계를 모두 넣어 세포 호흡과 연결해 설명하세요.',
@@ -157,16 +215,21 @@
     });
   }
   $('stage').addEventListener('pointerdown', e => { e.preventDefault(); jump(); });
-  window.addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); jump(); } });
+  // 게임 중에만 Space·↑를 점프로 쓴다. 시작·결과 화면에서는 버튼 누르기와 서술 답의 띄어쓰기가 그대로 되게 둔다.
+  window.addEventListener('keydown', e => {
+    if (!running || (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]'))) return;
+    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); jump(); }
+  });
 
   reset(); draw(); hud();
   A.intro($('overlay'), {
     id: 'run',
     rules: [
       '주인공은 온몸을 도는 <b>혈액</b>이다. 화면을 누르면 점프(두 번까지).',
-      '에너지는 가만히 있어도 줄어든다. <b>포도당과 산소가 둘 다 있어야</b> 세포 호흡으로 에너지가 채워진다.',
-      '세포 호흡을 하면 <b>이산화 탄소</b>가 쌓이고, 단백질을 먹으면 <b>요소</b>가 생긴다. 폐와 콩팥 구간을 지나야 줄어든다.',
-      '60초를 버티면 성공. 세포 호흡 횟수 22·30번 이상이면 별 2·3개.',
+      '소장에서 <b>포도당·아미노산</b>을, 폐에서 <b>산소</b>를 받아 싣는다.',
+      '근육·콩팥 구간의 <b>세포</b>에 닿으면 영양소와 산소를 하나씩 전해 준다. <b>둘 다 있어야</b> 세포가 세포 호흡으로 에너지를 얻고 <b>이산화 탄소</b>를 혈액에 내놓는다. 아미노산을 쓰면 <b>요소</b>도 생긴다.',
+      '세포의 에너지는 가만히 있어도 줄어들고, 근육에서는 더 빨리 줄어든다. 이산화 탄소는 폐에서, 요소는 콩팥에서 내보낸다.',
+      `60초를 버티면 성공. 세포 ${CELLS}개 가운데 ${STAR2}개·${STAR3}개 이상에 전해 주면 별 2·3개.`,
     ],
     onStart: start,
   });
