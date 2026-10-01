@@ -3,7 +3,8 @@
   const PD = window.Pedigree, A = window.Arcade;
   const $ = id => document.getElementById(id);
   let li = 0, marks = {}, judged = false, t0 = 0, timerId = null;
-  const total = { correct: 0, wrong: 0, missed: 0, must: 0, perLevel: [] };
+  // maleMarkedX: X 염색체 열성 단계에서 남성을 보인자로 표시한 수, maybeMarked: 보인자일 수도 있는 사람을 표시한 수
+  const total = { correct: 0, wrong: 0, missed: 0, must: 0, maleMarkedX: 0, maybeMarked: 0, perLevel: [] };
   let sol;
 
   const X = x => 24 + x * 40, Y = gen => 40 + gen * 105, R = 16;
@@ -56,12 +57,14 @@
   function tap(id) {
     if (judged) return;
     const L = PD.LEVELS[li], p = L.people.find(q => q.id === id);
-    if (p.affected) return toast('발현한 사람은 보인자가 아니라 열성 동형(발현자)이다');
+    if (p.affected) return toast(L.mode === 'x' && p.sex === 'M'
+      ? '발현한 남성은 보인자가 아니다. 하나뿐인 X 염색체에 열성 대립유전자가 있다(XᵃY).'
+      : `발현자는 보인자가 아니다. 열성 대립유전자만 두 개 가진다(${L.mode === 'x' ? 'XᵃXᵃ' : 'aa'}).`);
     marks[id] = marks[id] === 'c' ? 'q' : marks[id] === 'q' ? undefined : 'c';
     draw();
   }
   let toastT;
-  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 2200); }
+  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), Math.max(2200, t.length * 80)); }
 
   function startLevel() {
     judged = false; marks = {};
@@ -71,7 +74,9 @@
     timerId = setInterval(() => { $('timer').textContent = String(Math.min(999, Math.floor((Date.now() - t0) / 1000))).padStart(3, '0'); }, 500);
     draw();
   }
+  const blocked = () => !sol || !$('overlay').hidden;
   function judge() {
+    if (blocked()) return;
     if (judged) { // 다음 단계로
       if (li < PD.LEVELS.length - 1) { li++; startLevel(); } else finishAll();
       return;
@@ -82,8 +87,11 @@
     const correct = flagged.filter(id => sol.must.includes(id));
     const wrong = flagged.filter(id => !sol.must.includes(id));
     const missed = sol.must.filter(id => !flagged.includes(id));
+    const maleMarkedX = L.mode === 'x' ? wrong.filter(id => L.people.find(q => q.id === id).sex === 'M').length : 0;
+    const maybeMarked = wrong.filter(id => sol.maybe.includes(id)).length;
     total.correct += correct.length; total.wrong += wrong.length; total.missed += missed.length; total.must += sol.must.length;
-    total.perLevel.push({ level: li + 1, correct: correct.length, wrong: wrong.length, missed: missed.length, seconds: Math.round((Date.now() - t0) / 1000) });
+    total.maleMarkedX += maleMarkedX; total.maybeMarked += maybeMarked;
+    total.perLevel.push({ level: li + 1, correct: correct.length, wrong: wrong.length, missed: missed.length, maleMarkedX, maybeMarked, seconds: Math.round((Date.now() - t0) / 1000) });
     $('face').textContent = wrong.length ? '😵' : missed.length ? '😐' : '😎';
     const maxGen = Math.max(...L.people.map(q => q.gen));
     const baseName = p => {
@@ -115,7 +123,10 @@
   }
   function finishAll() {
     const perfect = total.wrong === 0 && total.missed === 0;
-    const stars = perfect ? 3 : (total.wrong <= 2 && total.correct >= total.must * 0.8) ? 2 : total.correct >= total.must * 0.5 ? 1 : 0;
+    // 별 1개도 잘못 표시가 확실한 보인자 수의 절반 이하일 때만 준다. 정상인을 전부 찍으면 0개다.
+    const stars = perfect ? 3
+      : (total.wrong <= 2 && total.correct >= total.must * 0.8) ? 2
+      : (total.wrong <= total.must * 0.5 && total.correct >= total.must * 0.5) ? 1 : 0;
     A.finish($('overlay'), {
       id: 'pedigree', stars, score: total.correct * 10 - total.wrong * 5,
       detail: total,
@@ -124,16 +135,16 @@
       quiz: { q: '어머니가 적록 색맹 보인자이고 아버지는 정상일 때, 아들이 색맹일 확률은?', options: ['1/2', '1/4'], answer: 0,
         explain: '아들의 X 염색체는 어머니에게서 온다. 어머니의 X 두 개 중 색맹 대립유전자를 가진 X를 받을 확률은 1/2이다.' },
       reflection: '4단계 가계도에서 “반드시 보인자인 사람”을 한 명 골라, 그렇게 판단한 근거를 부모와 자녀의 형질로 설명하세요. 사람의 유전을 연구할 때 교배 실험 대신 가계도 분석을 쓰는 까닭도 함께 쓰세요.',
-      onRetry: () => { li = 0; Object.assign(total, { correct: 0, wrong: 0, missed: 0, must: 0, perLevel: [] }); startLevel(); },
+      onRetry: () => { li = 0; Object.assign(total, { correct: 0, wrong: 0, missed: 0, must: 0, maleMarkedX: 0, maybeMarked: 0, perLevel: [] }); startLevel(); },
     });
   }
   $('judge').onclick = judge;
-  $('face').onclick = () => { if (!judged) { marks = {}; draw(); } };
+  $('face').onclick = () => { if (!blocked() && !judged) { marks = {}; draw(); } };
 
   A.intro($('overlay'), {
     id: 'pedigree',
     rules: [
-      '가계도에서 <b>반드시 보인자인 사람</b>을 찾아 눌러 ◐ 표시한다. 왼쪽 위 숫자는 아직 표시하지 않은 확실한 보인자 수다.',
+      '가계도에서 <b>반드시 보인자인 사람</b>을 찾아 눌러 ◐ 표시한다. 왼쪽 위 숫자는 확실한 보인자 수에서 ◐ 표시한 수를 뺀 값이다. 표시가 맞았는지는 판정할 때 알 수 있다.',
       '보인자일 수도 있고 아닐 수도 있는 사람에게 표시하면 <b>지뢰</b>! 모르면 “?”로 남겨 두자.',
       '1·2단계는 상염색체 열성 유전, 3·4단계는 X 염색체 열성 유전(적록 색맹)이다.',
       '정답은 가능한 유전자형 조합을 모두 따지는 해결기가 계산한다.',

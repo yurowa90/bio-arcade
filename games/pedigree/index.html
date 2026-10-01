@@ -22,6 +22,8 @@
     .judge { margin-top: 10px; }
     .result { background: var(--panel); border-radius: 12px; padding: 10px; margin-top: 10px; font-size: 13px; line-height: 1.5; }
     .result li { margin-bottom: 4px; }
+    /* 발현자 안내가 두 줄이 되어도 잘리지 않게 한다 */
+    .toast { white-space: normal; width: max-content; text-align: center; word-break: keep-all; border-radius: 14px; line-height: 1.4; }
   </style>
 </head>
 <body>
@@ -29,7 +31,7 @@
   <main id="stage">
     <p class="lvl" id="lvl"></p>
     <div class="board">
-      <div class="status"><span class="lcd" id="mines" title="아직 표시하지 않은 확실한 보인자 수">000</span><button class="face" id="face" aria-label="단계 다시 시작">🙂</button><span class="lcd" id="timer">000</span></div>
+      <div class="status"><span class="lcd" id="mines" title="확실한 보인자 수에서 ◐ 표시한 수를 뺀 값(맞았는지는 판정할 때 알 수 있다)">000</span><button class="face" id="face" aria-label="단계 다시 시작">🙂</button><span class="lcd" id="timer">000</span></div>
       <div class="field" id="field"></div>
     </div>
     <p class="legend">□ 남자 ○ 여자 · 검게 칠함 = 형질 발현 · 눌러서 표시: <b>◐ 보인자</b> → <b>? 모름</b> → 표시 없음<br>표시 가능한 사람은 <b>“반드시” 보인자인 사람</b>뿐이다. 보인자일 수도 있고 아닐 수도 있는 사람에게 표시하면 지뢰를 밟은 것!</p>
