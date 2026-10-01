@@ -1,5 +1,5 @@
 // 오프라인 실행용 서비스 워커: 네트워크 우선, 끊기면 캐시로 실행한다.
-const CACHE = 'bio-arcade-v1';
+const CACHE = 'bio-arcade-v2'; // v2: 오류 응답이 들어갔을 수 있는 v1 캐시를 비우고 새로 받는다
 const FILES = [
   './',
   'games/basepang/engine.js',
@@ -37,5 +37,9 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(fetch(e.request).then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return res; }).catch(() => caches.match(e.request)));
+  e.respondWith(fetch(e.request).then(res => {
+    // 정상 응답(같은 출처, 2xx)만 캐시에 넣는다. 404·5xx가 오프라인용 사본을 덮어쓰지 않게 한다.
+    if (res.ok && res.type === 'basic') { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
+    return res;
+  }).catch(() => caches.match(e.request)));
 });

@@ -27,6 +27,7 @@ canvas.game { width: 100%; display: block; border-radius: 14px; background: #fff
 .overlay { position: fixed; inset: 0; background: rgba(12, 8, 24, .72); display: grid; place-items: center; padding: 14px; z-index: 20; overflow: auto; }
 .overlay[hidden] { display: none; }
 .card { background: var(--panel); border-radius: 18px; padding: 18px 16px; width: 100%; max-width: 440px; max-height: 92vh; overflow: auto; box-shadow: 0 6px 0 rgba(0, 0, 0, .35); word-break: keep-all; line-height: 1.5; }
+.card:focus { outline: none; } /* 결과 카드는 포커스만 받아 둔다(arcade.js finish) */
 .card h2 { margin: 2px 0 6px; font-size: 24px; }
 .card p { margin: 6px 0; font-size: 15px; }
 .homage { font-size: 12px !important; color: var(--ink-2); font-weight: 700; }
@@ -49,7 +50,8 @@ canvas.game { width: 100%; display: block; border-radius: 14px; background: #fff
 .quiz-opts { display: grid; gap: 6px; }
 .quiz-fb { font-size: 14px !important; }
 .refl { display: block; margin-top: 10px; font-size: 14px; }
-textarea { width: 100%; min-height: 72px; margin-top: 6px; font: inherit; font-size: 15px; border: 2px solid var(--line); border-radius: 10px; padding: 8px; background: #fff; color: var(--ink); -webkit-user-select: text; user-select: text; }
+/* 글자 크기가 16px 미만이면 iOS 사파리가 입력할 때 화면을 확대한다 */
+textarea { width: 100%; min-height: 72px; margin-top: 6px; font: inherit; font-size: 16px; border: 2px solid var(--line); border-radius: 10px; padding: 8px; background: #fff; color: var(--ink); -webkit-user-select: text; user-select: text; }
 
 details.std { margin: 10px 0; background: #f3ecdc; border-radius: 12px; padding: 8px 10px; font-size: 13px; }
 details.std summary { cursor: pointer; font-weight: 700; }
@@ -61,5 +63,8 @@ details.std summary { cursor: pointer; font-weight: 700; }
 .levels b { display: inline-block; width: 16px; color: #6b4fa0; }
 .note { font-size: 12px !important; color: var(--ink-2); }
 
-.toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); background: rgba(20, 16, 36, .88); color: #fff; padding: 6px 12px; border-radius: 999px; font-size: 14px; font-weight: 700; pointer-events: none; opacity: 0; transition: opacity .2s; white-space: nowrap; max-width: 92%; overflow: hidden; text-overflow: ellipsis; z-index: 5; }
+/* 긴 피드백 문장도 잘리지 않게 여러 줄로 감싼다(너비는 글 길이에 맞추되 무대 폭의 92%까지) */
+.toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); background: rgba(20, 16, 36, .88); color: #fff; padding: 6px 12px; border-radius: 14px; font-size: 14px; font-weight: 700; line-height: 1.4; text-align: center; pointer-events: none; opacity: 0; transition: opacity .2s; width: max-content; max-width: 92%; white-space: normal; word-break: keep-all; overflow-wrap: anywhere; z-index: 5; }
 .toast.on { opacity: 1; }
+/* hidden 속성이 .btn·.row .btn의 display 규칙에 덮이지 않게 한다 */
+.btn[hidden], .row .btn[hidden] { display: none; }
