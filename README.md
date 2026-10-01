@@ -50,3 +50,9 @@ PW=$(npm root -g)/playwright node tests/quest-e2e.js <스크린샷 폴더>
 | 혈액 순환 보드게임 | 모두의마블 | 판의 길 = 폐순환·온몸 순환 경로 | 9과13-02 |
 | 구성 단계 루미큐브 | 루미큐브 | 연속 줄 = 세포→조직→기관→기관계→개체, 식물은 조직계 | 9과02-02 |
 | 반응 속도 배구 | 피카츄 배구 | 자신의 반응 시간 측정, 자극→반응 경로 | 9과20-02 |
+
+## 로컬 작업 + GPT 교차 검증 (선택)
+
+`.claude/agents/gpt-reviewer.md`는 Claude Code 서브에이전트가 OpenAI Codex CLI(`codex exec`)를 **읽기 전용**으로 불러 과학 내용과 성취기준 대응을 교차 검증하게 하는 설정입니다.
+쓰려면 로컬에 Codex CLI를 설치하고(`npm install -g @openai/codex`), `codex login`으로 로그인하세요. API 키는 대화창이나 저장소에 넣지 마세요.
+Claude Code 서브에이전트는 Claude 모델만 쓸 수 있으므로, GPT는 “모델”이 아니라 서브에이전트가 부르는 “도구”로 연결됩니다.
