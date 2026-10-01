@@ -10,19 +10,25 @@
   <style>
     body { background: #10243a; }
     #cv { aspect-ratio: 3 / 4; background: #f7fbff; }
-    .modes { display: flex; gap: 8px; margin: 8px 0; }
-    .modes .btn { flex: 1; font-size: 13px; padding: 7px 4px; }
+    /* 모드 고르기는 시작·결과 카드 안에 넣는다(game.js addModePicker) */
+    .modes { display: flex; gap: 8px; margin: 10px 0 4px; }
+    .modes .btn { flex: 1; font-size: 14px; padding: 8px 4px; }
     .modes .btn.on { background: #3d85c6; color: #fff; border-color: #1f5f99; }
+    .mode-note { font-size: 12px !important; color: var(--ink-2); margin: 2px 0 0 !important; }
     .hint { color: #cfe2f3; font-size: 13px; text-align: center; margin: 6px 0 0; }
+    /* 경고 문구는 줄을 바꿔 끝까지 보이게 하고, 호르몬 막대 아래 캔버스 안쪽에 띄운다 */
+    .cv-wrap { position: relative; margin-top: 4px; }
+    .cv-wrap .toast { top: 15%; width: max-content; max-width: calc(100% - 24px); white-space: normal; word-break: keep-all; text-align: center; border-radius: 12px; line-height: 1.4; }
   </style>
 </head>
 <body>
-  <header class="bar"><a href="../../index.html">← 오락실</a><b>혈당 지키기</b><div class="hud"><span id="clock">06:00</span><span>정상 범위 <b id="tir">0%</b></span></div></header>
+  <header class="bar"><a href="../../index.html">← 오락실</a><b>혈당 지키기</b><div class="hud"><span id="clock">06:00</span><span>목표 범위 <b id="tir">0%</b></span></div></header>
   <main id="stage">
-    <div class="modes"><button class="btn on" id="m-normal">기본</button><button class="btn" id="m-res">도전: 인슐린 저항성</button></div>
-    <canvas id="cv" class="game" width="480" height="640" aria-label="혈당 그래프. 화면을 누르고 있으면 인슐린 분비"></canvas>
+    <div class="cv-wrap">
+      <canvas id="cv" class="game" width="480" height="640" aria-label="혈당 그래프. 화면을 누르고 있으면 인슐린 분비"></canvas>
+      <div class="toast" id="toast" role="status"></div>
+    </div>
     <p class="hint">화면을 <b>누르고 있으면 인슐린</b>, <b>떼면 글루카곤</b>. 호르몬은 조금 늦게 효과를 낸다!</p>
-    <div class="toast" id="toast"></div>
   </main>
   <div class="overlay" id="overlay" hidden></div>
   <script src="../../shared/standards.js"></script>
