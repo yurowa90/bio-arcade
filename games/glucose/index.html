@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>혈당 지키기</title>
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../../icons/icon-180.png">
+  <link rel="stylesheet" href="../../shared/arcade.css">
+  <style>
+    body { background: #10243a; }
+    #cv { aspect-ratio: 3 / 4; background: #f7fbff; }
+    .modes { display: flex; gap: 8px; margin: 8px 0; }
+    .modes .btn { flex: 1; font-size: 13px; padding: 7px 4px; }
+    .modes .btn.on { background: #3d85c6; color: #fff; border-color: #1f5f99; }
+    .hint { color: #cfe2f3; font-size: 13px; text-align: center; margin: 6px 0 0; }
+  </style>
+</head>
+<body>
+  <header class="bar"><a href="../../index.html">← 오락실</a><b>혈당 지키기</b><div class="hud"><span id="clock">06:00</span><span>정상 범위 <b id="tir">0%</b></span></div></header>
+  <main id="stage">
+    <div class="modes"><button class="btn on" id="m-normal">기본</button><button class="btn" id="m-res">도전: 인슐린 저항성</button></div>
+    <canvas id="cv" class="game" width="480" height="640" aria-label="혈당 그래프. 화면을 누르고 있으면 인슐린 분비"></canvas>
+    <p class="hint">화면을 <b>누르고 있으면 인슐린</b>, <b>떼면 글루카곤</b>. 호르몬은 조금 늦게 효과를 낸다!</p>
+    <div class="toast" id="toast"></div>
+  </main>
+  <div class="overlay" id="overlay" hidden></div>
+  <script src="../../shared/standards.js"></script>
+  <script src="../../shared/arcade.js"></script>
+  <script src="model.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

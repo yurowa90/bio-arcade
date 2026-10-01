@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>염기쌍 팡</title>
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../../icons/icon-180.png">
+  <link rel="stylesheet" href="../../shared/arcade.css">
+  <style>
+    body { background: linear-gradient(180deg, #ffb3c1, #ffd6a5); }
+    .bar, .bar a { color: #3a1c2b; }
+    .bar a, .bar .hud span { background: rgba(255, 255, 255, .5); }
+    .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .scorebox { background: #fff; border-radius: 14px; padding: 6px 12px; font-weight: 900; font-size: 22px; color: #c2185b; box-shadow: 0 3px 0 rgba(0, 0, 0, .15); }
+    .movebox { background: #fff; border-radius: 14px; padding: 6px 12px; font-weight: 800; font-size: 15px; }
+    .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; background: rgba(255, 255, 255, .55); padding: 8px; border-radius: 18px; touch-action: none; position: relative; }
+    .tile { aspect-ratio: 1; border: none; font-size: clamp(20px, 7vw, 30px); font-weight: 900; color: #fff; display: grid; place-items: center; box-shadow: inset 0 -5px 0 rgba(0, 0, 0, .2); transition: transform .12s; position: relative; }
+    .tile.D { border-radius: 10px; }
+    .tile.R { border-radius: 50%; box-shadow: inset 0 -5px 0 rgba(0, 0, 0, .2), 0 0 0 3px #fff inset; }
+    .tile.R::after { content: 'RNA'; position: absolute; bottom: 2px; font-size: 8px; font-weight: 800; opacity: .9; }
+    .tile.sel { transform: scale(1.1); outline: 4px solid #fff; }
+    .tile.pop { animation: pop .35s ease-out; }
+    @keyframes pop { 50% { transform: scale(1.3); filter: brightness(1.5); } }
+    .b-A { background: #e06666; } .b-T { background: #e0a412; } .b-G { background: #6aa84f; } .b-C { background: #3d85c6; } .b-U { background: #8e7cc3; }
+    .legend { background: rgba(255, 255, 255, .7); border-radius: 12px; padding: 8px 10px; margin-top: 8px; font-size: 13px; line-height: 1.5; }
+    .legend b { font-size: 15px; }
+  </style>
+</head>
+<body>
+  <header class="bar"><a href="../../index.html">← 오락실</a><b>염기쌍 팡</b><div class="hud"><span id="lvhud"></span></div></header>
+  <main id="stage">
+    <div class="top"><div class="scorebox" id="score">0</div><div class="movebox">남은 이동 <b id="moves"></b></div></div>
+    <div class="grid" id="grid" aria-label="염기 판"></div>
+    <div class="legend" id="legend"></div>
+    <div class="toast" id="toast"></div>
+  </main>
+  <div class="overlay" id="overlay" hidden></div>
+  <script src="../../shared/standards.js"></script>
+  <script src="../../shared/arcade.js"></script>
+  <script src="engine.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

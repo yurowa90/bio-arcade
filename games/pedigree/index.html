@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>가계도 지뢰찾기</title>
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../../icons/icon-180.png">
+  <link rel="stylesheet" href="../../shared/arcade.css">
+  <style>
+    body { background: #2a2540; }
+    .board { background: #c0c0c0; border-radius: 6px; padding: 8px; border: 3px solid; border-color: #fff #7b7b7b #7b7b7b #fff; }
+    .status { display: flex; justify-content: space-between; align-items: center; background: #c0c0c0; padding: 4px 6px 8px; }
+    .lcd { background: #000; color: #f33; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 22px; font-weight: 800; padding: 2px 8px; border-radius: 3px; min-width: 64px; text-align: center; letter-spacing: 2px; }
+    .face { width: 46px; height: 46px; border-radius: 6px; border: 3px solid; border-color: #fff #7b7b7b #7b7b7b #fff; background: #c0c0c0; font-size: 24px; display: grid; place-items: center; }
+    .field { background: #fff; border: 3px solid; border-color: #7b7b7b #fff #fff #7b7b7b; }
+    .field svg { width: 100%; display: block; }
+    .field .person { cursor: pointer; }
+    .lvl { color: #fff; margin: 8px 2px 4px; font-size: 14px; }
+    .lvl b { color: #f2c14e; }
+    .legend { color: #d9d1f2; font-size: 12px; margin: 6px 2px; line-height: 1.5; }
+    .judge { margin-top: 10px; }
+    .result { background: var(--panel); border-radius: 12px; padding: 10px; margin-top: 10px; font-size: 13px; line-height: 1.5; }
+    .result li { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <header class="bar"><a href="../../index.html">← 오락실</a><b>가계도 지뢰찾기</b><div class="hud"><span id="stagehud"></span></div></header>
+  <main id="stage">
+    <p class="lvl" id="lvl"></p>
+    <div class="board">
+      <div class="status"><span class="lcd" id="mines" title="아직 표시하지 않은 확실한 보인자 수">000</span><button class="face" id="face" aria-label="단계 다시 시작">🙂</button><span class="lcd" id="timer">000</span></div>
+      <div class="field" id="field"></div>
+    </div>
+    <p class="legend">□ 남자 ○ 여자 · 검게 칠함 = 형질 발현 · 눌러서 표시: <b>◐ 보인자</b> → <b>? 모름</b> → 표시 없음<br>표시 가능한 사람은 <b>“반드시” 보인자인 사람</b>뿐이다. 보인자일 수도 있고 아닐 수도 있는 사람에게 표시하면 지뢰를 밟은 것!</p>
+    <button class="btn primary big judge" id="judge">판정하기</button>
+    <div id="result"></div>
+    <div class="toast" id="toast"></div>
+  </main>
+  <div class="overlay" id="overlay" hidden></div>
+  <script src="../../shared/standards.js"></script>
+  <script src="../../shared/arcade.js"></script>
+  <script src="pedigree.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

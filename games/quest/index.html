@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>생명 탐사대</title>
+  <meta name="description" content="초록섬을 탐사하며 생물 도감을 채우고, 광합성·소화 체육관에 도전하는 중2~통합과학1 생명과학 게임">
+  <meta name="theme-color" content="#1f3b2d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="생명 탐사대">
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="icon" href="../../icons/icon-192.png">
+  <link rel="apple-touch-icon" href="../../icons/icon-180.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main id="device">
+    <!-- 화면 영역: 지도 캔버스 + 겹쳐 뜨는 창들 -->
+    <section id="screen">
+      <canvas id="map" width="176" height="144" aria-label="탐사 지도"></canvas>
+      <div id="hud"><span id="hud-place"></span><span id="hud-time"></span></div>
+
+      <!-- 타이틀 -->
+      <div id="title" class="layer">
+        <div class="title-card">
+          <p class="title-sub">초록섬 도감</p>
+          <h1>생명 탐사대</h1>
+          <p class="title-desc">섬을 걸으며 생물을 관찰하고<br>광합성·소화 체육관에 도전하세요</p>
+          <button id="btn-new" class="btn primary">처음부터</button>
+          <button id="btn-continue" class="btn" hidden>이어하기</button>
+          <a class="btn" id="btn-hub" href="../../index.html">← 오락실로</a>
+          <p class="title-note">중2 ~ 통합과학1 생명과학</p>
+        </div>
+      </div>
+
+      <!-- 대화창 -->
+      <div id="dialog" class="dialog" hidden>
+        <div id="dialog-name" class="dialog-name"></div>
+        <div id="dialog-text" class="dialog-text"></div>
+        <div id="dialog-choices" class="dialog-choices"></div>
+        <div id="dialog-next" class="dialog-next" aria-hidden="true">▼</div>
+      </div>
+
+      <!-- 전체 화면 창(도감·조우·대결·메뉴) -->
+      <div id="panel" class="layer panel" hidden>
+        <div class="panel-head"><b id="panel-title"></b><button id="panel-close" class="btn small" aria-label="닫기">닫기</button></div>
+        <div id="panel-body" class="panel-body"></div>
+      </div>
+    </section>
+
+    <!-- 조작부 -->
+    <section id="pad" aria-label="조작 버튼">
+      <div class="dpad">
+        <button class="dir up" data-dir="up" aria-label="위">▲</button>
+        <button class="dir left" data-dir="left" aria-label="왼쪽">◀</button>
+        <button class="dir right" data-dir="right" aria-label="오른쪽">▶</button>
+        <button class="dir down" data-dir="down" aria-label="아래">▼</button>
+      </div>
+      <div class="ab">
+        <button id="btn-b" class="round b" aria-label="메뉴">메뉴</button>
+        <button id="btn-a" class="round a" aria-label="확인">확인</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/data.js"></script>
+  <script src="js/battles.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

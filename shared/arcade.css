@@ -1,0 +1,65 @@
+/* 생명 오락실 미니게임 공통 스타일 (세로 휴대폰 화면 기준) */
+:root {
+  --bg: #1b1530; --panel: #fffaf0; --ink: #1f1d2b; --ink-2: #5d5a6d; --line: #ddd3bd;
+  --accent: #e2574c; --accent-ink: #fff; --ok: #1f8a4c; --bad: #c0392b; --gold: #e0a412;
+  color-scheme: light;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  display: flex; flex-direction: column; align-items: center;
+  overscroll-behavior: none; touch-action: manipulation; -webkit-user-select: none; user-select: none;
+}
+button, a.btn { font: inherit; cursor: pointer; }
+.bar {
+  width: 100%; max-width: 480px; display: flex; align-items: center; gap: 10px;
+  padding: max(8px, env(safe-area-inset-top)) 12px 8px; color: #fff;
+}
+.bar a { color: #fff; text-decoration: none; font-weight: 800; font-size: 15px; background: rgba(255, 255, 255, .12); padding: 5px 10px; border-radius: 8px; }
+.bar b { flex: 1; font-size: 16px; }
+.bar .hud { display: flex; gap: 8px; font-size: 13px; }
+.bar .hud span { background: rgba(255, 255, 255, .14); padding: 3px 8px; border-radius: 999px; }
+#stage { position: relative; width: 100%; max-width: 480px; flex: 1; display: flex; flex-direction: column; padding: 0 10px max(10px, env(safe-area-inset-bottom)); }
+canvas.game { width: 100%; display: block; border-radius: 14px; background: #fff; touch-action: none; }
+
+.overlay { position: fixed; inset: 0; background: rgba(12, 8, 24, .72); display: grid; place-items: center; padding: 14px; z-index: 20; overflow: auto; }
+.overlay[hidden] { display: none; }
+.card { background: var(--panel); border-radius: 18px; padding: 18px 16px; width: 100%; max-width: 440px; max-height: 92vh; overflow: auto; box-shadow: 0 6px 0 rgba(0, 0, 0, .35); word-break: keep-all; line-height: 1.5; }
+.card h2 { margin: 2px 0 6px; font-size: 24px; }
+.card p { margin: 6px 0; font-size: 15px; }
+.homage { font-size: 12px !important; color: var(--ink-2); font-weight: 700; }
+.rules { padding-left: 18px; margin: 8px 0; font-size: 14px; }
+.rules li { margin-bottom: 4px; }
+.best { font-size: 13px !important; color: var(--ink-2); }
+.btn { display: inline-block; border: 2px solid var(--ink); background: #fff; color: var(--ink); border-radius: 12px; padding: 9px 14px; font-weight: 800; font-size: 15px; text-align: center; text-decoration: none; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: #9e3129; }
+.btn.big { width: 100%; font-size: 18px; padding: 12px; margin-top: 6px; }
+.btn:disabled { opacity: .55; cursor: default; }
+.btn.right { border-color: var(--ok); background: #e5f5ea; }
+.btn.wrong { border-color: var(--bad); background: #fbe6e3; }
+.btn:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.row { display: flex; gap: 8px; margin-top: 12px; }
+.row .btn { flex: 1; }
+.stars { color: var(--gold); letter-spacing: 3px; }
+.stars .off { color: #d9d0bb; }
+.big-stars { font-size: 34px; text-align: center; margin: 4px 0 !important; }
+.quiz { background: #f3ecdc; border-radius: 12px; padding: 10px; margin-top: 10px; }
+.quiz-opts { display: grid; gap: 6px; }
+.quiz-fb { font-size: 14px !important; }
+.refl { display: block; margin-top: 10px; font-size: 14px; }
+textarea { width: 100%; min-height: 72px; margin-top: 6px; font: inherit; font-size: 15px; border: 2px solid var(--line); border-radius: 10px; padding: 8px; background: #fff; color: var(--ink); -webkit-user-select: text; user-select: text; }
+
+details.std { margin: 10px 0; background: #f3ecdc; border-radius: 12px; padding: 8px 10px; font-size: 13px; }
+details.std summary { cursor: pointer; font-weight: 700; }
+.std .code { color: #6b4fa0; }
+.std .lv { background: #fff; border-radius: 999px; padding: 1px 7px; font-size: 12px; }
+.std-item { margin-top: 8px; }
+.levels { margin: 4px 0 0; padding-left: 18px; }
+.levels li { margin-bottom: 3px; list-style: none; }
+.levels b { display: inline-block; width: 16px; color: #6b4fa0; }
+.note { font-size: 12px !important; color: var(--ink-2); }
+
+.toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); background: rgba(20, 16, 36, .88); color: #fff; padding: 6px 12px; border-radius: 999px; font-size: 14px; font-weight: 700; pointer-events: none; opacity: 0; transition: opacity .2s; white-space: nowrap; max-width: 92%; overflow: hidden; text-overflow: ellipsis; z-index: 5; }
+.toast.on { opacity: 1; }
