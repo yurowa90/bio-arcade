@@ -94,7 +94,11 @@
   function advanceDialog() {
     if (!dlg) return;
     if (!dlg.full) { finishLine(); return; }
-    if (dlg.idx === dlg.lines.length - 1 && dlg.choices) return; // 선택지를 골라야 함
+    if (dlg.idx === dlg.lines.length - 1 && dlg.choices) { // 선택지를 골라야 함: 포커스만 첫 선택지로 옮긴다
+      const first = $('dialog-choices').querySelector('button');
+      if (first && !$('dialog-choices').contains(document.activeElement)) first.focus();
+      return;
+    }
     if (dlg.idx < dlg.lines.length - 1) { dlg.idx++; showLine(); return; }
     closeDialog(undefined);
   }
@@ -221,10 +225,12 @@
     if (isNight()) { ctx.fillStyle = 'rgba(18, 26, 70, 0.45)'; ctx.fillRect(0, 0, cv.width, cv.height); }
   }
 
+  let hudNight = null; // HUD에 표시한 낮·밤(실제 시계 모드에서 시간대가 바뀌면 다시 그린다)
   function updateHUD() {
     if (mode === 'title') { $('hud-place').textContent = ''; $('hud-time').textContent = ''; return; }
+    hudNight = isNight();
     $('hud-place').textContent = map().name;
-    $('hud-time').textContent = isNight() ? '☾ 밤' : '☀ 낮';
+    $('hud-time').textContent = hudNight ? '☾ 밤' : '☀ 낮';
   }
 
   /* ---------------- 이동 ---------------- */
@@ -244,6 +250,8 @@
       }
     }
     render();
+    // 같은 지도에 머무는 동안 19시·6시를 지나면 HUD 낮·밤 표시도 바꾼다(약 0.5초마다 확인)
+    if (mode !== 'title' && frame % 30 === 0 && isNight() !== hudNight) updateHUD();
     requestAnimationFrame(loop);
   }
   function tryMove(d) {
@@ -293,10 +301,13 @@
       await say('', ['집에 들어가 푹 쉬었다.', '탐사 기록을 저장했다.']);
       writeSave();
     } else if (ch === 'L') {
-      const n = doneList().length;
+      const done = doneList(), n = done.length;
+      const hasProducer = done.some(s => s.role === '생산자');
       await say('한결 박사', [
         `도감은 잘 채우고 있니? 지금 관찰을 마친 생물은 ${n}종이구나.`,
-        n < 4 ? '광합성 체육관에 가려면 생물 4종 이상, 그중 생산자 1종 이상을 관찰해야 해.' : '좋아! 잎새마을 광합성 체육관에 도전해 보렴.',
+        n < 4 ? '광합성 체육관에 가려면 생물 4종 이상, 그중 생산자 1종 이상을 관찰해야 해.'
+          : !hasProducer ? '종 수는 충분하지만 아직 생산자가 없구나. 스스로 양분을 만드는 생물도 관찰해 와야 광합성 체육관에 들어갈 수 있어.'
+          : '좋아! 잎새마을 광합성 체육관에 도전해 보렴.',
         '낮과 밤에 만나는 생물이 달라. 메뉴의 “시간 설정”에서 탐사 시간을 바꿀 수도 있단다.',
       ]);
     } else if (ch === 'G') {
@@ -325,8 +336,12 @@
   }
   function speciesCardHTML(sp, full) {
     const t = sp.time === 'night' ? '☾ 밤' : sp.time === 'day' ? '☀ 낮' : '☀☾ 낮·밤';
+    // 관찰을 마치기 전에는 무리·분류·역할 칩을 숨긴다. 관찰 질문의 답이 화면에 그대로 보이지 않게 한다.
+    const meta = full
+      ? `<span class="chip">${sp.kind}</span> <span class="chip">${sp.cls}</span> <span class="chip ok">${sp.role}</span> <span class="chip">${t}</span>`
+      : `<span class="chip">${sp.habitat === 'forest' ? '숲' : '습지'}</span> <span class="chip">${t}</span>`;
     return `<div class="species-card">${badgeHTML(sp, true)}<h3>${sp.name}</h3>
-      <div class="meta"><span class="chip">${sp.kind}</span> <span class="chip">${sp.cls}</span> <span class="chip ok">${sp.role}</span> <span class="chip">${t}</span></div>
+      <div class="meta">${meta}</div>
       ${full ? `<p>${sp.fact}</p>` : '<p class="muted">관찰을 마치면 자세한 정보가 기록됩니다.</p>'}</div>`;
   }
   function partnerLine(sp) {
@@ -460,46 +475,52 @@
       return;
     }
     await say('관장 초록', [
-      '나는 광합성 체육관 관장 초록. 식물은 빛·물·이산화 탄소로 녹말을 만들지.',
-      '규칙은 하나야. 광합성량은 세 재료 중 “가장 모자란 것”이 정해. 이것을 제한 요인이라고 해.',
+      '나는 광합성 체육관 관장 초록. 식물은 빛에너지를 이용해 물과 이산화 탄소로 녹말을 만들지.',
+      '규칙은 하나야. 광합성량은 빛·물·이산화 탄소 세 요인 가운데 “가장 모자란 요인”이 정해. 이것을 제한 요인이라고 해.',
       '그리고 식물은 밤낮없이 호흡을 해서 매 턴 녹말 1을 쓰지.',
+      '기공은 언제든 열고 닫을 수 있어. 턴을 쓰지 않지. 매 턴에는 행동을 하나 고르렴.',
       '10턴 뒤 녹말 6 이상을 모으면 네 승리야. 내 날씨 기술을 버텨 봐!',
     ]);
     let st = B.photoInit();
     const hints = {
-      leafy: { 1: '기공을 열어야 이산화 탄소가 들어와! 지금은 닫혀 있어.', 5: '가뭄이야. 물이 가장 모자란 재료가 되지 않게 조심해!', 7: '밤에는 빛이 0이야. 기공을 열어 두면 물만 빠져나가!' },
+      leafy: { 1: '기공을 열어야 이산화 탄소가 들어와! 지금은 닫혀 있어.', 5: '가뭄이 오면 뿌리가 물을 흡수하지 못해. 물이 제한 요인이 되지 않게 조심해!', 7: '밤에는 빛이 0이야. 기공을 열어 두면 물만 빠져나가!' },
       mito: { 1: '광합성으로 만든 녹말 중 일부는 호흡으로 쓰여. 그래서 매 턴 −1이야.', 7: '밤에도 호흡은 계속돼. 녹말이 줄어드는 건 그 때문이야.' },
-      spore: { 1: '세 재료 막대 중 가장 짧은 게 속도를 정해. 그걸 늘리는 행동을 골라!', 9: '마른바람이야! 기공이 열려 있으면 물이 두 배로 빠져.' },
+      spore: { 1: '빛·이산화 탄소·물 세 요인 막대 중 가장 짧은 게 속도를 정해. 그걸 늘리는 행동을 골라!', 9: '마른바람이야! 기공이 열려 있으면 물이 두 배로 빠져.' },
     }[S.partner] || {};
     const partner = PARTNERS.find(p => p.id === S.partner);
     const logs = [];
+    let loggedTurn = 0;
     const body = openPanel('광합성 체육관 · 관장 초록', false);
     const NAME = { cloud: '먹구름', drought: '가뭄', night: '밤', wind: '마른바람' };
-    function meter(label, v, max, limit, goal) {
-      return `<div class="meter${limit ? ' limit' : ''}"><div class="meter-label"><span>${label}${limit ? ' ← 제한 요인' : ''}</span><span>${v}/${max}</span></div>
-        <div class="meter-bar"><i style="width:${(v / max) * 100}%"></i>${(goal || []).map(g => `<span class="goal" style="left:${(g / max) * 100}%"></span>`).join('')}</div></div>`;
+    // text를 주면 오른쪽 숫자 대신 쓴다. 막대 너비만 max에서 자른다(숫자는 실제 값).
+    function meter(label, v, max, limit, goal, text) {
+      return `<div class="meter${limit ? ' limit' : ''}"><div class="meter-label"><span>${label}${limit ? ' ← 제한 요인' : ''}</span><span>${text != null ? text : `${v}/${max}`}</span></div>
+        <div class="meter-bar"><i style="width:${(Math.min(v, max) / max) * 100}%"></i>${(goal || []).map(g => `<span class="goal" style="left:${(g / max) * 100}%"></span>`).join('')}</div></div>`;
     }
     function draw() {
       const L = st.last;
       const lim = L ? L.limiting : [];
       const upcoming = B.PHOTO.script[st.turn];
+      const F = B.PHOTO.maxFactor;
       body.innerHTML = `<div class="battle-top"><span class="chip">턴 ${Math.min(st.turn, 10)}/10</span>
         <span class="chip ${st.stomata ? 'ok' : 'warn'}">기공 ${st.stomata ? '열림' : '닫힘'}</span>
+        <span class="chip">물 저장량 ${st.water}/5</span>
         ${Object.keys(st.fx).map(k => `<span class="chip enemy">${NAME[k]} ${st.fx[k]}턴</span>`).join('')}
         ${upcoming && !st.done ? `<span class="chip enemy">다음 턴: 관장이 ${upcoming.name}!</span>` : ''}</div>
-        <p class="muted">광합성량 = min(빛, 이산화 탄소, 물) · 녹말 변화 = 광합성량 − 1(호흡)</p>
-        ${meter('빛 (지난 턴)', L ? L.light : 0, 3, lim.includes('light'))}
-        ${meter('이산화 탄소 (지난 턴)', L ? L.co2 : 0, 3, lim.includes('co2'))}
-        ${meter('물 (저장량)', st.water, 5, lim.includes('water'))}
-        ${meter('녹말', Math.min(st.starch, 10), 10, false, [6, 8])}
-        ${st.done ? '' : `<div class="actions">${B.PHOTO.actions.map(a => `<button class="btn" data-a="${a.id}">${a.label}</button>`).join('')}</div>`}
+        <p class="muted">광합성량 = min(빛, 이산화 탄소, 물) · 녹말 변화 = 광합성량 − 1(호흡)<br>막대: 지난 턴 계산에 쓴 세 요인의 값(모두 0~${F}). 물은 저장량 가운데 한 턴에 최대 ${F}까지 쓴다.</p>
+        ${meter('빛', L ? L.light : 0, F, lim.includes('light'))}
+        ${meter('이산화 탄소', L ? L.co2 : 0, F, lim.includes('co2'))}
+        ${meter('물', L ? L.water : 0, F, lim.includes('water'))}
+        ${L && !lim.length ? `<p class="muted">지난 턴은 세 요인이 모두 충분해 광합성량이 최대(${F})였다.</p>` : ''}
+        ${meter('녹말', st.starch, 14, false, B.PHOTO.stars, `${st.starch} (승리 ${B.PHOTO.goal} · 별 3개 ${B.PHOTO.stars[2]})`)}
+        ${st.done ? '' : `<div class="actions"><button class="btn" data-a="${B.PHOTO.toggle.id}" aria-pressed="${st.stomata}">기공 ${st.stomata ? '닫기' : '열기'} (턴 안 씀)</button>${B.PHOTO.actions.map(a => `<button class="btn" data-a="${a.id}">${a.label}</button>`).join('')}</div>`}
         <ul class="blog">${logs.slice(-8).reverse().map(l => `<li class="${l.t}">${l.text}</li>`).join('')}</ul>`;
       body.querySelectorAll('[data-a]').forEach(b => b.addEventListener('click', () => {
         const turn = st.turn;
+        if (loggedTurn !== turn) { logs.push({ t: '', text: `— ${turn}턴 —` }); loggedTurn = turn; }
         st = B.photoStep(st, b.dataset.a);
-        logs.push({ t: '', text: `— ${turn}턴 —` });
         st.lastLog.forEach(l => logs.push({ t: l.t === 'me' ? '' : l.t, text: l.text }));
-        const h = hints[st.turn];
+        const h = st.turn !== turn && hints[st.turn]; // 기공 전환은 턴을 쓰지 않으므로 힌트도 턴이 넘어갈 때만
         if (h && partner && !st.done) logs.push({ t: 'hint', text: `${partner.name}: ${h}` });
         if (st.done) finish(); else draw();
       }));
@@ -509,9 +530,16 @@
     function finish() {
       draw();
       const stars = st.stars || 0;
+      const nightTurn = st.history.find(h => h.night);
+      const closedAtNight = !!nightTurn && !nightTurn.stomata; // 밤 턴 계산 때 기공이 실제로 닫혀 있었는가
+      const top = B.PHOTO.stars[2];
+      const msg = !st.win ? `녹말이 ${B.PHOTO.goal}에 못 미쳤다. 매 턴 가장 짧은 막대(제한 요인)를 늘리는 행동을 골라 보자.`
+        : stars === 3 ? (closedAtNight ? '완벽해! 밤에 기공을 닫아 물을 아낀 식물의 지혜를 찾아냈구나.' : `녹말 ${top} 이상을 모았구나! 밤에 기공을 어떻게 했는지도 돌아보자.`)
+        : closedAtNight ? `밤에 기공을 닫은 건 잘했어! 녹말 ${top}에 도전하려면 어느 턴에 무엇이 제한 요인이었는지 살펴봐.`
+        : `좋아! 녹말 ${top}에 도전하려면 밤에 기공을 어떻게 해야 할지 생각해 봐.`;
       const box = document.createElement('div');
       box.innerHTML = `<div class="feedback ${st.win ? 'ok' : 'bad'}"><b>${st.win ? '승리!' : '패배…'}</b> 녹말 ${st.starch} ${starsHTML(stars)}
-        <p>${st.win ? (stars === 3 ? '완벽해! 밤에 기공을 닫아 물을 아낀 식물의 지혜를 찾아냈구나.' : '좋아! 녹말 8에 도전하려면 밤에 무엇을 해야 할지 생각해 봐.') : '녹말이 6에 못 미쳤다. 매 턴 가장 짧은 막대(제한 요인)를 늘리는 행동을 골라 보자.'}</p></div>
+        <p>${msg}</p></div>
         <p><b>설명해 보기</b> — 이번 대결에서 녹말 생산을 가장 크게 막은 제한 요인은 무엇이었나요? 밤에 기공을 닫는 것이 식물에게 유리한 까닭도 함께 쓰세요.</p>
         <textarea id="refl" placeholder="두세 문장으로 써 보세요."></textarea>
         <div class="row-btns"><button class="btn primary" id="p-done">${st.win ? '배지 받기' : '저장하고 나가기'}</button><button class="btn" id="p-retry">다시 도전</button></div>`;
@@ -525,7 +553,7 @@
       $('p-retry').onclick = () => { save(); closePanel(); gymPhoto(); };
       $('p-done').onclick = async () => {
         save(); closePanel();
-        if (st.win) await say('관장 초록', ['훌륭해! 새잎 배지를 줄게.', '기억해. 광합성은 가장 모자란 재료가 속도를 정해. 그리고 식물도 늘 호흡을 한단다.', '다음은 습지길 동쪽의 소화 체육관이야.']);
+        if (st.win) await say('관장 초록', ['훌륭해! 새잎 배지를 줄게.', '기억해. 광합성 속도는 가장 모자란 요인이 정해. 그리고 식물도 늘 호흡을 한단다.', '다음은 습지길 동쪽의 소화 체육관이야.']);
       };
     }
   }
@@ -587,7 +615,7 @@
         <p>${!win ? '분해되지 않은 영양소는 흡수되지 못한다. 어느 장소에서 어떤 소화액이 나오는지 다시 떠올려 보자.'
           : wrongAbs.length ? `흡수 통로를 잘못 고른 영양소: ${wrongAbs.map(k => NUT[k]).join(', ')}. 물에 잘 녹는 포도당·아미노산은 모세 혈관으로, 지방산·모노글리세리드는 암죽관으로 흡수된다.`
           : st.wrong ? `분해는 성공! 다만 효과 없는 선택이 ${st.wrong}번 있었다.` : '완벽한 소화와 흡수!'}</p></div>
-        <p><b>설명해 보기</b> — 쓸개즙에는 소화 효소가 없는데도 지방 소화에 꼭 필요한 까닭은 무엇일까요?</p>
+        <p><b>설명해 보기</b> — 쓸개즙에는 소화 효소가 없는데도 지방의 소화를 돕는 까닭은 무엇일까요?</p>
         <textarea id="refl" placeholder="두세 문장으로 써 보세요."></textarea>
         <div class="row-btns"><button class="btn primary" id="d-done">${win ? '배지 받기' : '저장하고 나가기'}</button><button class="btn" id="d-retry">다시 도전</button></div>`;
       const save = () => {
@@ -656,7 +684,13 @@
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
     if (KEYMAP[e.key]) { held.add(KEYMAP[e.key]); e.preventDefault(); }
-    else if (['z', 'Z', 'Enter', ' '].includes(e.key)) { if (mode === 'dialog' || mode === 'walk') { e.preventDefault(); pressA(); } }
+    else if (['z', 'Z', 'Enter', ' '].includes(e.key)) {
+      if (mode === 'dialog' || mode === 'walk') {
+        e.preventDefault(); // 기본 동작(포커스된 버튼 클릭)은 막고 아래에서 한 번만 처리한다
+        const choice = mode === 'dialog' && e.target.closest && e.target.closest('#dialog-choices button');
+        if (choice) choice.click(); else pressA(); // 선택지에 포커스가 있으면 그 선택지를 고른다
+      }
+    }
     else if (['x', 'X', 'Escape'].includes(e.key)) { e.preventDefault(); pressB(); }
   });
   document.addEventListener('keyup', e => { if (KEYMAP[e.key]) held.delete(KEYMAP[e.key]); });

@@ -6,20 +6,29 @@
    * 매 턴 광합성량 P = min(빛, 이산화 탄소, 물)  ← 제한 요인(가장 모자란 요인이 속도를 정함)
    * 녹말 변화 = P − 1(호흡은 밤낮없이 늘 일어난다)
    * 기공을 열면 CO2가 들어오지만 물이 빠져나간다(증산 작용).
+   * 기공 열기·닫기는 턴을 쓰지 않는다. 한 턴을 쓰게 하면 밤에 닫았다가 아침에 다시 여는 데
+   * 두 턴이 들어서, 물 1을 잃더라도 밤에 열어 두는 쪽이 유리해졌다(밤에 닫는 개념과 반대).
+   * 가뭄 동안에는 뿌리가 물을 흡수하지 못하므로, 밤에 열어 두어 잃은 물은 되찾기 어렵다.
+   * 별 기준은 전수 탐색(tests/quest-tune-photo.js)으로 맞췄다:
+   *   밤에 기공을 연 수열의 최대 녹말 11 < 별 3 기준 12 ≤ 밤에 기공을 닫은 수열의 최대 녹말 13
    */
   const PHOTO = {
     maxTurns: 10,
-    goal: 6,          // 이기려면 10턴 뒤 녹말 6 이상
-    stars: [6, 7, 8], // 별 1·2·3 기준 (8은 밤에 기공을 닫아 물을 아껴야 도달)
+    goal: 6,           // 이기려면 10턴 뒤 녹말 6 이상
+    stars: [6, 9, 12], // 별 1·2·3 기준 (12는 밤에 기공을 닫아야 도달 — tests/quest-logic.js에서 단언)
+    startWater: 3,     // 처음 물 저장량
+    maxFactor: 3,      // 빛·이산화 탄소·물 각 요인의 최댓값(셋 다 이 값이면 제한 요인 없음)
     // 관장 초록의 날씨 기술: 해당 턴 시작 시 발동
     script: {
       2: { id: 'cloud', turns: 2, name: '먹구름', text: '관장 초록이 먹구름을 불렀다! 2턴 동안 빛이 약해진다.' },
-      5: { id: 'drought', turns: 3, name: '가뭄', text: '관장 초록이 가뭄을 일으켰다! 3턴 동안 뿌리가 물을 조금밖에 흡수하지 못한다.' },
+      5: { id: 'drought', turns: 3, name: '가뭄', text: '관장 초록이 가뭄을 일으켰다! 3턴 동안 흙이 말라 뿌리가 물을 흡수하지 못한다.' },
       7: { id: 'night', turns: 1, name: '밤', text: '관장 초록이 해를 가렸다! 이번 턴은 밤이다. 빛이 없으면 광합성은 멈추고 호흡만 일어난다.' },
       9: { id: 'wind', turns: 1, name: '마른바람', text: '관장 초록이 마른바람을 불렀다! 기공이 열려 있으면 물이 두 배로 빠져나간다.' },
     },
+    // 기공 열기·닫기: 턴을 쓰지 않는 전환(photoToggle)
+    toggle: { id: 'stomata', label: '기공 열기/닫기' },
+    // 턴을 쓰는 행동: 매 턴 하나를 고른다
     actions: [
-      { id: 'stomata', label: '기공 열기/닫기' },
       { id: 'water', label: '뿌리로 물 흡수' },
       { id: 'leaf', label: '잎을 빛 쪽으로' },
       { id: 'wait', label: '기다리기' },
@@ -27,11 +36,21 @@
   };
 
   function photoInit() {
-    return { turn: 1, starch: 0, water: 2, stomata: false, leafBoost: 0, fx: {}, done: false, win: false, history: [] };
+    return { turn: 1, starch: 0, water: PHOTO.startWater, stomata: false, leafBoost: 0, fx: {}, done: false, win: false, history: [] };
+  }
+
+  // 기공 열기·닫기: 턴을 쓰지 않는다(턴 수·날씨·녹말은 그대로)
+  function photoToggle(prev) {
+    const s = JSON.parse(JSON.stringify(prev));
+    if (s.done) return s;
+    s.stomata = !s.stomata;
+    s.lastLog = [{ t: 'me', text: s.stomata ? '기공을 열었다. 이산화 탄소가 잎 속으로 들어온다.' : '기공을 닫았다. 물이 덜 빠져나가지만 이산화 탄소도 들어오지 못한다.' }];
+    return s;
   }
 
   // 한 턴 진행: 관장 기술 → 플레이어 행동 → 광합성·호흡·증산 계산
   function photoStep(prev, action) {
+    if (action === PHOTO.toggle.id) return photoToggle(prev);
     const s = JSON.parse(JSON.stringify(prev));
     if (s.done) return s;
     const log = [];
@@ -39,8 +58,10 @@
     if (ev) { s.fx[ev.id] = ev.turns; log.push({ t: 'enemy', text: ev.text }); }
     const drought = s.fx.drought > 0, cloud = s.fx.cloud > 0, night = s.fx.night > 0, wind = s.fx.wind > 0;
 
-    if (action === 'stomata') { s.stomata = !s.stomata; log.push({ t: 'me', text: s.stomata ? '기공을 열었다. 이산화 탄소가 잎 속으로 들어온다.' : '기공을 닫았다. 물이 덜 빠져나가지만 이산화 탄소도 들어오지 못한다.' }); }
-    if (action === 'water') { const g = drought ? 1 : 2; s.water = Math.min(5, s.water + g); log.push({ t: 'me', text: `뿌리로 물을 흡수했다(+${g}).${drought ? ' 가뭄이라 조금밖에 흡수하지 못했다.' : ''}` }); }
+    if (action === 'water') {
+      if (drought) log.push({ t: 'me', text: '뿌리로 물을 흡수하려 했지만 가뭄으로 흙이 말라 흡수하지 못했다(+0).' });
+      else { s.water = Math.min(5, s.water + 2); log.push({ t: 'me', text: '뿌리로 물을 흡수했다(+2).' }); }
+    }
     if (action === 'leaf') { s.leafBoost = 2; log.push({ t: 'me', text: '잎을 빛 쪽으로 펼쳤다. 2턴 동안 받는 빛이 늘어난다.' }); }
     if (action === 'wait') log.push({ t: 'me', text: '가만히 기다렸다.' });
 
@@ -50,7 +71,9 @@
     const P = Math.min(light, co2, water);
     const factors = { light, co2, water };
     const minV = Math.min(light, co2, water);
-    const limiting = Object.keys(factors).filter(k => factors[k] === minV);
+    // 세 요인이 모두 최댓값이면 이 셋 가운데 제한 요인은 없다(모두 '제한 요인'으로 표시하지 않는다)
+    const limiting = minV >= PHOTO.maxFactor ? [] : Object.keys(factors).filter(k => factors[k] === minV);
+    const stomataOpen = s.stomata; // 이번 턴 계산에 쓴 기공 상태(증산으로 시들어 닫히기 전)
     const net = P - 1;
     s.starch = Math.max(0, s.starch + net);
 
@@ -61,9 +84,10 @@
       if (s.water === 0) { s.stomata = false; log.push({ t: 'warn', text: '물이 바닥나 잎이 시들었다! 기공이 저절로 닫혔다.' }); }
     }
     const NAME = { light: '빛', co2: '이산화 탄소', water: '물' };
-    log.push({ t: P > 0 ? 'ok' : 'bad', text: `광합성량 = min(빛 ${light}, 이산화 탄소 ${co2}, 물 ${water}) = ${P}. 제한 요인: ${limiting.map(k => NAME[k]).join('·')}. 호흡 −1 → 녹말 ${net >= 0 ? '+' : ''}${net}` });
+    const limText = limiting.length ? `제한 요인: ${limiting.map(k => NAME[k]).join('·')}` : '세 요인이 모두 충분해 광합성량이 최대다';
+    log.push({ t: P > 0 ? 'ok' : 'bad', text: `광합성량 = min(빛 ${light}, 이산화 탄소 ${co2}, 물 ${water}) = ${P}. ${limText}. 호흡 −1 → 녹말 ${net >= 0 ? '+' : ''}${net}` });
 
-    s.history.push({ turn: s.turn, action, light, co2, water, P, net, starch: s.starch, limiting });
+    s.history.push({ turn: s.turn, action, night, stomata: stomataOpen, light, co2, water, P, net, starch: s.starch, limiting });
     // 효과 지속 시간 감소
     for (const k of Object.keys(s.fx)) { s.fx[k]--; if (s.fx[k] <= 0) delete s.fx[k]; }
     if (s.leafBoost > 0) s.leafBoost--;
@@ -95,6 +119,7 @@
     moves: {
       chew:     { name: '씹기', place: ['mouth'], desc: '음식을 잘게 부순다(물리적 소화). 화학적으로 분해하지는 않는다.' },
       mix:      { name: '꿈틀 운동', place: ['stomach', 'intestine'], desc: '근육이 오므라들었다 펴지며 음식과 소화액을 섞고 앞으로 보낸다(물리적 소화).' },
+      // 위·소장의 침은 함정 선택지(효과 없음): 위는 강한 산성, 소장으로는 침이 분비되지 않는다
       saliva:   { name: '침(아밀레이스)', place: ['mouth', 'stomach', 'intestine'], desc: '녹말 → 엿당' },
       gastric:  { name: '위액(펩신·염산)', place: ['stomach'], desc: '단백질 → 폴리펩타이드' },
       bile:     { name: '쓸개즙', place: ['intestine'], desc: '지방을 작은 방울로 만든다(유화). 소화 효소는 없다.' },
@@ -128,6 +153,7 @@
       effect = true;
     } else if (moveId === 'saliva') {
       if (place.id === 'stomach') log.push({ t: 'bad', text: '효과 없음! 위의 강한 산성에서는 침 속 아밀레이스가 작용하지 못한다.' });
+      else if (place.id === 'intestine') log.push({ t: 'bad', text: '효과 없음! 침은 입속으로 분비되고 소장으로는 분비되지 않는다. 소장에서 녹말을 분해하는 것은 이자액의 아밀레이스다.' });
       else if (s.food.starch === 0) { s.food.starch = 1; effect = true; log.push({ t: 'ok', text: `분해 성공! ${C.starch[0]} → ${C.starch[1]}` }); }
       else log.push({ t: 'bad', text: '효과 없음! 아밀레이스는 녹말만 분해한다. 이미 녹말이 남아 있지 않다.' });
     } else if (moveId === 'gastric') {
@@ -183,7 +209,7 @@
     return res;
   }
 
-  const api = { PHOTO, photoInit, photoStep, DIGEST, digestInit, digestStep, digestStars, absorbCheck };
+  const api = { PHOTO, photoInit, photoToggle, photoStep, DIGEST, digestInit, digestStep, digestStars, absorbCheck };
   root.Battles = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

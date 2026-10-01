@@ -156,10 +156,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .absorb-row b { flex: 1 1 100%; }
 .absorb-row .btn { flex: 1; font-size: 13px; }
 .absorb-row .btn.sel { background: var(--accent); color: #fff; }
-textarea { width: 100%; min-height: 70px; font: inherit; font-size: 14px; border: 2px solid var(--line); border-radius: 8px; padding: 6px 8px; background: #fff; color: var(--ink); -webkit-user-select: text; user-select: text; }
+textarea { width: 100%; min-height: 70px; font: inherit; font-size: 16px; border: 2px solid var(--line); border-radius: 8px; padding: 6px 8px; background: #fff; color: var(--ink); -webkit-user-select: text; user-select: text; }
 .stars { color: #d49b0e; font-size: 22px; letter-spacing: 3px; }
 .stars .off { color: #d8d0bb; }
 .roadmap li { margin-bottom: 4px; }
 .muted { color: var(--ink-2); font-size: 12px; }
 
 @media (min-height: 860px) { #pad { padding-top: 28px; } }
+/* 기록 화면의 학번·이름 입력칸도 16px(iOS Safari 자동 확대 방지) */
+#r-id, #r-name { font-size: 16px; }
