@@ -20,20 +20,28 @@
     .tile.R { border-radius: 50%; box-shadow: inset 0 -5px 0 rgba(0, 0, 0, .2), 0 0 0 3px #fff inset; }
     .tile.R::after { content: 'RNA'; position: absolute; bottom: 2px; font-size: 8px; font-weight: 800; opacity: .9; }
     .tile.sel { transform: scale(1.1); outline: 4px solid #fff; }
+    .tile:focus-visible { outline: 3px dashed #3a1c2b; outline-offset: 2px; }
     .tile.pop { animation: pop .35s ease-out; }
     @keyframes pop { 50% { transform: scale(1.3); filter: brightness(1.5); } }
     .b-A { background: #e06666; } .b-T { background: #e0a412; } .b-G { background: #6aa84f; } .b-C { background: #3d85c6; } .b-U { background: #8e7cc3; }
     .legend { background: rgba(255, 255, 255, .7); border-radius: 12px; padding: 8px 10px; margin-top: 8px; font-size: 13px; line-height: 1.5; }
     .legend b { font-size: 15px; }
+    /* 토스트는 점수·남은 이동 칸을 가리지 않게 판 위쪽에 띄운다 */
+    .board { position: relative; }
+    /* 결과 화면에 덧붙인 번역 문항(game.js addFlowQuiz)도 공통 문항과 같은 모양으로 */
+    .flow-opts { display: grid; gap: 6px; }
+    .flow-fb { font-size: 14px !important; }
   </style>
 </head>
 <body>
   <header class="bar"><a href="../../index.html">← 오락실</a><b>염기쌍 팡</b><div class="hud"><span id="lvhud"></span></div></header>
   <main id="stage">
     <div class="top"><div class="scorebox" id="score">0</div><div class="movebox">남은 이동 <b id="moves"></b></div></div>
-    <div class="grid" id="grid" aria-label="염기 판"></div>
+    <div class="board">
+      <div class="grid" id="grid" aria-label="염기 판"></div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
     <div class="legend" id="legend"></div>
-    <div class="toast" id="toast"></div>
   </main>
   <div class="overlay" id="overlay" hidden></div>
   <script src="../../shared/standards.js"></script>
