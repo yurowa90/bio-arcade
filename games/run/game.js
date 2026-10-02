@@ -49,11 +49,12 @@
   }
   function reset() {
     S = { t: 0, x: 0, y: GROUND, vy: 0, jumps: 0, E: E_MAX, nut: ['glu', 'glu', 'glu'], O: 3, C: 0, U: 0, made: 0, items: [], queue: makeQueue(), hurt: 0,
-      stats: { glucose: 0, amino: 0, o2: 0, hits: 0, cellsMet: 0, cellsNoO2: 0, cellsNoNut: 0, cellsEmpty: 0, wasteSlow: 0, exhaled: 0, filtered: 0 }, warned: {} };
+      stats: { glucose: 0, amino: 0, o2: 0, hits: 0, cellsMet: 0, cellsNoO2: 0, cellsNoNut: 0, cellsEmpty: 0, exhaled: 0, filtered: 0 }, warned: {} };
     spawn();
   }
   let toastT;
-  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 2200); }
+  // 글이 길수록 오래 보여 준다: 글자당 70ms, 최소 2.2초, 최대 6초
+  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), Math.min(6000, Math.max(2200, t.length * 70))); }
   function warnOnce(key, text) { if (!S.warned[key]) { S.warned[key] = true; toast(text); } }
 
   // 일정에서 화면 오른쪽 끝에 들어올 때가 된 아이템을 꺼낸다
@@ -64,7 +65,6 @@
       S.items.push(it);
     }
   }
-  function speed() { return (S.C >= 8 || S.U >= 8) ? 170 : 230; }
 
   // 세포에 닿았을 때: 영양소 1 + 산소 1을 전해 주면 세포가 세포 호흡을 하고 노폐물을 혈액에 내놓는다
   function deliver(it) {
@@ -84,13 +84,11 @@
   function update(dt) {
     const z = zoneAt(S.t);
     S.t += dt;
-    const v = speed();
-    S.x += v * dt;
+    S.x += BASE_SPEED * dt;
     // 대사: 세포는 가만히 있어도 에너지를 쓴다
-    const wasteHeavy = S.C >= 8 || S.U >= 8;
-    S.E -= (z.drain + (wasteHeavy ? 3 : 0)) * dt;
-    if (wasteHeavy) { S.stats.wasteSlow += dt; warnOnce('waste', '노폐물이 쌓였다! 몸이 무거워진다 — 폐와 콩팥에서 내보내자'); }
-    // 폐: 이산화 탄소 배출, 콩팥: 요소 배설
+    S.E -= z.drain * dt;
+    // 폐: 이산화 탄소 배출, 콩팥: 요소 배설. 그 구간을 지나기만 하면 저절로 줄어드는 표시용 값이다.
+    // 폐를 지날 때마다 이산화 탄소가 0이 되어 많이 쌓일 수 없으므로, 노폐물이 쌓여 받는 불이익(감속 등)은 두지 않는다.
     if (z.id === 'lung' && S.C > 0) { const d = Math.min(S.C, 2.5 * dt); S.C -= d; S.stats.exhaled += d; }
     if (z.id === 'kidney' && S.U > 0) { const d = Math.min(S.U, 2 * dt); S.U -= d; S.stats.filtered += d; }
     // 점프 물리
@@ -100,7 +98,7 @@
     // 아이템
     spawn();
     for (const it of S.items) {
-      it.x -= v * dt;
+      it.x -= BASE_SPEED * dt;
       if (it.got) continue;
       if (it.k === 'cell' && it.x < PX - 26) { it.got = true; S.stats.cellsMet++; continue; } // 닿지 못하고 지나친 세포
       const hitY = it.k === 'wall' ? S.y > GROUND - 40 : Math.abs((S.y - 22) - it.y) < 34;
@@ -144,7 +142,7 @@
   }
 
   function draw() {
-    const z = zoneAt(S.t), v = speed(), k = Math.floor(S.t / ZONE_LEN);
+    const z = zoneAt(S.t), v = BASE_SPEED, k = Math.floor(S.t / ZONE_LEN);
     // 구간 경계도 아이템과 같은 속도로 흘러온다: 화면 오른쪽에는 곧 들어갈 구간이 보인다
     for (let j = Math.max(0, k - 1); j <= k + 1; j++) {
       const x0 = j === 0 ? 0 : PX + v * (j * ZONE_LEN - S.t), x1 = PX + v * ((j + 1) * ZONE_LEN - S.t);
@@ -206,8 +204,7 @@
         `만난 세포 ${st.cellsMet}개 가운데 ${S.made}개에 산소와 영양소를 전해 주었다(세포 호흡 ${S.made}번).`,
         `받은 것: 포도당 ${st.glucose} · 아미노산 ${st.amino} · 산소 ${st.o2}개`,
         st.cellsNoO2 ? `영양소는 있는데 산소가 없어 세포 호흡을 못 한 세포가 ${st.cellsNoO2}개. 호흡계 없이는 소화계도 소용없다!` : '',
-        st.cellsNoNut ? `산소는 있는데 영양소가 없어 에너지를 못 얻은 세포가 ${st.cellsNoNut}개. 소화계 없이는 호흡계도 소용없다!` : '',
-        st.wasteSlow > 1 ? `노폐물 때문에 느려진 시간 ${st.wasteSlow.toFixed(1)}초. 폐와 콩팥이 쉬지 않는 까닭이다.` : ''].filter(Boolean),
+        st.cellsNoNut ? `산소는 있는데 영양소가 없어 에너지를 못 얻은 세포가 ${st.cellsNoNut}개. 소화계 없이는 호흡계도 소용없다!` : ''].filter(Boolean),
       quiz: { q: '세포 호흡으로 에너지를 얻는 데 반드시 필요한 두 가지 물질은?', options: ['포도당(영양소)과 산소', '포도당과 이산화 탄소'], answer: 0,
         explain: '소화계가 흡수한 영양소와 호흡계가 받아들인 산소를 순환계가 세포까지 운반해야 세포 호흡이 일어난다. 이산화 탄소는 세포 호흡의 결과로 생기는 노폐물이다.' },
       reflection: '에너지 런에서 에너지가 계속 만들어지려면 소화계, 호흡계, 순환계, 배설계가 각각 어떤 일을 해야 했나요? 네 기관계를 모두 넣어 세포 호흡과 연결해 설명하세요.',
@@ -228,7 +225,8 @@
       '주인공은 온몸을 도는 <b>혈액</b>이다. 화면을 누르면 점프(두 번까지).',
       '소장에서 <b>포도당·아미노산</b>을, 폐에서 <b>산소</b>를 받아 싣는다.',
       '근육·콩팥 구간의 <b>세포</b>에 닿으면 영양소와 산소를 하나씩 전해 준다. <b>둘 다 있어야</b> 세포가 세포 호흡으로 에너지를 얻고 <b>이산화 탄소</b>를 혈액에 내놓는다. 아미노산을 쓰면 <b>요소</b>도 생긴다.',
-      '세포의 에너지는 가만히 있어도 줄어들고, 근육에서는 더 빨리 줄어든다. 이산화 탄소는 폐에서, 요소는 콩팥에서 내보낸다.',
+      '세포의 에너지는 가만히 있어도 줄어들고, 근육에서는 더 빨리 줄어든다.',
+      '<b>이산화 탄소·요소</b> 막대는 혈액에 실린 노폐물의 양이다. 혈액이 폐를 지나면 이산화 탄소가 빠져나가고, 콩팥을 지나면 요소가 걸러진다. 따로 누를 것은 없다.',
       `60초를 버티면 성공. 세포 ${CELLS}개 가운데 ${STAR2}개·${STAR3}개 이상에 전해 주면 별 2·3개.`,
     ],
     onStart: start,
