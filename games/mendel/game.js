@@ -55,7 +55,9 @@
   }
   function info(msg) { $('info').innerHTML = `<p>${msg}</p>${cardsHTML()}${notesHTML()}`; }
   let toastT;
-  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 1800); }
+  // 글자 수에 비례해 띄운다(글자당 70ms, 2.2~6초)
+  const toastMs = t => Math.min(6000, Math.max(2200, Array.from(t).length * 70));
+  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), toastMs(t)); }
 
   /* ---------- 행동 ---------- */
   // 남은 날이 0이 되어도 바로 끝내지 않는다. 지금 띄운 화면(씨앗 심기·유전자형 문항)을 닫을 때 끝낸다.
@@ -63,7 +65,8 @@
   // 오버레이가 떠 있는 동안 뒤쪽 화면(화분·도구 버튼)이 키보드로 눌리지 않게 막는다
   function lockStage(on) { $('stage').inert = on; }
   function focusCard() { const c = $('overlay').querySelector('.card'); if (c) { c.tabIndex = -1; c.focus({ preventScroll: true }); } }
-  function openOverlay(html) { const ov = $('overlay'); ov.hidden = false; ov.innerHTML = html; lockStage(true); focusCard(); return ov; }
+  // 카드가 화면을 덮으면 뒤쪽 토스트는 내린다(검정 교배 안내 같은 토스트가 카드를 닫은 뒤까지 남지 않게)
+  function openOverlay(html) { const ov = $('overlay'); ov.hidden = false; ov.innerHTML = html; $('toast').classList.remove('on'); lockStage(true); focusCard(); return ov; }
   function closeOverlay(msg) {
     $('overlay').hidden = true; lockStage(false); S.sel = []; render(); info(msg);
     if (S.days <= 0) end();
@@ -114,11 +117,14 @@
       if (keep.has(i)) keep.delete(i); else if (keep.size < free) keep.add(i); else return toast(`빈 화분이 ${free}개뿐이다`);
       b.classList.toggle('keep', keep.has(i)); b.setAttribute('aria-pressed', keep.has(i));
     });
+    // 같은 교배에서 심은 완두는 추론 문항과 정답이 같으므로 추론 상태를 함께 쓴다.
+    // 하나라도 추론을 틀리면 정답이 공개되므로, 이 교배의 완두는 모두 그 판 동안 검정 교배로만 확인한다.
+    const inferState = inf ? { failed: false } : null;
     $('plant').onclick = () => {
       for (const i of keep) {
         const slot = S.pots.findIndex(p => !p);
         const k = kids[i];
-        S.pots[slot] = newPlant(k.shape, k.color, { from: title, infer: inf });
+        S.pots[slot] = newPlant(k.shape, k.color, { from: title, infer: inferState });
       }
       closeOverlay(`${keep.size}그루를 심었다. 유전자형은 아직 “?”다. 검정 교배나 추론으로 알아내자.`);
     };
@@ -141,7 +147,11 @@
     ov.querySelectorAll('[data-g]').forEach(b => b.onclick = () => {
       const ok = b.dataset.g === key, match = key === truth;
       ov.querySelectorAll('[data-g]').forEach(x => { x.disabled = true; if (x.dataset.g === key) x.classList.add('right'); });
-      if (!ok) { b.classList.add('wrong'); if (how === 'test') S.wrongTests++; else S.wrongInfers++; }
+      if (!ok) {
+        b.classList.add('wrong');
+        if (how === 'test') S.wrongTests++;
+        else { S.wrongInfers++; if (p.infer) { p.infer.failed = true; p.inferMissed = true; } }
+      }
       const fb = ov.querySelector('.quiz-fb'); fb.hidden = false;
       fb.innerHTML = ok ? (match ? `정답! <b>${truth}</b> 카드를 얻었다.` : '이번 자료로는 맞는 판단이다.') : `아쉽다. ${match ? '정답은' : '이번 자료로 판단하면'} <b>${key}</b>.`;
       if (how === 'test') {
@@ -157,7 +167,8 @@
       if (ok) { p.known = true; S.geno.add(truth); if (how !== 'test') S.inferred++; }
       $('gclose').hidden = false;
     });
-    $('gclose').onclick = () => closeOverlay(p.known ? `${G.genotype(p)} 확인 완료!` : '다른 완두로 다시 도전해 보자.');
+    $('gclose').onclick = () => closeOverlay(p.known ? `${G.genotype(p)} 확인 완료!`
+      : how === 'test' ? '하루를 더 써서 이 완두를 다시 검정 교배하거나, 다른 완두로 도전해 보자.' : '추론을 틀렸다. 이 완두와, 같은 교배에서 나온 다른 완두는 검정 교배로 확인하자.');
   }
 
   $('t-cross').onclick = () => {
@@ -179,8 +190,13 @@
     if (p.known) return toast('이미 유전자형을 아는 완두다');
     if (G.phenoKey(p) === 'ry') return askGenotype(p, 'infer', '<p class="note">주름지고 녹색인 형질은 둘 다 열성이다. 열성 형질이 겉으로 드러나려면 열성 대립유전자만 가져야 한다.</p>',
       { why: '주름진 모양과 녹색은 둘 다 열성 형질이다. 열성 형질은 열성 대립유전자만 가질 때 나타나므로 rr, yy다.' });
-    if (p.infer) return askGenotype(p, 'infer', `<p class="note">부모(${p.from})의 유전자형을 모두 알고 있다. 부모가 만들 수 있는 생식세포를 떠올려 보자.</p>`,
+    if (p.infer && !p.infer.failed) return askGenotype(p, 'infer', `<p class="note">부모(${p.from})의 유전자형을 모두 알고 있다. 부모가 만들 수 있는 생식세포를 떠올려 보자.</p>`,
       { why: '부모가 만들 수 있는 생식세포의 조합이 한 가지뿐이면 자손의 유전자형도 하나로 정해진다.' });
+    // 추론을 틀린 교배의 완두: 처음 누르면 안내만 하고(하루를 쓰지 않음), 다시 누르면 검정 교배를 한다
+    if (p.infer && !p.warned) {
+      p.warned = true;
+      return toast(`${p.inferMissed ? '이 완두는 추론을 틀렸다.' : '같은 교배에서 나온 완두의 추론을 틀렸다.'} 같은 버튼을 한 번 더 누르면 검정 교배로 확인한다(하루 소요).`);
+    }
     // 검정 교배: 열성 순종(rryy)과 교배
     const kids = G.cross(p, TESTER, N_SEEDS);
     const t = G.tally(kids);
@@ -219,7 +235,6 @@
         : '잡종 1대(RrYy)를 자가 수분하면 네 가지 표현형이 약 9:3:3:1로 나와요. 그 까닭을 분리의 법칙과 독립의 법칙으로 설명하세요. 씨앗 수가 16개처럼 적으면 실제 개수가 이 비율과 다를 수 있는 까닭도 함께 쓰세요.',
       onRetry: reset,
     });
-    focusCard();
   }
 
   lockStage(true);
@@ -229,6 +244,7 @@
       '화분 두 개를 골라 <b>교배</b>하거나, 한 개를 골라 <b>자가 수분</b>하면 씨앗 16개가 나온다(하루 소요).',
       '새로운 겉모습이 나오면 <b>표현형 카드</b>를 얻는다.',
       '유전자형(예: RrYy)은 겉으로 보이지 않는다. <b>검정 교배</b>나 <b>추론</b>으로 맞혀야 <b>유전자형 카드</b>를 얻는다.',
+      '추론을 틀리면 그 완두와, 같은 교배에서 나온 다른 완두도 추론할 수 없다. 검정 교배(하루 소요)로 확인하자.',
       `${DAYS}일 안에 카드를 최대한 모으자. 별: 표현형 4장 + 유전자형 5·7·9장`,
     ],
     onStart: reset,
