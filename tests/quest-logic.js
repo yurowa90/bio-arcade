@@ -1,4 +1,4 @@
-// 지도 연결·도달 가능성, 서식지별 낮/밤 생물, 체육관 규칙을 검증한다.
+// 지도 연결·도달 가능성, 서식지별 낮/밤 생물, 관찰 질문 배정, 체육관 규칙을 검증한다.
 const D = require('../games/quest/js/data.js');
 const B = require('../games/quest/js/battles.js');
 let fail = 0;
@@ -51,6 +51,31 @@ chk('낮에 생산자 관찰 가능', D.SPECIES.some(s => s.role === '생산자'
 chk('밤에도 생산자 관찰 가능', D.SPECIES.some(s => s.role === '생산자' && s.time !== 'day'));
 chk('체육관 입장 조건(4종·생산자) 낮 숲만으로 충족 가능', D.SPECIES.filter(s => s.habitat === 'forest' && s.time !== 'night').length >= 4);
 
+// 3-1. 관찰 질문 배정(data.js의 ask). 정답 계산은 main.js의 observationQuestions와 같다(tests/quest-e2e.js가 실제 함수와 대조).
+// 질문 종류만 보고 답을 짐작하지 못해야 한다: 종류마다 정답이 둘 이상으로 갈리고, 한 정답이 60%를 넘지 않는다.
+// ask가 배열이면 차례로 낸다(앞 질문을 맞혀야 다음 질문). 분포는 낼 수 있는 질문 전체로, 풀 조건은 첫 질문으로 센다.
+const ASK = { kind: sp => sp.kind, role: sp => sp.role, vert: sp => (sp.cls.startsWith('척추') ? 'yes' : 'no') };
+const asks = sp => [].concat(sp.ask);
+chk('관찰 질문: 모든 생물에 질문 종류(kind·role·vert)가 정해져 있음', D.SPECIES.every(sp => asks(sp).length && asks(sp).every(k => ASK[k])), D.SPECIES.filter(sp => !asks(sp).every(k => ASK[k])).map(sp => sp.name).join(','));
+chk('관찰 질문: 한 생물에게 같은 종류를 두 번 내지 않음', D.SPECIES.every(sp => new Set(asks(sp)).size === asks(sp).length));
+chk('관찰 질문: 척추 여부는 동물에게만', D.SPECIES.every(sp => asks(sp).every(k => k !== 'vert' || sp.kind === '동물')));
+const askDist = (arr, firstOnly) => { const o = {}; for (const sp of arr) for (const k of firstOnly ? asks(sp).slice(0, 1) : asks(sp)) { if (!ASK[k]) continue; const a = ASK[k](sp); (o[k] = o[k] || {})[a] = (o[k][a] || 0) + 1; } return o; };
+const fmt = o => Object.entries(o).map(([k, v]) => `${k} ${JSON.stringify(v)}`).join(' / ');
+const dAll = askDist(D.SPECIES);
+for (const t of Object.keys(ASK)) {
+  const v = Object.values(dAll[t] || {}), n = v.reduce((a, b) => a + b, 0);
+  chk(`관찰 질문 ${t}: 정답이 한 가지로 몰리지 않음(18종 전체)`, v.length >= 2 && Math.max(...v) / n <= 0.6, `${n}문항 ${JSON.stringify(dAll[t] || {})}`);
+}
+chk('관찰 질문: 무리 질문의 정답에 식물·균류·동물이 모두 있음', ['식물', '균류', '동물'].every(k => (dAll.kind || {})[k] > 0), JSON.stringify(dAll.kind));
+chk('관찰 질문: 역할 질문의 정답에 생산자·소비자·분해자가 모두 있음', ['생산자', '소비자', '분해자'].every(r => (dAll.role || {})[r] > 0), JSON.stringify(dAll.role));
+const oyster = D.SPECIES.find(s => s.id === 'oyster');
+chk('관찰 질문: 느타리(균류·분해자)는 무리 질문을 먼저 받고 이어 역할 질문을 받음', asks(oyster).join() === 'kind,role');
+for (const h of ['forest', 'wetland']) for (const t of ['day', 'night']) {
+  const pool = D.SPECIES.filter(s => s.habitat === h && (s.time === 'both' || s.time === t));
+  const dp = askDist(pool, true);
+  chk(`관찰 질문 ${h}/${t}: 첫 질문만으로도 세 종류가 모두 나오고 종류마다 정답이 갈림`, Object.keys(ASK).every(k => dp[k] && Object.keys(dp[k]).length >= 2), fmt(dp));
+}
+
 // 4. 광합성 대결 ('stomata'는 기공 열기·닫기 — 턴을 쓰지 않는다)
 const run = seq => seq.reduce((s, a) => B.photoStep(s, a), B.photoInit());
 const tg = B.photoStep(B.photoInit(), 'stomata');
@@ -78,9 +103,12 @@ chk('광합성 전수: 밤에 기공을 닫으면 별 3 도달 가능', maxNight
 chk('광합성 전수: 밤에 기공을 열어도 승리는 가능(별 1~2)', maxNightOpen >= B.PHOTO.goal);
 
 // 5. 소화 대결
-let d = B.digestInit(); for (const m of ['saliva', 'chew', 'gastric', 'mix', 'bile', 'pancreas', 'intestinal']) d = B.digestStep(d, m);
+const ABS_OK = { starch: 'capillary', protein: 'capillary', fat: 'lacteal' };
+const MODEL = ['saliva', 'chew', 'gastric', 'mix', 'bile', 'pancreas', 'intestinal'];
+let d = B.digestInit(); for (const m of MODEL) d = B.digestStep(d, m);
 chk('소화: 모범 경로 → 흡수 단계', d.phase === 'absorb' && d.wrong === 0);
-chk('소화: 흡수 정답 → 별 3', B.digestStars(d, B.absorbCheck({ starch: 'capillary', protein: 'capillary', fat: 'lacteal' })) === 3);
+chk('소화: 모범 경로는 쓸개즙으로 유화한 뒤 이자액으로 분해', MODEL.indexOf('bile') >= 0 && MODEL.indexOf('bile') < MODEL.indexOf('pancreas') && d.emulsified);
+chk('소화: 쓸개즙 사용 + 흡수 정답 → 별 3', B.digestStars(d, B.absorbCheck(ABS_OK)) === 3);
 chk('소화: 지방을 모세 혈관으로 → 별 1', B.digestStars(d, B.absorbCheck({ starch: 'capillary', protein: 'capillary', fat: 'capillary' })) === 1);
 let d2 = B.digestInit(); d2 = B.digestStep(d2, 'chew'); d2 = B.digestStep(d2, 'chew'); d2 = B.digestStep(d2, 'saliva');
 chk('소화: 위에서 침 → 효과 없음(산성)', d2.lastLog.some(l => l.text.includes('산성')));
@@ -92,5 +120,21 @@ let d3 = B.digestInit(); for (const m of ['chew', 'chew', 'mix', 'mix', 'mix', '
 chk('소화: 분해 안 하면 패배', d3.phase === 'fail');
 let d4 = B.digestInit(); for (const m of ['chew', 'chew', 'gastric', 'mix', 'pancreas', 'pancreas', 'intestinal']) d4 = B.digestStep(d4, m);
 chk('소화: 쓸개즙 없이도 라이페이스 2번이면 분해(비효율)', d4.phase === 'absorb' && d4.food.fat === 2);
+chk('소화: 쓸개즙 미사용 → 헛수 0·흡수 정답이어도 별 2(승리는 함)', !d4.emulsified && d4.wrong === 0 && B.digestStars(d4, B.absorbCheck(ABS_OK)) === 2);
+let d6 = B.digestInit(); for (const m of ['saliva', 'chew', 'gastric', 'mix', 'pancreas', 'bile', 'pancreas', 'intestinal']) d6 = B.digestStep(d6, m);
+chk('소화: 이자액을 먼저 썼어도 쓸개즙으로 유화한 뒤 이자액으로 분해를 끝내면 별 3 가능', d6.phase === 'absorb' && d6.emulsified && B.digestStars(d6, B.absorbCheck(ABS_OK)) === 3);
+// 전수 탐색: 장소마다 쓸 수 있는 모든 기술 수열을 끝까지 돌린다(약 2만 2천 개)
+const dFinals = [];
+(function dfs(s) {
+  if (s.phase !== 'digest') { dFinals.push(s); return; }
+  const place = B.DIGEST.places[s.placeIdx].id;
+  for (const [id, m] of Object.entries(B.DIGEST.moves)) if (m.place.includes(place)) dfs(B.digestStep(s, id));
+})(B.digestInit());
+const dWins = dFinals.filter(s => s.phase === 'absorb');
+const bileWins = dWins.filter(s => s.history.some(h => h.move === 'bile' && h.effect)), noBileWins = dWins.filter(s => !s.history.some(h => h.move === 'bile' && h.effect));
+const maxStars = arr => Math.max(...arr.map(s => B.digestStars(s, B.absorbCheck(ABS_OK))));
+chk('소화 전수: 쓸개즙 없이 이긴 수열은 별 2 이하', noBileWins.length > 0 && maxStars(noBileWins) === 2, `${noBileWins.length}개, 최대 별 ${maxStars(noBileWins)}`);
+chk('소화 전수: 쓸개즙을 쓴 수열은 별 3 도달 가능', maxStars(bileWins) === 3, `${bileWins.length}개 중 별 3 ${bileWins.filter(s => B.digestStars(s, B.absorbCheck(ABS_OK)) === 3).length}개`);
+chk('소화 전수: emulsified = 쓸개즙이 효과를 낸 수열', dWins.every(s => s.emulsified === bileWins.includes(s)));
 
 process.exit(fail ? 1 : 0);

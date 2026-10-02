@@ -103,6 +103,8 @@
   /* ============ 2 체육관: 소화 ============
    * 음식이 입 → 위 → 소장을 차례로 지난다. 장소마다 쓸 수 있는 소화액이 다르다.
    * 원작의 “속성 상성”을 효소-기질 특이성으로 바꾸었다: 맞지 않으면 “효과 없음”.
+   * 지방: 쓸개즙으로 유화한 뒤 라이페이스(이자액)를 쓰면 한 번에 분해된다. 유화하지 않으면 이자액을 두 번 써야 한다.
+   * 쓸개즙 없이 분해해도 이길 수는 있지만 별 3은 받을 수 없다(digestStars) — 쓸개즙의 역할(유화)이 점수에 드러나게 한다.
    */
   const DIGEST = {
     places: [
@@ -131,7 +133,7 @@
   };
 
   function digestInit() {
-    return { placeIdx: 0, turnInPlace: 0, food: { starch: 0, protein: 0, fat: 0 }, fatHP: 2, done: false, phase: 'digest', history: [], wrong: 0 };
+    return { placeIdx: 0, turnInPlace: 0, food: { starch: 0, protein: 0, fat: 0 }, fatHP: 2, emulsified: false, done: false, phase: 'digest', history: [], wrong: 0 };
   }
   const final = st => st.food.starch === 2 && st.food.protein === 2 && st.food.fat === 2;
 
@@ -160,7 +162,7 @@
       if (s.food.protein === 0) { s.food.protein = 1; effect = true; log.push({ t: 'ok', text: `분해 성공! ${C.protein[0]} → ${C.protein[1]} (펩신은 산성에서 잘 작용한다)` }); }
       else log.push({ t: 'bad', text: '효과 없음! 펩신은 단백질을 분해한다. 녹말과 지방에는 작용하지 않는다.' });
     } else if (moveId === 'bile') {
-      if (s.food.fat === 0) { s.food.fat = 1; s.fatHP = 1; effect = true; log.push({ t: 'ok', text: '지방이 작은 방울로 나뉘었다(유화). 쓸개즙에는 소화 효소가 없지만, 라이페이스가 작용할 표면적을 넓혀 준다.' }); }
+      if (s.food.fat === 0) { s.food.fat = 1; s.fatHP = 1; s.emulsified = true; effect = true; log.push({ t: 'ok', text: '지방이 작은 방울로 나뉘었다(유화). 쓸개즙에는 소화 효소가 없지만, 라이페이스가 작용할 표면적을 넓혀 준다.' }); }
       else log.push({ t: 'bad', text: '효과 없음! 유화할 지방이 없다.' });
     } else if (moveId === 'pancreas') {
       const done = [];
@@ -193,11 +195,12 @@
     return s;
   }
 
-  // 별: 헛수(효과 없음) 0개 + 흡수 모두 정답 = 3, 헛수 2개 이하 = 2, 그 밖 성공 = 1
+  // 별: 쓸개즙으로 유화한 뒤 분해 + 헛수(효과 없음) 0개 + 흡수 모두 정답 = 3, 헛수 2개 이하 + 흡수 모두 정답 = 2, 그 밖 성공 = 1
+  // 쓸개즙은 지방이 다 분해되기 전에만 효과가 있으므로(위 bile), emulsified는 “유화한 뒤 라이페이스로 분해했다”와 같다.
   function digestStars(st, absorbRes) {
     if (st.phase === 'fail') return 0;
     const allOk = absorbRes && Object.values(absorbRes).every(Boolean);
-    if (st.wrong === 0 && allOk) return 3;
+    if (st.wrong === 0 && allOk && st.emulsified) return 3;
     if (st.wrong <= 2 && allOk) return 2;
     return 1;
   }

@@ -327,12 +327,26 @@
   function badgeHTML(sp, big, unknown) {
     return `<div class="badge${big ? ' big' : ''}" style="background:${unknown ? '#ddd6c3' : sp.color}">${unknown ? '?' : sp.name[0]}</div>`;
   }
+  /* 관찰 질문은 세 종류다. 무리·역할 질문은 어느 생물에게나, 척추 질문은 동물에게만 낸다(동물 안에서만 답이 갈린다).
+   * 생물마다 어떤 질문을 낼지는 data.js의 ask가 정한다. 질문 종류만 보고 답을 짐작하지 못하도록
+   * 서식지·시간 풀마다 같은 종류의 질문끼리 정답이 갈리게 배정했다(tests/quest-logic.js에서 확인). */
   const ROLE_DESC = { 생산자: '빛에너지로 스스로 양분을 만든다', 소비자: '다른 생물을 먹어 양분을 얻는다', 분해자: '죽은 생물이나 배설물을 분해해 양분을 얻는다' };
-  function observationQuestion(sp) {
-    if (sp.kind === '식물') return { q: `${josa(sp.name, '은/는')} 양분을 어떻게 얻을까?`, key: 'role', options: ['생산자', '소비자', '분해자'].map(r => ({ v: r, label: `${r} — ${ROLE_DESC[r]}` })), answer: sp.role };
-    if (sp.kind === '균류') return { q: `${josa(sp.name, '은/는')} 어느 무리일까? (힌트: 엽록체가 있는지 살펴보자)`, key: 'kind', options: ['식물', '균류', '동물'].map(k => ({ v: k, label: k })), answer: sp.kind };
-    const vert = sp.cls.startsWith('척추');
-    return { q: `${josa(sp.name, '은/는')} 등뼈(척추)가 있을까?`, key: 'vert', options: [{ v: 'yes', label: '척추동물 — 등뼈가 있다' }, { v: 'no', label: '무척추동물 — 등뼈가 없다' }], answer: vert ? 'yes' : 'no' };
+  const KIND_DESC = { 식물: '엽록체가 있어 광합성을 한다', 균류: '엽록체가 없고, 대부분 몸이 균사로 되어 있으며, 주로 죽은 생물 등을 분해해 양분을 얻는다', 동물: '엽록체가 없고, 다른 생물을 먹어 양분을 얻는다' };
+  const QUESTIONS = {
+    kind: sp => ({ q: `${josa(sp.name, '은/는')} 어느 무리일까?`, hint: '균류와 동물은 둘 다 엽록체가 없다. 몸이 무엇으로 되어 있는지, 양분을 어떻게 얻는지도 살펴보자.',
+      options: ['식물', '균류', '동물'].map(k => ({ v: k, label: `${k} — ${KIND_DESC[k]}` })), answer: sp.kind }),
+    role: sp => ({ q: `${josa(sp.name, '은/는')} 양분을 어떻게 얻을까?`, hint: '생산자·소비자·분해자는 양분을 얻는 방법으로 가른다.',
+      options: ['생산자', '소비자', '분해자'].map(r => ({ v: r, label: `${r} — ${ROLE_DESC[r]}` })), answer: sp.role }),
+    vert: sp => ({ q: `${josa(sp.name, '은/는')} 등뼈(척추)가 있을까?`, hint: '몸 겉이 단단하다고 등뼈가 있는 것은 아니다. 몸속에 등뼈가 있는지 떠올려 보자.',
+      options: [{ v: 'yes', label: '척추동물 — 등뼈가 있다' }, { v: 'no', label: '무척추동물 — 등뼈가 없다' }], answer: sp.cls.startsWith('척추') ? 'yes' : 'no' }),
+  };
+  // ask가 배열이면(느타리) 차례로 낼 질문 목록이 된다. 앞 질문을 맞혀야 다음 질문으로 간다.
+  function observationQuestions(sp) {
+    return [].concat(sp.ask || 'kind').map(k => {
+      let key = QUESTIONS[k] ? k : 'kind';
+      if (key === 'vert' && sp.kind !== '동물') key = 'kind';
+      return { key, ...QUESTIONS[key](sp) };
+    });
   }
   function speciesCardHTML(sp, full) {
     const t = sp.time === 'night' ? '☾ 밤' : sp.time === 'day' ? '☀ 낮' : '☀☾ 낮·밤';
@@ -354,8 +368,7 @@
     }[p.id];
     return `<p class="feedback"><b>${p.name}</b>: ${L}</p>`;
   }
-  function encounter(habitat) {
-    const sp = pickSpecies(habitat);
+  function encounter(habitat, sp = pickSpecies(habitat)) {
     if (!sp) return;
     const rec = S.dex[sp.id] || (S.dex[sp.id] = { seen: 0, done: false, first: new Date().toISOString(), atNight: isNight() });
     rec.seen++;
@@ -367,25 +380,39 @@
       $('enc-ok').onclick = closePanel; $('enc-ok').focus();
       return;
     }
-    const Q = observationQuestion(sp);
-    body.innerHTML = `<p>풀숲에서 무언가가 움직인다… <b>${josa(sp.name, '이/가')}</b> 나타났다!</p>
-      ${speciesCardHTML(sp, false)}
-      <p><b>관찰하기</b> — ${Q.q}</p>
-      <div class="choice-list">${Q.options.map(o => `<button class="btn" data-v="${o.v}">${o.label}</button>`).join('')}</div>
-      <div class="row-btns"><button class="btn small" id="enc-run">관찰 그만두기</button></div>`;
-    $('enc-run').onclick = closePanel;
-    body.querySelectorAll('.choice-list .btn').forEach(b => b.addEventListener('click', () => {
-      const ok = b.dataset.v === Q.answer;
-      const correctLabel = Q.options.find(o => o.v === Q.answer).label;
-      if (ok) rec.done = true;
-      rec.tries = (rec.tries || 0) + 1;
-      if (!ok) rec.wrong = (rec.wrong || 0) + 1;
-      writeSave();
-      body.innerHTML = `${ok ? `<p class="feedback ok">관찰 성공! <b>${josa(sp.name, '이/가')}</b> 도감에 등록되었다.</p>` : `<p class="feedback bad">아쉽다! 정답은 “${correctLabel}”. 다음에 다시 만나면 관찰을 완성할 수 있다.</p>`}
-        ${speciesCardHTML(sp, true)}${partnerLine(sp)}
-        <div class="row-btns"><button class="btn primary" id="enc-ok">계속 탐사</button></div>`;
-      $('enc-ok').onclick = closePanel; $('enc-ok').focus();
-    }));
+    const QS = observationQuestions(sp);
+    // 질문이 여럿이어도 첫 화면에 몇 개인지 보이지 않게 한다(질문 수로 느타리임을 짐작하지 못하게).
+    // 다음 질문을 내는 동안에는 카드를 계속 가려 둔다. 카드에 다음 질문의 답(역할)이 있다.
+    const showQuestion = (i, lead) => {
+      const Q = QS[i];
+      body.innerHTML = `${lead}
+        ${speciesCardHTML(sp, false)}
+        <p><b>관찰하기</b> — ${Q.q}</p>
+        <p class="muted q-hint">힌트: ${Q.hint}</p>
+        <div class="choice-list">${Q.options.map(o => `<button class="btn" data-v="${o.v}">${o.label}</button>`).join('')}</div>
+        <div class="row-btns"><button class="btn small" id="enc-run">관찰 그만두기</button></div>`;
+      body.scrollTop = 0;
+      $('enc-run').onclick = closePanel;
+      body.querySelectorAll('.choice-list .btn').forEach(b => b.addEventListener('click', () => {
+        const ok = b.dataset.v === Q.answer;
+        const correctLabel = Q.options.find(o => o.v === Q.answer).label;
+        rec.tries = (rec.tries || 0) + 1;
+        if (!ok) rec.wrong = (rec.wrong || 0) + 1;
+        if (ok && i + 1 < QS.length) {
+          writeSave();
+          showQuestion(i + 1, `<p class="feedback ok">맞았다! ${josa(sp.name, '은/는')} ${josa(correctLabel.split(' — ')[0], '이다/다')}. 하나 더 관찰해 보자.</p>`);
+          body.querySelector('.choice-list .btn').focus({ preventScroll: true }); // '맞았다' 안내가 화면 맨 위에 보이게
+          return;
+        }
+        if (ok) rec.done = true;
+        writeSave();
+        body.innerHTML = `${ok ? `<p class="feedback ok">관찰 성공! <b>${josa(sp.name, '이/가')}</b> 도감에 등록되었다.</p>` : `<p class="feedback bad">아쉽다! 정답은 “${correctLabel}”. 다음에 다시 만나면 관찰을 완성할 수 있다.</p>`}
+          ${speciesCardHTML(sp, true)}${partnerLine(sp)}
+          <div class="row-btns"><button class="btn primary" id="enc-ok">계속 탐사</button></div>`;
+        $('enc-ok').onclick = closePanel; $('enc-ok').focus();
+      }));
+    };
+    showQuestion(0, `<p>풀숲에서 무언가가 움직인다… <b>${josa(sp.name, '이/가')}</b> 나타났다!</p>`);
   }
 
   /* ---------------- 도감 ---------------- */
@@ -611,15 +638,20 @@
       const win = stars > 0;
       const wrongAbs = absorbRes ? Object.entries(absorbRes).filter(([, v]) => !v).map(([k]) => k) : [];
       const NUT = { starch: '포도당', protein: '아미노산', fat: '지방산·모노글리세리드' };
+      const notes = [];
+      if (wrongAbs.length) notes.push(`흡수 통로를 잘못 고른 영양소: ${wrongAbs.map(k => NUT[k]).join(', ')}. 물에 잘 녹는 포도당·아미노산은 모세 혈관으로, 지방산·모노글리세리드는 암죽관으로 흡수된다.`);
+      else if (st.wrong) notes.push(`분해는 성공! 다만 효과 없는 선택이 ${st.wrong}번 있었다.`);
+      // 쓸개즙 없이 이자액을 두 번 써서 지방을 분해했다 → 별 3 불가(battles.js digestStars)
+      if (!st.emulsified) notes.push('쓸개즙으로 지방을 유화하기 전에 이자액으로 지방을 분해했다. 쓸개즙에는 소화 효소가 없지만, 지방을 작은 방울로 만들어(유화) 라이페이스가 작용하는 표면적을 넓힌다. 별 3개는 쓸개즙으로 유화한 뒤 이자액으로 분해해야 받을 수 있다.');
       body.innerHTML = `<div class="feedback ${win ? 'ok' : 'bad'}"><b>${win ? '승리!' : '패배…'}</b> ${starsHTML(stars)}
-        <p>${!win ? '분해되지 않은 영양소는 흡수되지 못한다. 어느 장소에서 어떤 소화액이 나오는지 다시 떠올려 보자.'
-          : wrongAbs.length ? `흡수 통로를 잘못 고른 영양소: ${wrongAbs.map(k => NUT[k]).join(', ')}. 물에 잘 녹는 포도당·아미노산은 모세 혈관으로, 지방산·모노글리세리드는 암죽관으로 흡수된다.`
-          : st.wrong ? `분해는 성공! 다만 효과 없는 선택이 ${st.wrong}번 있었다.` : '완벽한 소화와 흡수!'}</p></div>
+        ${!win ? '<p>분해되지 않은 영양소는 흡수되지 못한다. 어느 장소에서 어떤 소화액이 나오는지 다시 떠올려 보자.</p>'
+          : notes.length ? notes.map(n => `<p>${n}</p>`).join('') : '<p>완벽한 소화와 흡수!</p>'}</div>
         <p><b>설명해 보기</b> — 쓸개즙에는 소화 효소가 없는데도 지방의 소화를 돕는 까닭은 무엇일까요?</p>
         <textarea id="refl" placeholder="두세 문장으로 써 보세요."></textarea>
         <div class="row-btns"><button class="btn primary" id="d-done">${win ? '배지 받기' : '저장하고 나가기'}</button><button class="btn" id="d-retry">다시 도전</button></div>`;
+      body.scrollTop = 0; // 흡수 화면에서 내려간 채로 두면 별과 결과 안내가 화면 위로 가려진다
       const save = () => {
-        S.records.push({ gym: 'digest', at: new Date().toISOString(), win, stars, wrong: st.wrong, absorb: absorbRes, history: st.history, reflection: $('refl').value.trim() });
+        S.records.push({ gym: 'digest', at: new Date().toISOString(), win, stars, wrong: st.wrong, emulsified: st.emulsified, absorb: absorbRes, history: st.history, reflection: $('refl').value.trim() });
         if (win) S.badges.digest = Math.max(S.badges.digest || 0, stars);
         writeSave();
       };
@@ -707,6 +739,6 @@
   // 오프라인 실행(PWA)
 
   // 테스트용 훅
-  window.__bq = { get S() { return S; }, get mode() { return mode; }, player, warp, encounter, gymPhoto, gymDigest, openDex };
+  window.__bq = { get S() { return S; }, get mode() { return mode; }, player, warp, encounter, observationQuestions, gymPhoto, gymDigest, openDex };
   requestAnimationFrame(loop);
 })();

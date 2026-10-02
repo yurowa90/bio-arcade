@@ -4,44 +4,50 @@
  */
 (function (root) {
   // kind: 식물 | 동물 | 균류   role: 생산자 | 소비자 | 분해자   time: day | night | both
+  // ask: 처음 만났을 때 낼 관찰 질문 — kind(어느 무리) | role(양분을 얻는 방법 = 생태계 역할) | vert(등뼈 유무, 동물만)
+  //   질문 종류만 보고 답을 짐작하지 못하게, 서식지·시간 풀(숲·습지 × 낮·밤)마다 세 종류가 모두 나오고
+  //   같은 종류의 질문끼리 정답이 갈리도록 배정했다. 생물을 더하거나 바꾸면 tests/quest-logic.js로 확인한다.
+  //   배열이면 차례로 낸다. 앞 질문을 맞혀야 다음 질문이 나오고, 모두 맞혀야 관찰이 완성된다.
+  //   느타리는 하나뿐인 균류이자 분해자라서 무리 질문(버섯=식물 오개념) 뒤에 역할 질문을 더 낸다.
+  //   그래야 역할 질문에서도 '분해자'가 정답이 되는 경우가 생긴다.
   const SPECIES = [
     // 숲길
-    { id: 'squirrel', name: '다람쥐', kind: '동물', cls: '척추동물 · 포유류', role: '소비자', time: 'day', habitat: 'forest', color: '#b7793f',
+    { id: 'squirrel', name: '다람쥐', kind: '동물', cls: '척추동물 · 포유류', role: '소비자', ask: 'vert', time: 'day', habitat: 'forest', color: '#b7793f',
       fact: '볼주머니에 도토리 같은 먹이를 담아 옮기고 땅속에 저장한다. 낮에 활동한다.' },
-    { id: 'sparrow', name: '참새', kind: '동물', cls: '척추동물 · 조류', role: '소비자', time: 'day', habitat: 'forest', color: '#8d6e4c',
+    { id: 'sparrow', name: '참새', kind: '동물', cls: '척추동물 · 조류', role: '소비자', ask: 'role', time: 'day', habitat: 'forest', color: '#8d6e4c',
       fact: '곡식과 곤충을 모두 먹는 잡식성 텃새다. 새는 알을 낳고 깃털로 체온을 지킨다.' },
-    { id: 'cabbagebutterfly', name: '배추흰나비', kind: '동물', cls: '무척추동물 · 곤충', role: '소비자', time: 'day', habitat: 'forest', color: '#e9e4c9',
+    { id: 'cabbagebutterfly', name: '배추흰나비', kind: '동물', cls: '무척추동물 · 곤충', role: '소비자', ask: 'vert', time: 'day', habitat: 'forest', color: '#e9e4c9',
       fact: '알 → 애벌레 → 번데기 → 어른벌레로 모습이 바뀐다(완전 탈바꿈). 한 개체의 모습이 바뀌는 것은 “진화”가 아니라 “발생”이다.' },
-    { id: 'dandelion', name: '민들레', kind: '식물', cls: '속씨식물 · 쌍떡잎식물', role: '생산자', time: 'day', habitat: 'forest', color: '#f2c14e',
+    { id: 'dandelion', name: '민들레', kind: '식물', cls: '속씨식물 · 쌍떡잎식물', role: '생산자', ask: 'kind', time: 'day', habitat: 'forest', color: '#f2c14e',
       fact: '잎에서 빛에너지로 양분을 만든다(광합성). 씨에 달린 갓털이 바람을 타고 멀리 퍼진다.' },
-    { id: 'pine', name: '소나무', kind: '식물', cls: '겉씨식물', role: '생산자', time: 'both', habitat: 'forest', color: '#3f7d4e',
+    { id: 'pine', name: '소나무', kind: '식물', cls: '겉씨식물', role: '생산자', ask: 'role', time: 'both', habitat: 'forest', color: '#3f7d4e',
       fact: '바늘 모양 잎이 겨울에도 달려 있는 늘푸른나무다. 잎의 기공으로 이산화 탄소를 받아들인다.' },
-    { id: 'oyster', name: '느타리', kind: '균류', cls: '균류 · 버섯', role: '분해자', time: 'both', habitat: 'forest', color: '#b8b1a6',
+    { id: 'oyster', name: '느타리', kind: '균류', cls: '균류 · 버섯', role: '분해자', ask: ['kind', 'role'], time: 'both', habitat: 'forest', color: '#b8b1a6',
       fact: '죽은 나무를 분해해 양분을 얻는다. 엽록체가 없어 광합성을 하지 못하므로 식물이 아니다.' },
-    { id: 'scopsowl', name: '소쩍새', kind: '동물', cls: '척추동물 · 조류', role: '소비자', time: 'night', habitat: 'forest', color: '#7a6a58',
+    { id: 'scopsowl', name: '소쩍새', kind: '동물', cls: '척추동물 · 조류', role: '소비자', ask: 'vert', time: 'night', habitat: 'forest', color: '#7a6a58',
       fact: '밤에 “소쩍 소쩍” 하고 우는 올빼미 무리의 새다. 밤에 곤충 등을 사냥한다.' },
-    { id: 'firefly', name: '애반딧불이', kind: '동물', cls: '무척추동물 · 곤충', role: '소비자', time: 'night', habitat: 'forest', color: '#d9e36a',
+    { id: 'firefly', name: '애반딧불이', kind: '동물', cls: '무척추동물 · 곤충', role: '소비자', ask: 'vert', time: 'night', habitat: 'forest', color: '#d9e36a',
       fact: '배 끝의 발광 기관에서 빛을 내 짝을 찾는다. 애벌레는 물속에서 다슬기 등을 먹는다.' },
-    { id: 'raccoondog', name: '너구리', kind: '동물', cls: '척추동물 · 포유류', role: '소비자', time: 'night', habitat: 'forest', color: '#6f6559',
+    { id: 'raccoondog', name: '너구리', kind: '동물', cls: '척추동물 · 포유류', role: '소비자', ask: 'role', time: 'night', habitat: 'forest', color: '#6f6559',
       fact: '열매·곤충·작은 동물을 두루 먹는 잡식성이다. 주로 해 질 녘과 밤에 활동한다. (미국너구리와는 다른 동물이다.)' },
-    { id: 'bat', name: '관박쥐', kind: '동물', cls: '척추동물 · 포유류', role: '소비자', time: 'night', habitat: 'forest', color: '#4f4a52',
+    { id: 'bat', name: '관박쥐', kind: '동물', cls: '척추동물 · 포유류', role: '소비자', ask: 'kind', time: 'night', habitat: 'forest', color: '#4f4a52',
       fact: '초음파를 내고 되돌아오는 소리로 먹이와 장애물의 위치를 안다. 날개가 있지만 새끼를 낳아 젖을 먹이는 포유류다.' },
     // 습지길
-    { id: 'treefrog', name: '청개구리', kind: '동물', cls: '척추동물 · 양서류', role: '소비자', time: 'both', habitat: 'wetland', color: '#6cbf5b',
+    { id: 'treefrog', name: '청개구리', kind: '동물', cls: '척추동물 · 양서류', role: '소비자', ask: 'role', time: 'both', habitat: 'wetland', color: '#6cbf5b',
       fact: '어릴 때(올챙이)는 아가미로, 자라면 폐와 피부로 호흡한다. 발가락 끝의 흡반으로 나무에 붙는다.' },
-    { id: 'heron', name: '왜가리', kind: '동물', cls: '척추동물 · 조류', role: '소비자', time: 'day', habitat: 'wetland', color: '#9aa6b2',
+    { id: 'heron', name: '왜가리', kind: '동물', cls: '척추동물 · 조류', role: '소비자', ask: 'vert', time: 'day', habitat: 'wetland', color: '#9aa6b2',
       fact: '긴 다리와 부리로 얕은 물에서 물고기와 개구리를 잡아먹는다.' },
-    { id: 'cattail', name: '부들', kind: '식물', cls: '속씨식물 · 외떡잎식물', role: '생산자', time: 'both', habitat: 'wetland', color: '#8a6d3b',
+    { id: 'cattail', name: '부들', kind: '식물', cls: '속씨식물 · 외떡잎식물', role: '생산자', ask: 'role', time: 'both', habitat: 'wetland', color: '#8a6d3b',
       fact: '물가에 자라며 소시지 모양의 이삭이 달린다. 습지의 생산자로 많은 동물의 먹이와 쉼터가 된다.' },
-    { id: 'divingbeetle', name: '물방개', kind: '동물', cls: '무척추동물 · 곤충', role: '소비자', time: 'both', habitat: 'wetland', color: '#3d4a3a',
+    { id: 'divingbeetle', name: '물방개', kind: '동물', cls: '무척추동물 · 곤충', role: '소비자', ask: 'vert', time: 'both', habitat: 'wetland', color: '#3d4a3a',
       fact: '딱지날개 아래에 공기 방울을 저장해 물속에서도 호흡한다.' },
-    { id: 'waterstrider', name: '소금쟁이', kind: '동물', cls: '무척추동물 · 곤충', role: '소비자', time: 'day', habitat: 'wetland', color: '#5a5048',
+    { id: 'waterstrider', name: '소금쟁이', kind: '동물', cls: '무척추동물 · 곤충', role: '소비자', ask: 'kind', time: 'day', habitat: 'wetland', color: '#5a5048',
       fact: '다리의 잔털과 물의 표면 장력 덕분에 물 위를 걷는다.' },
-    { id: 'duckweed', name: '개구리밥', kind: '식물', cls: '속씨식물 · 외떡잎식물', role: '생산자', time: 'both', habitat: 'wetland', color: '#7bc96f',
+    { id: 'duckweed', name: '개구리밥', kind: '식물', cls: '속씨식물 · 외떡잎식물', role: '생산자', ask: 'kind', time: 'both', habitat: 'wetland', color: '#7bc96f',
       fact: '물 위에 떠서 사는 아주 작은 식물이다. 물 위에서 빛을 받아 광합성을 한다.' },
-    { id: 'otter', name: '수달', kind: '동물', cls: '척추동물 · 포유류', role: '소비자', time: 'night', habitat: 'wetland', color: '#6b4f3a',
+    { id: 'otter', name: '수달', kind: '동물', cls: '척추동물 · 포유류', role: '소비자', ask: 'vert', time: 'night', habitat: 'wetland', color: '#6b4f3a',
       fact: '물갈퀴가 있어 헤엄을 잘 치고 주로 밤에 물고기를 사냥한다. 천연기념물이자 멸종 위기 야생생물이다.' },
-    { id: 'blackspottedfrog', name: '참개구리', kind: '동물', cls: '척추동물 · 양서류', role: '소비자', time: 'night', habitat: 'wetland', color: '#7a9a5b',
+    { id: 'blackspottedfrog', name: '참개구리', kind: '동물', cls: '척추동물 · 양서류', role: '소비자', ask: 'kind', time: 'night', habitat: 'wetland', color: '#7a9a5b',
       fact: '여름밤 논에서 수컷이 볼의 울음주머니를 부풀려 운다. 알 → 올챙이 → 개구리로 탈바꿈한다.' },
   ];
 
