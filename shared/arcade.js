@@ -25,7 +25,7 @@
       standards: ['10통과1-02-05', '10통과1-03-06'], target: 'C~B' },
     { id: 'run', title: '에너지 런', path: 'games/run/index.html', color: '#f1a33c',
       homage: '쿠키런 (카카오 게임, 2013)', genre: '러너',
-      pitch: '가만히 있어도 줄어드는 세포의 에너지! 영양소와 산소를 실어 세포에 전하고, 노폐물을 내보내며 달린다.',
+      pitch: '가만히 있어도 줄어드는 세포의 에너지! 영양소와 산소를 실어 세포에 전하며 달린다. 노폐물은 폐와 콩팥을 지날 때 빠져나간다.',
       standards: ['9과13-05', '9과13-02', '9과13-03', '9과13-04'], target: 'C~A' },
     { id: 'glucose', title: '혈당 지키기', path: 'games/glucose/index.html', color: '#3d85c6',
       homage: '놈(NOM, 피처폰) · 플래피 버드 (2013)', genre: '원버튼',
