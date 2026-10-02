@@ -25,7 +25,8 @@
     $('moves').textContent = moves;
   }
   let toastT;
-  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 2200); }
+  // 표시 시간은 글자 수에 비례한다(글자당 70ms). 짧은 문구도 2.2초는 보이고, 긴 문구도 6초를 넘지 않는다.
+  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), Math.min(6000, Math.max(2200, t.length * 70))); }
 
   // 잘못된 교환의 까닭을 판별해 오개념 신호로 기록.
   // a = 학생이 옮긴 타일의 처음 칸(밀기의 출발 칸, 두 칸 누르기의 첫 칸), b = 그 타일이 도착한 칸.
@@ -83,7 +84,7 @@
         rec.invalid.sameBase ? `염기를 같은 염기 옆으로 옮긴 적이 ${rec.invalid.sameBase}번 있었다. 이 게임에서는 “같은 것”이 아니라 “짝”이 터진다!` : ''].filter(Boolean),
       quiz: { q: 'DNA 주형 가닥의 염기 서열이 TAC일 때, 전사로 만들어지는 RNA의 염기 서열은?', options: ['AUG', 'ATG'], answer: 0,
         explain: 'T→A, A→U, C→G. RNA에는 T 대신 U가 들어가므로 AUG가 된다.' },
-      reflection: 'DNA가 두 가닥의 염기쌍으로 이루어져 있다는 사실이 유전 정보를 복제하고 전사하는 데 왜 중요한지, 게임 속 “짝 규칙”을 근거로 설명하세요.',
+      reflection: 'DNA가 복제될 때와 유전자의 정보가 RNA로 전사될 때 게임 속 “짝 규칙”이 어떻게 쓰이는지 설명하세요. 이어서 그 RNA의 정보로 단백질이 만들어지는 과정을 설명하세요.',
       onRetry: () => { rec.levelScores = {}; Object.assign(rec.invalid, { total: 0, dnaDnaInTx: 0, sameBase: 0, purinePurine: 0 }); Object.assign(rec.bonds, { AT: 0, GC: 0, DNA_RNA: 0 }); start(1); },
     });
     addFlowQuiz($('overlay'));
@@ -93,19 +94,26 @@
   // 공통 결과 화면(Arcade.finish)은 문항을 하나만 받으므로 첫 문항 아래에 덧붙인다.
   // 공통 문항의 클릭 처리(.quiz-opts .btn, .quiz-fb)에 걸리지 않게 클래스 이름을 따로 쓰고, 정답 여부는 flowQuizCorrect로 남긴다.
   // 전사로 만든 RNA가 모두 번역의 주형이 되는 것은 아니므로(rRNA는 리보솜을 이루고, tRNA는 아미노산을 나른다) 문항은 유전자의 정보를 담은 RNA(mRNA)로 한정한다.
+  // 학생 화면에는 성취기준 문구대로 'RNA'만 쓰고 'mRNA'라는 말은 쓰지 않는다.
   // '단백질 정보를 담은 RNA'라고 쓰면 정답이 문제에 드러나므로 '유전자의 정보'로 적는다.
   const FLOW_QUIZ = {
-    q: '전사로 만든 RNA 가운데 유전자의 정보를 담은 RNA(mRNA)는 리보솜으로 간다. 리보솜에서 이 RNA의 정보에 따라 만들어지는 것은?', options: ['단백질', 'DNA'], answer: 0,
-    explain: '리보솜에서 mRNA의 염기 서열에 따라 단백질이 만들어진다. 이 과정을 번역이라고 한다. 유전자의 정보는 DNA → RNA(전사) → 단백질(번역) 순서로 전달된다.',
+    q: '전사로 만든 RNA 가운데 유전자의 정보를 담은 RNA는 리보솜으로 간다. 리보솜에서 이 RNA의 정보에 따라 만들어지는 것은?', options: ['단백질', 'DNA'], answer: 0,
+    explain: '리보솜에서 이 RNA의 염기 서열에 따라 단백질이 만들어진다. 이 과정을 번역이라고 한다. 유전자의 정보는 DNA → RNA(전사) → 단백질(번역) 순서로 전달된다.',
   };
   function addFlowQuiz(ov) {
     const first = ov.querySelector('.quiz'), card = ov.querySelector('.card'); if (!card) return;
+    // '설명해 보기' 문항에 '단백질'이 들어 있어 같은 화면에 두면 이 문항의 답이 미리 드러난다.
+    // 그래서 답을 고르기 전에는 떼어 두었다가 고른 뒤 이 문항 아래에 다시 붙인다.
+    // 숨기지 않고 떼는 까닭: 공통 CSS(.refl display:block)가 hidden 속성을 덮어쓰고,
+    // 공통 코드의 성찰 저장(keepRefl)은 누를 때 #ar-refl을 찾으므로 다시 붙이면 그대로 저장된다.
+    const refl = card.querySelector('.refl');
     const box = document.createElement('div'); box.className = 'quiz flow-quiz';
     const opts = FLOW_QUIZ.options.map((o, i) => ({ o, i })).sort(() => Math.random() - 0.5);
     box.innerHTML = `<p><b>이어서 떠올리기</b> — ${FLOW_QUIZ.q}</p>
       <div class="flow-opts">${opts.map(({ o, i }) => `<button class="btn" data-i="${i}">${o}</button>`).join('')}</div>
-      <p class="flow-fb" hidden></p>`;
-    if (first) first.after(box); else card.insertBefore(box, card.querySelector('.refl') || card.querySelector('.row'));
+      <p class="flow-fb"${refl ? '' : ' hidden'}>${refl ? '답을 고르면 ‘설명해 보기’가 나와요.' : ''}</p>`;
+    if (first) first.after(box); else card.insertBefore(box, refl || card.querySelector('.row'));
+    if (refl) refl.remove();
     const btns = box.querySelectorAll('.flow-opts .btn');
     btns.forEach(btn => btn.onclick = () => {
       const ok = +btn.dataset.i === FLOW_QUIZ.answer;
@@ -113,6 +121,7 @@
       if (!ok) btn.classList.add('wrong');
       const fb = box.querySelector('.flow-fb'); fb.hidden = false;
       fb.textContent = (ok ? '정답! ' : '아쉬워요. ') + FLOW_QUIZ.explain;
+      if (refl && !refl.isConnected) box.after(refl);
       A.patchLast('basepang', { flowQuizCorrect: ok });
     });
   }
