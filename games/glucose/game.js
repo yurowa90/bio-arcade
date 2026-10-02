@@ -27,7 +27,9 @@
   }
 
   let toastT;
-  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 2000); }
+  // 토스트는 글자 수(띄어쓰기 포함)에 비례해 띄운다: 글자당 70ms, 짧아도 2.2초, 길어도 6초
+  const toastMs = t => Math.min(6000, Math.max(2200, Array.from(t).length * 70));
+  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), toastMs(t)); }
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
@@ -92,6 +94,8 @@
   function start() {
     // 숨겨진 시작·다시 하기 버튼에 포커스가 남으면 게임 중 Space가 그 버튼을 누를 수 있어 포커스를 푼다
     if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+    // 이전 판 끝 무렵에 뜬 경고가 새 판(혈당 95)에 남지 않게 토스트를 바로 내린다
+    clearTimeout(toastT); $('toast').classList.remove('on');
     s = M.init(mode); hold = false; warned = {}; holdTime = 0; running = true; last = performance.now(); requestAnimationFrame(frame);
   }
   function finish() {
