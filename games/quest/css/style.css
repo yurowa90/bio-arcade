@@ -58,6 +58,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .title-desc { margin: 0 0 12px; font-size: 13px; color: #e2f0e6; line-height: 1.5; }
 .title-note { margin: 10px 0 0; font-size: 11px; color: #bcd9c4; }
 #title .btn { display: block; width: 180px; margin: 6px auto; text-decoration: none; text-align: center; }
+/* 위의 display 규칙이 hidden 속성을 덮지 않게 같은 선택자에 [hidden]을 붙인다(일반 [hidden] 규칙은 ID 선택자를 이기지 못한다) */
+#title[hidden], #title .btn[hidden] { display: none; }
 
 .btn { border: 2px solid var(--ink); background: var(--paper); color: var(--ink); border-radius: 10px; padding: 9px 14px; font-weight: 800; font-size: 15px; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: #1d5a3b; }

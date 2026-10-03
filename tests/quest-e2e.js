@@ -13,7 +13,14 @@ const path = require('path');
   const check = (name, cond, extra = '') => { if (!cond) process.exitCode = 1; console.log(`${cond ? 'OK  ' : 'FAIL'} ${name}${extra ? ' — ' + extra : ''}`); };
   await page.goto('file://' + path.resolve(__dirname, '../games/quest/index.html'));
   await page.screenshot({ path: `${out}/01-title.png` });
+  // 화면에 실제로 보이는지: hidden 속성이 아니라 계산된 display와 isVisible로 판단한다(CSS가 hidden을 덮는 함정 대비)
+  const shown = sel => page.evaluate(sel => { const el = document.querySelector(sel); return !!el && getComputedStyle(el).display !== 'none' && el.getClientRects().length > 0; }, sel);
+  check('저장이 없으면 이어하기 버튼이 보이지 않음', !(await shown('#btn-continue')));
   await page.click('#btn-new');
+  await page.waitForTimeout(100);
+  check('처음부터를 누르면 타이틀이 사라짐', !(await shown('#title')));
+  const topAtMap = await page.evaluate(() => { const r = document.getElementById('map').getBoundingClientRect(); const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return el ? (el.id || el.className || el.tagName) : null; });
+  check('지도 가운데를 가리는 타이틀 요소가 없음', !(await page.evaluate(() => { const r = document.getElementById('map').getBoundingClientRect(); const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!(el && el.closest('#title')); })), String(topAtMap));
   const mode = () => page.evaluate(() => window.__bq.mode);
   // 대화 넘기기: 선택지가 나오면 첫 번째를 고른다
   async function drain(max = 40, shotName) {
@@ -50,12 +57,12 @@ const path = require('path');
   for (let i = 0; i < 40 && (await mode()) === 'dialog'; i++) { await page.keyboard.press(i % 2 ? 'Enter' : ' '); await page.waitForTimeout(40); }
   console.log('after intro mode:', await mode(), 'partner:', await page.evaluate(() => window.__bq.S.partner));
   check('키보드로 인트로 끝까지 진행', (await mode()) === 'walk' && (await page.evaluate(() => window.__bq.S.introDone)));
-  // 이동: 위로 3칸
+  // 이동: 시작 칸(9,5) 바로 위(9,4)는 표지판이라 막힌다. 아래 칸(9,6)은 빈 길이므로 아래로 움직여 좌표가 바뀌는지 본다
   const before = await page.evaluate(() => ({ ...window.__bq.player }));
-  await page.dispatchEvent('.dir.up', 'pointerdown'); await page.waitForTimeout(520); await page.dispatchEvent('.dir.up', 'pointerup');
-  await page.waitForTimeout(200);
+  await page.dispatchEvent('.dir.down', 'pointerdown'); await page.waitForTimeout(520); await page.dispatchEvent('.dir.down', 'pointerup');
+  await page.waitForTimeout(250);
   const after = await page.evaluate(() => ({ ...window.__bq.player }));
-  console.log('move up:', before.y, '→', after.y);
+  check('방향 버튼으로 아래로 이동', after.y > before.y && after.x === before.x, `y ${before.y} → ${after.y}`);
   await page.screenshot({ path: `${out}/03-town.png` });
   // 조우 → 관찰
   await page.evaluate(() => window.__bq.encounter('forest'));
