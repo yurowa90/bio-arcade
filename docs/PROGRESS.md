@@ -6,12 +6,12 @@
 ## 상태 스냅샷
 
 - 게임 6종(생명 탐사대, 멘델의 텃밭, 가계도 지뢰찾기, 염기쌍 팡, 에너지 런, 혈당 지키기)과 허브가 동작한다.
+- 학생용 주소: https://bio-arcade-f5u1.netlify.app (Netlify, 커밋 bdc2c28 기준 배포). 다시 배포하는 절차는 `docs/DEVELOPMENT.md` 11절.
 - 마지막 전체 검증(2026-10-03, 커밋 071c3a3): 문법 검사 통과, `quest-logic` 75 PASS, `quest-e2e` 전 항목 OK, `arcade-e2e` 통과(errors·failures none, 확인 창 4번). 탐사대 도감은 19종이다.
 - 교차 검토 지적 65건(확정 53, 의견 갈림 12) 가운데 확정 지적은 모두 고쳤고, 의견 갈림 지적은 고치거나 결정으로 정리했다(`docs/DECISIONS.md`).
 
 ## 다음 할 일
 
-- **T3 (진행 중) Netlify 배포(D-039).** 학생용 파일(`index.html`, `manifest.webmanifest`, `sw.js`, `icons/`, `shared/`, `games/`)만 모아 새 사이트로 올린다. Netlify 팀은 연결돼 있고 이름에 arcade가 든 기존 사이트는 없다. 배포 주소와 절차를 `docs/DEVELOPMENT.md`와 README에 적는다.
 - **T4 혈액 순환 보드게임 설계(D-037).** `/add-game` 설계 단계대로 규칙·성취기준(9과13-02)·별 기준을 교사와 먼저 맞춘다. 설계안에는 `gpt-reviewer`의 설계 의견을 받는다.
 - **T2 실기기 확인.** 아이폰 Safari와 안드로이드 Chrome에서 허브 확인 창, PWA 설치·오프라인 실행, 입력칸 자동 확대를 본다. 교사가 시간이 날 때 한다(2026-10-03 보류).
 
@@ -26,11 +26,11 @@
 
 ## 최근 작업 기록 (최신 순, 5개까지)
 
+- 2026-10-03 Netlify 첫 배포(bio-arcade-f5u1, https·오프라인 확인).
 - 2026-10-03 교사 결정 M1~M8·T3(Netlify) 확정(D-031~D-039), GPT 호출 기본값(D-040). M1·M2 구현(c18de9d), M8과 배포 파일 계정 이름 제거(071c3a3).
 - 2026-10-03 T1 해결(7927fa3): 탐사대 타이틀·'이어하기'가 `hidden`에도 보이던 CSS 버그 수정, `quest-e2e`에 가시성·이동 단언 추가.
 - 2026-10-03 작업 기억 구조화(8d60e9a): `AGENTS.md`, `CLAUDE.md`, `.node-version`, `docs/PROGRESS.md`·`DECISIONS.md`·`DEVELOPMENT.md`, 스킬 4개, 폴더별 규칙 3개, 압축·재개 뒤 git 상태를 넣는 SessionStart 훅. Playwright를 `~/.cache/bio-arcade-tools`에 설치했다(D-028~D-030).
 - 2026-10-02 2차 수정(130277a~90fefd5): 1차에서 미룬 의견 갈림 지적의 설계 결정 반영(쓸개즙 별, 관찰 질문 재설계, 멘델 추론 잠금, 노폐물 규칙 삭제, RNA 용어, 확인 창 조건).
-- 2026-10-02 1차 수정(5c38040~286e229): 교차 검토 확정 지적을 게임별 커밋으로 수정.
 
 ## 이 문서를 고치는 때
 

@@ -123,3 +123,21 @@ E2E는 서버 없이 `file://`로 페이지를 연다. 화면을 직접 보려�
 8. **`sw.js`의 `FILES`는 손으로 관리한다.** 등록은 허브에서, https일 때만 한다.
 9. **`docs/`의 당시 기록**(복구 기록서, 교차 검토 결과)은 숫자가 현재와 다르다. 현재 상태는 이 문서와 `docs/PROGRESS.md`를 본다.
 10. **gpt-reviewer**는 발췌를 임시 파일과 표준 입력으로 넘긴다. 코드 발췌를 셸 인자로 넘기면 백틱·`${}`가 치환된다.
+
+## 11. 배포 (Netlify)
+
+학생용 주소: https://bio-arcade-f5u1.netlify.app (Netlify 사이트 `bio-arcade-f5u1`, 팀 `yurowa90`). 주소에 GitHub 계정이 드러나지 않게 하려고 GitHub Pages 대신 Netlify를 쓴다(D-039). `bio-arcade`라는 이름은 이미 쓰이고 있어 Netlify가 뒤에 `-f5u1`을 붙였다. 사이트 이름은 Netlify에서 바꿀 수 있다.
+
+올리는 파일은 학생용 파일뿐이다. 문서·테스트·에이전트 설정은 올리지 않는다.
+
+1. 커밋한 상태에서 배포용 폴더를 만든다.
+   ```bash
+   D=/tmp/bio-arcade-site-$(git rev-parse --short HEAD); mkdir -p "$D" && git archive HEAD index.html manifest.webmanifest sw.js icons shared games | tar -x -C "$D"
+   printf '[build]\n  publish = "."\n  command = ""\n' > "$D/netlify.toml"
+   rg -n -i "github|yurowa|yurosung|gmail" "$D"   # 아무것도 나오지 않아야 한다
+   ```
+2. Claude Code에서 Netlify 연결의 `deploy-site`(사이트 ID `69ce0fdc-ece2-4493-8b77-f0e2a255e0a3`)를 부르면 `npx -y @netlify/mcp@latest --site-id … --proxy-path …` 명령을 준다. 이 명령을 **배포용 폴더 안에서** 실행한다. 명령의 `--proxy-path`에는 인증 정보가 들어 있으니 문서나 커밋에 남기지 않는다.
+3. 배포 뒤 확인: 허브와 게임 페이지 6개가 200, http가 https로 넘어감, 서비스 워커 등록, 오프라인 새로고침에서 허브·탐사대가 열림, 페이지에 계정 이름 없음.
+
+파일 목록을 바꿨으면 `sw.js`의 `FILES`(7절)를 먼저 고친다. 오래된 캐시가 남지 않게 하려면 `CACHE` 이름의 번호를 올린다.
+

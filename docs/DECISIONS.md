@@ -418,8 +418,8 @@
 - 결정: Netlify에 배포한다. 주소는 `<사이트 이름>.netlify.app`이라 계정 이름이 들어가지 않는다. 학생에게 필요한 파일(`index.html`, `manifest.webmanifest`, `sw.js`, `icons/`, `shared/`, `games/`)만 올리고 문서·테스트·에이전트 설정은 올리지 않는다. 배포되는 파일에서도 계정 이름을 지운다(성취기준 발췌 주석).
 - 근거: 무료이고, 이 세션에 Netlify 연결이 있어 바로 올릴 수 있다. https라 오프라인 실행이 된다.
 - 검토한 대안: Vercel(동작은 비슷), GitHub Pages + 개인 도메인(도메인 구입·DNS 설정이 필요), GitHub Pages 기본 주소(계정이 드러남).
-- 영향: GitHub 저장소는 공개 상태로 남으므로, 저장소를 찾아보는 사람에게는 계정이 보인다. 배포 절차는 `docs/DEVELOPMENT.md`에 적는다.
-- 관련: 진행 중
+- 영향: 학생용 주소는 https://bio-arcade-f5u1.netlify.app 이다(`bio-arcade`는 이미 쓰이는 이름이라 Netlify가 뒤를 붙였다). GitHub 저장소는 공개 상태로 남으므로, 저장소를 찾아보는 사람에게는 계정이 보인다.
+- 관련: 071c3a3(배포 파일 계정 이름 제거), Netlify 사이트 `bio-arcade-f5u1`(첫 배포 2026-10-03, 커밋 bdc2c28 기준), `docs/DEVELOPMENT.md` 11절
 
 ### D-040 GPT 서브에이전트 호출 기본값
 - 날짜 · 상태: 2026-10-03 · 채택
