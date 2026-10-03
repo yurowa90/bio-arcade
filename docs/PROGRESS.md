@@ -33,7 +33,7 @@
 
 ## 최근 작업 기록 (최신 순, 5개까지)
 
-- 2026-10-03 작업 기억 구조화: `AGENTS.md`, `CLAUDE.md`, `.node-version`, `docs/PROGRESS.md`·`DECISIONS.md`·`DEVELOPMENT.md`, 스킬 4개, 폴더별 규칙 3개, 압축·재개 뒤 git 상태를 넣는 SessionStart 훅. Playwright를 `~/.cache/bio-arcade-tools`에 설치했다(D-028~D-030).
+- 2026-10-03 작업 기억 구조화(8d60e9a): `AGENTS.md`, `CLAUDE.md`, `.node-version`, `docs/PROGRESS.md`·`DECISIONS.md`·`DEVELOPMENT.md`, 스킬 4개, 폴더별 규칙 3개, 압축·재개 뒤 git 상태를 넣는 SessionStart 훅. Playwright를 `~/.cache/bio-arcade-tools`에 설치했다(D-028~D-030).
 - 2026-10-02 2차 수정(130277a~90fefd5): 1차에서 미룬 의견 갈림 지적의 설계 결정 반영(쓸개즙 별, 관찰 질문 재설계, 멘델 추론 잠금, 노폐물 규칙 삭제, RNA 용어, 확인 창 조건).
 - 2026-10-02 1차 수정(5c38040~286e229): 교차 검토 확정 지적을 게임별 커밋으로 수정.
 - 2026-10-01 복구(48b3c84, 30b8b39, 4186bd0): push되지 않은 클라우드 세션 결과물을 대화 기록으로 되살리고 교차 검토.
