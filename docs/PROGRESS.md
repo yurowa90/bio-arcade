@@ -12,7 +12,7 @@
 
 ## 다음 할 일
 
-- **T6 (진행 중) 혈액 순환 일주 구현(D-041~D-045).** 작업 방식은 총괄 Claude → 작업 GPT → 검토 Opus(`/gpt-delegate`). 1단계 규칙 모듈(`games/circulation/circulation.js`)·Node 테스트(`tests/circulation-logic.js`)는 Astra가 마쳤고(미커밋, 자체 보고 PASS 25), Opus 둘(정확성·계약 / 과학·학습 설계·문구)이 독립 검토 중이다. 지시서·보고: `/private/tmp/claude-501/circ-impl/gpt/`. 다음: 지적 수정 → 2단계 화면·허브 등록·E2E는 Sol → Opus 검토 → Claude가 문서 갱신·`/arcade-verify`·커밋 → Netlify 재배포(교사 확인 뒤).
+- **T6 (진행 중) 혈액 순환 일주 구현(D-041~D-047).** 작업 방식은 총괄 Claude → 작업 GPT → 검토 Opus(`/gpt-delegate`). 1단계 규칙 모듈·Node 테스트 커밋(690a22c, PASS 36, Opus 2명 재검토 통과), 설계 문서 갱신(3afff80). 2단계(모듈 소수정 (a)~(g), 화면, GAMES 등록, sw.js v3, arcade-e2e)를 Sol이 작업 중(지시서·보고: `/private/tmp/claude-501/circ-impl/gpt/screen-*`). 다음: Claude가 E2E 실행 → Opus 검토 → README·DEVELOPMENT·rules 반영과 `/arcade-verify` → 커밋 → Netlify 재배포(교사 확인 뒤).
 - **T2 실기기 확인.** 아이폰 Safari와 안드로이드 Chrome에서 허브 확인 창, PWA 설치·오프라인 실행, 입력칸 자동 확대를 본다. 교사가 시간이 날 때 한다(2026-10-03 보류).
 
 ## 교사 판단이 필요한 미결 사항
@@ -26,11 +26,11 @@
 
 ## 최근 작업 기록 (최신 순, 5개까지)
 
+- 2026-10-03 T6 1단계: 혈액 순환 일주 규칙 모듈·Node 테스트(690a22c). Astra 구현 → Opus 2명 검토(high 0) → Sol 수정 → 재검토 통과. 교사 결정 D-047(개수 숨김 범위, 정의 문구).
 - 2026-10-03 설정 구조 재정리(D-046, d9f30e3): CLAUDE.md 60→38줄·AGENTS.md 80→53줄, `/deploy` 스킬, `test-runner` 서브에이전트, `guard-bash.sh` 훅(push 확인·`git add .` 금지·Codex 샌드박스 강제), 읽기 전용 허용 목록. 작업 분담은 전역 `~/.claude/CLAUDE.md`에도 넣었다(일반 절차는 홈 스킬 `/codex-orchestrate`).
 - 2026-10-03 T4 설계 확정: 혈액 순환 일주(설계안 3개 → Claude·GPT 심사 → 종합 → GPT·Claude 재검토 13건 반영 → 교사 결정 8개, D-041~D-044).
 - 2026-10-03 Netlify 첫 배포(bio-arcade-f5u1, https·오프라인 확인).
 - 2026-10-03 교사 결정 M1~M8·T3(Netlify) 확정(D-031~D-039), GPT 호출 기본값(D-040). M1·M2 구현(c18de9d), M8과 배포 파일 계정 이름 제거(071c3a3).
-- 2026-10-03 T1 해결(7927fa3): 탐사대 타이틀·'이어하기'가 `hidden`에도 보이던 CSS 버그 수정, `quest-e2e`에 가시성·이동 단언 추가.
 
 ## 이 문서를 고치는 때
 
