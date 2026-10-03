@@ -12,7 +12,7 @@
 
 ## 다음 할 일
 
-- **T6 (다음) 혈액 순환 일주 구현(D-041~D-044).** 확정 설계 `docs/design/circulation-board.md`의 '구현 계획'대로 `/add-game` 절차를 밟는다. 먼저 결정 7(섞은 4지)의 구성과 전략별 별을 다시 계산한다. 끝나면 `/arcade-verify`, `/cross-review`(GPT 포함), README·AGENTS·DEVELOPMENT·규칙 갱신, Netlify 재배포.
+- **T6 (진행 중) 혈액 순환 일주 구현(D-041~D-045).** 작업 방식은 총괄 Claude → 작업 GPT → 검토 Opus(`/gpt-delegate`). 1단계 규칙 모듈·Node 테스트를 Astra가 작업 중(지시서·보고: `/private/tmp/claude-501/circ-impl/gpt/`). 다음: Opus 검토 → 2단계 화면·허브 등록·E2E는 Sol → Opus 검토 → Claude가 문서 갱신·`/arcade-verify`·커밋 → Netlify 재배포(교사 확인 뒤).
 - **T2 실기기 확인.** 아이폰 Safari와 안드로이드 Chrome에서 허브 확인 창, PWA 설치·오프라인 실행, 입력칸 자동 확대를 본다. 교사가 시간이 날 때 한다(2026-10-03 보류).
 
 ## 교사 판단이 필요한 미결 사항
