@@ -14,6 +14,7 @@ const root = path.resolve(__dirname, '..');
   page.on('dialog', d => { dialogs.push(d.message()); d.dismiss().catch(() => {}); });
   const check = (ok, msg) => { if (!ok) { failures.push(msg); console.log('실패:', msg); } };
   const STORE = 'bioArcade.v1'; // shared/arcade.js의 KEY
+  const QUEST_STORE = 'bioQuest.v1'; // shared/arcade.js의 QUEST_KEY(생명 탐사대 저장)
   const go = p => page.goto('file://' + path.join(root, p));
   const overflow = () => page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
   const finishCheck = async name => {
@@ -180,7 +181,22 @@ const root = path.resolve(__dirname, '..');
   check(await page.evaluate(() => window.Arcade.hasRecords()), '[취소]했는데 기록이 지워졌다');
   console.log(`허브 확인 창: 빈 이름 채우기·학번 네 번 변경에서 ${asked() - a0}번(기대 4번)`);
 
-  const summary = await page.inputValue('#summary');
+  // 허브 요약의 생명 탐사대 줄: 탐사대 저장(bioQuest.v1)이 있어야 줄이 생긴다(Arcade.questBadges).
+  // 이 테스트는 탐사대를 플레이하지 않으므로 배지 기록을 넣고 허브를 다시 연다. 화면 글상자와 '요약 복사' 텍스트 모두
+  // 미니게임 줄과 같은 형식으로 성취기준 코드를 적어야 한다. 복사 텍스트는 클립보드를 가로채서 받는다.
+  await page.evaluate(k => localStorage.setItem(k, JSON.stringify({ v: 1, badges: { photo: 3 } })), QUEST_STORE);
+  await page.reload();
+  await page.evaluate(() => {
+    window.__copied = null;
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: t => { window.__copied = t; return Promise.resolve(); } } });
+  });
+  await page.click('#copy');
+  await page.waitForFunction(() => window.__copied !== null);
+  const summary = await page.inputValue('#summary'), copied = await page.evaluate(() => window.__copied);
+  const questHead = await page.evaluate(() => { const g = window.Arcade.game('quest'); return `${g.title} [${g.standards.join('·')}]: 배지 `; });
+  const questLine = t => t.split('\n').find(l => l.startsWith('생명 탐사대')) || '(줄 없음)';
+  check(questLine(summary).startsWith(questHead) && questLine(copied).startsWith(questHead),
+    `탐사대 요약 줄이 '${questHead}…' 형식이 아니다. 화면: ${questLine(summary)} / 복사: ${questLine(copied)}`);
   console.log('허브 기록 요약:\n' + summary);
   console.log('허브 별 표시:', await page.locator('.cab .stars').allTextContents());
   console.log('errors:', errors.length ? errors : 'none');

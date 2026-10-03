@@ -145,15 +145,16 @@
         const d = A.data(), s = d.student || {};
         const lines = [`[생명 오락실] ${s.id || ''} ${s.name || ''}`.trim()];
         A.GAMES.forEach(g => {
+          const head = `${g.title} [${g.standards.join('·')}]`; // 게임 이름과 그 게임의 성취기준 코드 모두
           if (g.id === 'quest') { // 체육관마다 배지 별을 적는다(평균만 적으면 몇 곳을 통과했는지 알 수 없다)
             const q = A.questBadges(); if (!q) return;
-            lines.push(`${g.title}: 배지 ${q.got}/${q.total} — ${q.list.map(x => `${x.name} ${x.stars ? `★${x.stars}` : '배지 없음'}`).join(', ')} (세부 기록은 게임 안 메뉴)`);
+            lines.push(`${head}: 배지 ${q.got}/${q.total} — ${q.list.map(x => `${x.name} ${x.stars ? `★${x.stars}` : '배지 없음'}`).join(', ')} (세부 기록은 게임 안 메뉴)`);
             return;
           }
           const r = d.games[g.id]; if (!r) return;
           // 서술 답은 마지막 판만이 아니라 쓴 판 모두를 판 번호와 함께 싣는다
           const refl = r.plays.map((p, i) => p.reflection ? ` / 설명(${i + 1}판): ${p.reflection}` : '').join('');
-          lines.push(`${g.title} [${g.standards.join('·')}]: 최고 ★${r.best}, ${r.plays.length}판${refl}`);
+          lines.push(`${head}: 최고 ★${r.best}, ${r.plays.length}판${refl}`);
         });
         return lines.join('\n');
       }

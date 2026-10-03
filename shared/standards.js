@@ -1,5 +1,5 @@
 /* 성취기준·성취수준 발췌 — 2022 개정 과학과 교육과정(교육부 고시 제2022-33호 별책9) + 성취수준(교육부·평가원)
- * 출처 데이터: yurowa90/teacher-essaytest 의 standards-data.js 에서 이 오락실이 쓰는 기준만 발췌.
+ * 출처 데이터: 교사용 성취기준 데이터(teacher-essaytest)의 standards-data.js 에서 이 오락실이 쓰는 기준만 발췌.
  * PDF 추출로 생긴 띄어쓰기 오류(예: "관 계")와 끼어든 머리글 문구는 발췌하며 바로잡았다.
  */
 window.ARCADE_STANDARDS = [
