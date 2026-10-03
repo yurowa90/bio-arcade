@@ -4,9 +4,9 @@
 
 ## 쓰는 법
 
-- 새 결정은 맨 아래에 다음 번호로 추가한다. 번호는 다시 쓰지 않는다.
+- 결정을 내리면 그 자리에서 맨 아래에 다음 번호로 추가한다. 나중에 몰아 쓰면 근거를 잃는다. 번호는 다시 쓰지 않는다.
 - 새 항목을 쓰면 색인 표에도 한 줄 넣는다. 색인의 '결정' 칸과 본문 제목은 같은 문구로 쓴다.
-- 결정을 뒤집을 때는 원래 항목을 지우지 않는다. 상태를 `대체됨(D-0NN)`으로 바꾸고 새 항목을 쓴다.
+- 이전 결정을 뒤집기 전에 사용자에게 근거를 들어 확인한다. 뒤집을 때는 원래 항목을 지우지 않고 상태를 `대체됨(D-0NN)`으로 바꾼 뒤 새 항목을 쓴다.
 - 근거가 기록에서 확인되지 않고 추론한 것이면 `(추정)`이라고 적는다.
 - 교사의 판단을 기다리는 일은 결정이 아니므로 `docs/PROGRESS.md`의 미결 사항(M번호)에 둔다. 진행 문서의 항목은 T·M 고정 번호로 가리킨다.
 
@@ -72,6 +72,7 @@
 | D-043 | 혈액 순환 | 화면 용어: 온몸순환·폐순환, 동맥혈·정맥혈 미사용 | 10-03 |
 | D-044 | 혈액 순환 | 별 기준과 마지막 바퀴 형식: 까닭이 별 2의 문, 섞은 4지, 경계 문항 | 10-03 |
 | D-045 | 작업 방식 | 총괄 Claude → 작업 GPT(Sol·Astra) → 검토 Opus | 10-03 |
+| D-046 | 작업 기억 | 설정 구조 재정리: CLAUDE.md 최소화, 절차는 스킬(deploy 추가), 강제 규칙은 훅, 긴 출력은 test-runner | 10-03 |
 
 ---
 
@@ -480,3 +481,12 @@
 - 영향: GPT는 문서 수정·git 커밋을 하지 않는다. 커밋 메시지에 작업·검토 모델을 적는다. 절차는 `/gpt-delegate` 스킬. 혈액 순환 일주(T6)부터 적용한다. 멈춘 Claude 구현 시도의 부분 결과는 쓰지 않았다.
 - 관련: `CLAUDE.md` '작업 분담', `.claude/skills/gpt-delegate`
 
+
+### D-046 설정 구조 재정리: CLAUDE.md 최소화, 절차는 스킬(deploy 추가), 강제 규칙은 훅, 긴 출력은 test-runner
+- 날짜 · 상태: 2026-10-03 · 채택(사용자 지시)
+- 맥락: 매 세션 맥락에 들어가는 `CLAUDE.md`(60줄)·`AGENTS.md`(80줄)·`docs/PROGRESS.md`(37줄)에 GPT 호출 기본값, 결정·진행 기록 방법처럼 가끔 쓰는 절차가 섞여 있었다. 배포 절차는 `docs/DEVELOPMENT.md` 11절에 있었다. push 금지·`git add .` 금지·Codex 샌드박스 명시는 문서로 부탁하는 데 그쳤고, 검증 출력은 메인 대화에 그대로 쌓였다.
+- 결정: `CLAUDE.md`에는 가져오기, 재개 순서, 작업 분담 세 줄, 스킬 목록, 압축 지침만 둔다. `AGENTS.md`에는 모든 에이전트가 매번 알아야 할 사실(프로젝트, 먼저 읽을 문서, 구조, 명령, 지킬 것)만 둔다. 결정 기록 방법은 이 문서 머리말과 `/handoff`로, 배포 절차는 새 `/deploy` 스킬로 옮긴다. PreToolUse 훅 `.claude/hooks/guard-bash.sh`가 `git push`는 사용자 확인(ask)을 받게 하고, `git add .`·`-A`·`--all`과, 샌드박스(`read-only`·`workspace-write`)를 명시하지 않았거나 `danger-full-access`를 쓰는 `codex exec`는 거부(deny)한다. 검증은 `test-runner` 서브에이전트(Sonnet, 파일 수정 없음)가 돌려 단계별 요약만 돌려준다. 자주 쓰는 읽기 전용 명령(git status·diff·log·show, `node --check`, `node tests/*`, rg, fd)은 `.claude/settings.json` 허용 목록에 넣는다.
+- 근거: 사용자가 준 참고 영상 두 편(mild.codes)의 요지(총괄이 전달한 요약 기준): CLAUDE.md는 200줄 안에서 매번 알아야 하는 사실만 두고, 주제 하나짜리 규칙은 `paths`를 단 `.claude/rules/`로, 절차는 평소 설명 한 줄만 올라가는 스킬로, 절대 어기면 안 되는 규칙은 부탁이 아니라 훅으로, 출력이 긴 일은 서브에이전트로 옮긴다. 홈 폴더(`~/.claude`)에는 프로젝트와 무관한 취향·공통 스킬·허용 명령을 둔다. Claude Code 공식 문서(memory)도 CLAUDE.md를 파일당 200줄 미만으로 두라고 하고, 여러 단계 절차나 일부 경로에만 해당하는 내용은 스킬이나 경로별 규칙으로 옮기며, 행동을 확실히 막으려면 PreToolUse 훅을 쓰라고 한다. 같은 문서에 따르면 `@` 가져오기는 맥락 비용을 줄이지 않으므로 세 파일의 합계로 관리한다. 결과: CLAUDE.md 60→38줄, AGENTS.md 80→53줄, PROGRESS 37줄, 합계 177→128줄. 훅은 파이프 테스트 33건(요청한 다섯 가지 포함)이 모두 기대대로 나왔다.
+- 검토한 대안: 문서 규칙만 유지하는 안(부탁은 어길 수 있다). `permissions.deny`로 push를 막는 안(사용자가 요청한 push까지 막는다. 확인을 받는 ask가 맞다). 명령 문자열 전체를 검사하는 안(커밋 메시지나 GPT 지시문에 'git add .'가 적혀 있으면 정상 커밋까지 막는다. 그래서 heredoc 본문과 `-m` 메시지는 빼고 검사한다). 사용자 확인 뒤 홈 폴더로 옮길 후보: ① 작업 분담(총괄 Claude → 작업 GPT → 검토 Opus)과 'GPT 지적은 판정 없이 반영하지 않는다'처럼 프로젝트와 무관한 작업 취향 → `~/.claude/CLAUDE.md`, ② `gpt-delegate`의 일반 절차(모델 고르기, 지시서 항목, 보고 스키마, Opus 검토)와 `gpt-reviewer`의 Codex 호출 방식 → `~/.claude/skills/`·`~/.claude/agents/`(저장소 고유 내용만 여기 남긴다. 홈에는 같은 날 `codex-orchestrate` 스킬이 생겨 `gpt-delegate`와 겹치므로 합칠지도 함께 정한다), ③ `guard-bash.sh`의 push 확인·`git add .` 금지·Codex 샌드박스 강제 → `~/.claude/settings.json`의 훅(전역 CLAUDE.md의 Git 규칙과 같다), ④ 허용 목록의 git·rg·fd 규칙(이미 전역 설정에 있어 겹친다).
+- 영향: 훅과 허용 목록은 설정을 새로 읽는 세션부터 적용된다(작업 세션에서 시험한 명령은 막히지 않았다). `gpt-reviewer`의 시간 초과 대처(`exec resume --last`)는 샌드박스를 명시하지 않아 훅이 막는다. `exec resume`에는 `--sandbox` 옵션이 없어 `-c sandbox_mode=…`로 줘야 하고, 본 호출이 `--ephemeral`이라 세션이 저장되지 않으므로 `--last`가 다른 세션을 이을 수 있다(`codex exec --help` 확인, 실행은 미검증). `/arcade-verify`와 `test-runner`는 `tests/circulation-logic.js`가 생기면 함께 돌린다. 옛 항목이 가리키는 `AGENTS.md`·`CLAUDE.md`의 절 이름은 이번에 바뀌었다. D-040의 `CLAUDE.md` 'GPT 서브에이전트' 절은 없앴고 그 내용(기본값·판정 원칙·codex 경로)은 `.claude/agents/gpt-reviewer.md`에, D-013의 '과학 내용과 화면 문구' 규칙은 `AGENTS.md` '지킬 것'에 있다. 홈 폴더 후보는 사용자 지시(같은 날)로 이렇게 정리했다: ①은 `~/.claude/CLAUDE.md`에 '작업 분담' 절로 넣었다. ②는 홈에 이미 있는 `codex-orchestrate` 스킬과 `~/.claude/bin/codex-sub` 래퍼(모델·샌드박스 명시 강제)를 일반 절차로 쓰고, `gpt-delegate`는 보고 스키마와 커밋 표기가 필요한 이 저장소용으로 남겨 홈 스킬을 가리키게 했다. ③④는 옮기지 않았다(전역 훅은 모든 프로젝트의 명령을 막을 수 있고, 허용 목록은 이미 겹친다).
+- 관련: 커밋 전. `CLAUDE.md`, `AGENTS.md`, `README.md` '작업 문서', `docs/DEVELOPMENT.md` 11절, `.claude/settings.json`, `.claude/hooks/guard-bash.sh`, `.claude/agents/test-runner.md`, `.claude/skills/deploy/`, `.claude/skills/arcade-verify/`, `.claude/skills/handoff/`

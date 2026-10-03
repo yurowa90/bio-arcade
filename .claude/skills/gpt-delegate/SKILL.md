@@ -7,6 +7,8 @@ description: 구현·수정 작업을 사용자의 GPT 모델(Codex CLI의 Sol·
 
 역할(D-045): **Claude(세션)** 가 총괄해 지시서를 쓰고 통합·커밋한다. **GPT** 가 실제 작업을 한다. **Claude Opus** 가 결과를 독립 검토한다. GPT의 자체 보고는 검토 근거로 쓰지 않는다.
 
+모든 프로젝트에 쓰는 일반 절차는 홈 폴더의 `/codex-orchestrate`(래퍼 `~/.claude/bin/codex-sub`)에 있다. 이 저장소에서는 보고 스키마(`--output-schema`)와 커밋 메시지의 모델 표기가 필요해 이 스킬을 따른다.
+
 ## 1. 모델 고르기
 
 | 모델 | Codex 이름 | 맡길 일 |

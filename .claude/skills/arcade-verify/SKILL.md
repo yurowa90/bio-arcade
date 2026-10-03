@@ -7,6 +7,7 @@ description: 생명 오락실 변경을 검증한다. 커밋하기 전, 게임 �
 
 바뀐 범위에 맞춰 필요한 단계만 돌린다. 판단이 서지 않으면 전부 돌린다. 결과는 명령과 출력 근거로 보고하고, 돌리지 않은 단계는 '미실행'이라고 밝힌다.
 Bash 호출 사이에는 환경 변수가 이어지지 않는다. 그래서 아래 명령은 줄마다 따로 실행해도 되도록 필요한 변수를 줄 안에 둔다.
+출력이 길어 메인 대화의 맥락을 아껴야 하면 `test-runner` 서브에이전트에 맡기고 단계별 요약만 받는다.
 
 ## 0. 준비
 
@@ -24,11 +25,12 @@ for f in $(git ls-files '*.js'); do node --check "$f" || echo "FAIL $f"; done
 
 아직 추적되지 않은 새 파일은 따로 `node --check` 한다.
 
-## 2. 탐사대 규칙 (games/quest 또는 tests/quest-*를 바꿨을 때)
+## 2. 규칙 테스트 (게임 규칙이나 tests/를 바꿨을 때)
 
 ```bash
-node tests/quest-logic.js          # FAIL 0이어야 한다
+node tests/quest-logic.js          # 탐사대. FAIL 0이어야 한다
 node tests/quest-tune-photo.js     # 광합성 규칙을 바꿨다면 별 분포를 확인한다
+[ -f tests/circulation-logic.js ] && node tests/circulation-logic.js   # 혈액 순환 일주(파일이 생긴 뒤). 종료 코드 0
 ```
 
 ## 3. 성취기준 대조 (shared/arcade.js의 GAMES나 shared/standards.js를 바꿨을 때)
@@ -56,3 +58,5 @@ PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/arcade-e2e
 
 - 단계별로 명령, 핵심 출력(PASS 수, errors, 종료 코드), 실패 원인을 적는다.
 - 커밋 전 검증이면 결과를 `docs/PROGRESS.md`의 상태 스냅샷에 반영한다.
+
+이 스킬 이름을 `verify`로 하지 않은 것은 Claude Code 내장 `/verify`(앱을 띄워 직접 확인)를 가리지 않기 위해서다.

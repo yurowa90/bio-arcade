@@ -70,17 +70,21 @@ Claude Code 서브에이전트는 Claude 모델만 쓸 수 있으므로, GPT는 
 
 ## 작업 문서
 
-이 저장소를 고치는 사람과 코딩 에이전트(Claude Code, Codex)를 위한 문서입니다.
+이 저장소를 고치는 사람과 코딩 에이전트(Claude Code, Codex)를 위한 문서와 설정입니다.
 
 | 파일 | 내용 |
 |---|---|
-| `AGENTS.md` | 모든 에이전트가 따르는 공통 작업 규칙(구조, 명령, 과학 문구, 개인정보, 커밋) |
-| `CLAUDE.md` | Claude Code 전용 지침. `AGENTS.md`와 `docs/PROGRESS.md`를 불러오고 압축 요약 지침을 둡니다 |
+| `CLAUDE.md` | Claude Code가 매 세션 읽는 사실. `AGENTS.md`와 `docs/PROGRESS.md`를 불러오고, 작업 분담·스킬 목록·압축 요약 지침을 둡니다 |
+| `AGENTS.md` | 모든 에이전트가 매번 알아야 할 사실과 규칙(구조, 명령, 과학 문구, 개인정보, 커밋) |
 | `docs/PROGRESS.md` | 현재 상태, 다음 할 일, 교사 판단이 필요한 미결 사항 |
-| `docs/DECISIONS.md` | 결정 기록. 무엇을 왜 정했고 어떤 대안을 버렸는지 |
-| `docs/DEVELOPMENT.md` | 구조, 코드 관례, 저장 키, 테스트 환경, 새 게임 추가 절차, 함정 |
-| `.claude/skills/` | Claude Code 스킬: `/arcade-verify`, `/add-game`, `/cross-review`, `/handoff` |
-| `.claude/rules/` | 폴더별 규칙(탐사대, 미니게임·공통, 테스트) |
-| `.claude/settings.json`, `.claude/hooks/session-context.sh` | 압축·재개 직후 git 상태(브랜치, 최근 커밋, 커밋하지 않은 변경)를 맥락에 넣는 SessionStart 훅 |
-| `.node-version` | Node 버전(24.21.0). fnm이 읽는다 |
+| `docs/DECISIONS.md` | 결정 기록. 무엇을 왜 정했고 어떤 대안을 버렸는지. 머리말에 기록하는 법이 있습니다 |
+| `docs/DEVELOPMENT.md` | 모듈 관례, 저장 키, 테스트 환경, 새 게임 추가 절차, 함정 |
+| `.claude/rules/` | 경로별 규칙(탐사대, 미니게임·공통, 테스트). 해당 경로의 파일을 열 때만 불러옵니다 |
+| `.claude/skills/` | 절차: `/arcade-verify`, `/add-game`, `/cross-review`, `/handoff`, `/gpt-delegate`, `/deploy`. 평소에는 설명 한 줄만 올라갑니다 |
+| `.claude/hooks/` | 막는 규칙: `git push`는 확인, `git add .` 금지, Codex 샌드박스 강제(`guard-bash.sh`). 압축·재개 뒤 git 상태 주입(`session-context.sh`) |
+| `.claude/agents/` | 서브에이전트: `gpt-reviewer`(GPT 검토 중개·판정), `test-runner`(검증을 돌리고 요약만 보고) |
+| `.claude/settings.json` | 훅 연결과 허용 목록(자주 쓰는 읽기 전용 명령) |
+| `.node-version` | Node 버전(24.21.0). fnm이 읽습니다 |
 | `docs/recovery-manifest.md`, `docs/review-2026-10-01.md` | 2026-10-01 복구와 교차 검토의 당시 기록. 숫자가 현재와 다릅니다 |
+
+매 세션 맥락에 들어가는 `CLAUDE.md`·`AGENTS.md`·`docs/PROGRESS.md`에는 매번 필요한 사실만 둡니다. 가끔 쓰는 절차는 필요할 때만 불러오는 스킬로, 반드시 지켜야 하는 규칙은 부탁 대신 훅으로 옮겼습니다. CLAUDE.md를 200줄 미만으로 두고 절차는 스킬, 강제 규칙은 훅으로 나누라는 Claude Code 공식 권장을 따른 구조입니다(D-046).

@@ -6,7 +6,7 @@
 ## 상태 스냅샷
 
 - 게임 6종(생명 탐사대, 멘델의 텃밭, 가계도 지뢰찾기, 염기쌍 팡, 에너지 런, 혈당 지키기)과 허브가 동작한다.
-- 학생용 주소: https://bio-arcade-f5u1.netlify.app (Netlify, 커밋 bdc2c28 기준 배포). 다시 배포하는 절차는 `docs/DEVELOPMENT.md` 11절.
+- 학생용 주소: https://bio-arcade-f5u1.netlify.app (Netlify, 커밋 bdc2c28 기준 배포). 다시 배포하는 절차는 `/deploy` 스킬(사용자 확인 뒤).
 - 마지막 전체 검증(2026-10-03, 커밋 071c3a3): 문법 검사 통과, `quest-logic` 75 PASS, `quest-e2e` 전 항목 OK, `arcade-e2e` 통과(errors·failures none, 확인 창 4번). 탐사대 도감은 19종이다.
 - 교차 검토 지적 65건(확정 53, 의견 갈림 12) 가운데 확정 지적은 모두 고쳤고, 의견 갈림 지적은 고치거나 결정으로 정리했다(`docs/DECISIONS.md`).
 
@@ -26,11 +26,11 @@
 
 ## 최근 작업 기록 (최신 순, 5개까지)
 
+- 2026-10-03 설정 구조 재정리(D-046, 커밋 전): CLAUDE.md 60→38줄·AGENTS.md 80→53줄, `/deploy` 스킬, `test-runner` 서브에이전트, `guard-bash.sh` 훅(push 확인·`git add .` 금지·Codex 샌드박스 강제), 읽기 전용 허용 목록.
 - 2026-10-03 T4 설계 확정: 혈액 순환 일주(설계안 3개 → Claude·GPT 심사 → 종합 → GPT·Claude 재검토 13건 반영 → 교사 결정 8개, D-041~D-044).
 - 2026-10-03 Netlify 첫 배포(bio-arcade-f5u1, https·오프라인 확인).
 - 2026-10-03 교사 결정 M1~M8·T3(Netlify) 확정(D-031~D-039), GPT 호출 기본값(D-040). M1·M2 구현(c18de9d), M8과 배포 파일 계정 이름 제거(071c3a3).
 - 2026-10-03 T1 해결(7927fa3): 탐사대 타이틀·'이어하기'가 `hidden`에도 보이던 CSS 버그 수정, `quest-e2e`에 가시성·이동 단언 추가.
-- 2026-10-03 작업 기억 구조화(8d60e9a): `AGENTS.md`, `CLAUDE.md`, `.node-version`, `docs/PROGRESS.md`·`DECISIONS.md`·`DEVELOPMENT.md`, 스킬 4개, 폴더별 규칙 3개, 압축·재개 뒤 git 상태를 넣는 SessionStart 훅. Playwright를 `~/.cache/bio-arcade-tools`에 설치했다(D-028~D-030).
 
 ## 이 문서를 고치는 때
 
