@@ -364,7 +364,8 @@
     const L = {
       leafy: sp.role === '생산자' ? '이 친구도 나처럼 엽록체로 광합성을 해!' : '이 친구는 광합성을 못 해. 다른 생물에게서 양분을 얻어야 해.',
       mito: sp.role === '분해자' ? '분해자도 양분을 분해해서 에너지를 얻어. 세포 호흡은 모든 생물이 해!' : '살아 있는 생물은 모두 세포 호흡으로 에너지를 얻어.',
-      spore: sp.role === '분해자' ? '나랑 같은 균류야! 죽은 나무를 흙으로 돌려보내지.' : '이 친구가 죽으면 결국 분해자가 흙으로 돌려보낼 거야.',
+      // 분해자는 느타리(죽은 나무)와 푸른곰팡이(떨어진 열매·낙엽)이므로 분해하는 대상을 '죽은 생물'로 넓게 쓴다
+      spore: sp.role === '분해자' ? '나랑 같은 균류야! 죽은 생물을 분해해 흙으로 돌려보내지.' : '이 친구가 죽으면 결국 분해자가 흙으로 돌려보낼 거야.',
     }[p.id];
     return `<p class="feedback"><b>${p.name}</b>: ${L}</p>`;
   }
@@ -641,8 +642,19 @@
       const notes = [];
       if (wrongAbs.length) notes.push(`흡수 통로를 잘못 고른 영양소: ${wrongAbs.map(k => NUT[k]).join(', ')}. 물에 잘 녹는 포도당·아미노산은 모세 혈관으로, 지방산·모노글리세리드는 암죽관으로 흡수된다.`);
       else if (st.wrong) notes.push(`분해는 성공! 다만 효과 없는 선택이 ${st.wrong}번 있었다.`);
-      // 쓸개즙 없이 이자액을 두 번 써서 지방을 분해했다 → 별 3 불가(battles.js digestStars)
-      if (!st.emulsified) notes.push('쓸개즙으로 지방을 유화하기 전에 이자액으로 지방을 분해했다. 쓸개즙에는 소화 효소가 없지만, 지방을 작은 방울로 만들어(유화) 라이페이스가 작용하는 표면적을 넓힌다. 별 3개는 쓸개즙으로 유화한 뒤 이자액으로 분해해야 받을 수 있다.');
+      // 별 3의 소화액 조건 가운데 빠진 것만 안내한다(battles.js digestMissing). 별 3 조건 문장은 끝에 한 번만 쓴다.
+      const miss = B.digestMissing(st);
+      const noSaliva = miss.includes('saliva'), noGastric = miss.includes('gastric'), noBile = miss.includes('bile');
+      if (noSaliva && noGastric) notes.push('입에서 침(아밀레이스)을, 위에서 위액(펩신)을 쓰지 않았다. 녹말은 입에서 침으로, 단백질은 위에서 위액으로 분해되기 시작한다.');
+      else if (noSaliva) notes.push('입에서 침(아밀레이스)을 쓰지 않았다. 녹말은 입에서 침으로 분해되기 시작한다.');
+      else if (noGastric) notes.push('위에서 위액(펩신)을 쓰지 않았다. 단백질은 위에서 위액으로 분해되기 시작한다.');
+      // 쓸개즙 없이 이자액을 두 번 써서 지방을 분해했다
+      if (noBile) notes.push('쓸개즙으로 지방을 유화하기 전에 이자액으로 지방을 분해했다. 쓸개즙에는 소화 효소가 없지만, 지방을 작은 방울로 만들어(유화) 라이페이스가 작용하는 표면적을 넓힌다.');
+      if (miss.length) {
+        const place = noSaliva && noGastric ? '입에서 침을, 위에서 위액을' : noSaliva ? '입에서 침을' : noGastric ? '위에서 위액을' : '';
+        const how = place && noBile ? `${place} 쓰고, 쓸개즙으로 지방을 유화한 뒤 이자액으로 분해해야` : place ? `${place} 써야` : '쓸개즙으로 지방을 유화한 뒤 이자액으로 분해해야';
+        notes.push(`별 3개는 ${how} 받을 수 있다.`);
+      }
       body.innerHTML = `<div class="feedback ${win ? 'ok' : 'bad'}"><b>${win ? '승리!' : '패배…'}</b> ${starsHTML(stars)}
         ${!win ? '<p>분해되지 않은 영양소는 흡수되지 못한다. 어느 장소에서 어떤 소화액이 나오는지 다시 떠올려 보자.</p>'
           : notes.length ? notes.map(n => `<p>${n}</p>`).join('') : '<p>완벽한 소화와 흡수!</p>'}</div>
@@ -651,7 +663,7 @@
         <div class="row-btns"><button class="btn primary" id="d-done">${win ? '배지 받기' : '저장하고 나가기'}</button><button class="btn" id="d-retry">다시 도전</button></div>`;
       body.scrollTop = 0; // 흡수 화면에서 내려간 채로 두면 별과 결과 안내가 화면 위로 가려진다
       const save = () => {
-        S.records.push({ gym: 'digest', at: new Date().toISOString(), win, stars, wrong: st.wrong, emulsified: st.emulsified, absorb: absorbRes, history: st.history, reflection: $('refl').value.trim() });
+        S.records.push({ gym: 'digest', at: new Date().toISOString(), win, stars, wrong: st.wrong, salivaMouth: st.salivaMouth, gastricStomach: st.gastricStomach, emulsified: st.emulsified, absorb: absorbRes, history: st.history, reflection: $('refl').value.trim() });
         if (win) S.badges.digest = Math.max(S.badges.digest || 0, stars);
         writeSave();
       };

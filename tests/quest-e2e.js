@@ -110,18 +110,31 @@ const path = require('path');
   await page.click('.choice-list .btn[data-v="균류"]');
   await page.click('.choice-list .btn[data-v="분해자"]');
   check('느타리: 무리·역할을 모두 맞히면 관찰 성공', (await page.textContent('#panel-body')).includes('관찰 성공') && (await page.evaluate(() => window.__bq.S.dex.oyster.done)));
-  // 18종 전체: 실제 함수가 내는 질문 종류와 정답 분포(질문 종류만 보고 답을 짐작할 수 없어야 한다)
-  const qAll = await page.evaluate(() => window.GameData.SPECIES.flatMap(sp => window.__bq.observationQuestions(sp).map((Q, i) => ({ name: sp.name, kind: sp.kind, ask: [].concat(sp.ask)[i], key: Q.key, answer: Q.answer, ok: Q.options.some(o => o.v === Q.answer), hint: Q.hint }))));
+  // 생물 전체: 실제 함수가 내는 질문 종류와 정답 분포(질문 종류만 보고 답을 짐작할 수 없어야 한다)
+  const nSpecies = await page.evaluate(() => window.GameData.SPECIES.length);
+  const qAll = await page.evaluate(() => window.GameData.SPECIES.flatMap(sp => window.__bq.observationQuestions(sp).map((Q, i) => ({ name: sp.name, kind: sp.kind, ask: [].concat(sp.ask)[i], first: i === 0, key: Q.key, answer: Q.answer, ok: Q.options.some(o => o.v === Q.answer), hint: Q.hint }))));
   const qDist = {};
   for (const r of qAll) (qDist[r.key] = qDist[r.key] || {})[r.answer] = (qDist[r.key][r.answer] || 0) + 1;
-  console.log('관찰 질문 분포(18종, 낼 수 있는 질문 전체):', JSON.stringify(qDist));
+  console.log(`관찰 질문 분포(${nSpecies}종, 낼 수 있는 질문 전체):`, JSON.stringify(qDist));
   check('관찰 질문: 모든 생물이 ask대로 질문받고 정답이 선택지에 있음', qAll.every(r => r.key === r.ask && r.ok && r.hint));
   check('관찰 질문: 척추 질문은 동물에게만', qAll.every(r => r.key !== 'vert' || r.kind === '동물'));
   check('관찰 질문: 종류마다 정답이 둘 이상으로 갈리고 한 정답이 60%를 넘지 않음', Object.values(qDist).every(v => { const n = Object.values(v); return n.length >= 2 && Math.max(...n) / n.reduce((a, b) => a + b, 0) <= 0.6; }));
   check('관찰 질문: 역할 질문에서 분해자도 정답으로 나옴', (qDist.role || {})['분해자'] > 0, JSON.stringify(qDist.role));
+  const firstDecomposer = qAll.filter(r => r.first && r.key === 'role' && r.answer === '분해자').map(r => r.name);
+  check('관찰 질문: 첫 질문의 정답이 분해자인 생물이 있음', firstDecomposer.length > 0, firstDecomposer.join(',') || '없음');
   const kindHint = qAll.find(r => r.key === 'kind').hint;
   check('무리 질문 힌트: 엽록체 유무만으로 균류와 동물을 가르게 하지 않음', /균류와 동물/.test(kindHint), kindHint);
   await page.screenshot({ path: `${out}/05-observed.png` });
+  await page.click('#enc-ok');
+  // 푸른곰팡이(균류·분해자): 첫 질문이 역할 질문이고, 분해자를 고르면 한 번에 관찰이 완성된다
+  const bm = await qOf('bluemold');
+  await page.evaluate(() => { const S = window.__bq.S; delete S.dex.bluemold; window.__bq.encounter('forest', window.GameData.SPECIES.find(s => s.id === 'bluemold')); });
+  await page.waitForTimeout(60);
+  const bmMeta = await page.$eval('#panel-body .species-card .meta', el => el.textContent);
+  check('푸른곰팡이: 첫 질문이 역할 질문(정답 분해자)이고 관찰 전 카드에 무리·역할 칩이 없음', bm.qs.map(Q => Q.key).join() === 'role' && bm.qs[0].answer === '분해자' && (await screenMatches(bm.qs[0])) && !/균류|분해자/.test(bmMeta), bm.qs[0].q);
+  await page.click('.choice-list .btn[data-v="분해자"]');
+  check('푸른곰팡이: 분해자를 고르면 관찰 성공·도감 등록', (await page.textContent('#panel-body')).includes('관찰 성공') && (await page.evaluate(() => window.__bq.S.dex.bluemold.done)));
+  await page.screenshot({ path: `${out}/05b-bluemold.png` });
   await page.click('#enc-ok');
   // 체육관 1 조건 미달 확인: 비생산자 4종만 관찰 → 박사는 생산자를 더 관찰하라 하고, 관장은 입장을 거절한다
   await page.evaluate(() => { const S = window.__bq.S; S.dex = {}; for (const id of ['squirrel', 'sparrow', 'cabbagebutterfly', 'oyster']) S.dex[id] = { seen: 1, done: true }; window.__bq.warp('town', 15, 5); window.__bq.player.dir = 'up'; });
@@ -197,11 +210,33 @@ const path = require('path');
   const noBileRes = await page.$eval('#panel-body .feedback', el => el.textContent.replace(/\s+/g, ' ').trim());
   await page.screenshot({ path: `${out}/09b-digest-nobile.png` });
   check('소화 결과: 쓸개즙 없이 분해 → 승리·별 2 + 유화 안내', noBileRes.includes('승리') && (await digestStarsOn()) === 2 && /유화/.test(noBileRes) && /표면적/.test(noBileRes) && /소화 효소가 없/.test(noBileRes), noBileRes);
+  check('소화 결과: 입에서 침·위에서 위액을 썼으면 장소별 소화액 안내는 없음', !noBileRes.includes('분해되기 시작한다') && (noBileRes.match(/별 3개는/g) || []).length === 1, noBileRes);
   await page.click('#d-done');
   await page.waitForTimeout(200);
   await drain();
-  const lastDigest = await page.evaluate(() => window.__bq.S.records.filter(r => r.gym === 'digest').map(r => ({ stars: r.stars, emulsified: r.emulsified })));
-  check('소화 기록: 유화 여부가 남고, 배지는 더 높은 별을 유지', JSON.stringify(lastDigest) === JSON.stringify([{ stars: 3, emulsified: true }, { stars: 2, emulsified: false }]) && (await page.evaluate(() => window.__bq.S.badges.digest)) === 3, JSON.stringify(lastDigest));
+  // 다시 도전: 입·위에서 침·위액을 쓰지 않으면(씹기·꿈틀 운동만) 이기지만 별 2, 빠진 소화액만 안내한다
+  async function digestRetry(moves, shot) {
+    await page.evaluate(() => { window.__bq.gymDigest(); });
+    await page.waitForTimeout(200);
+    await drain();
+    for (const m of moves) await page.click(`[data-m="${m}"]`);
+    for (const [k, v] of [['starch', 'capillary'], ['protein', 'capillary'], ['fat', 'lacteal']]) await page.click(`[data-k="${k}"][data-v="${v}"]`);
+    await page.click('#ab-go');
+    const res = await page.$eval('#panel-body .feedback', el => el.textContent.replace(/\s+/g, ' ').trim());
+    const stars = await digestStarsOn();
+    if (shot) await page.screenshot({ path: `${out}/${shot}` });
+    await page.click('#d-done');
+    await page.waitForTimeout(200);
+    await drain();
+    return { res, stars, star3: (res.match(/별 3개는/g) || []).length };
+  }
+  const noPlace = await digestRetry(['chew', 'chew', 'mix', 'mix', 'bile', 'pancreas', 'intestinal'], '09c-digest-noplace.png');
+  check('소화 결과: 입·위에서 침·위액 없이 분해 → 승리·별 2 + 침·위액 안내(유화 안내 없음)', noPlace.res.includes('승리') && noPlace.stars === 2 && noPlace.res.includes('녹말은 입에서 침으로, 단백질은 위에서 위액으로 분해되기 시작한다') && !noPlace.res.includes('유화하기 전에') && noPlace.res.includes('별 3개는 입에서 침을, 위에서 위액을 써야 받을 수 있다') && noPlace.star3 === 1, noPlace.res);
+  const noSalivaBile = await digestRetry(['chew', 'chew', 'gastric', 'mix', 'pancreas', 'pancreas', 'intestinal'], '09d-digest-nosaliva-nobile.png');
+  check('소화 결과: 침·쓸개즙이 빠지면 빠진 것만 안내하고 별 3 조건은 한 문장', noSalivaBile.res.includes('승리') && noSalivaBile.stars === 2 && noSalivaBile.res.includes('녹말은 입에서 침으로 분해되기 시작한다') && !noSalivaBile.res.includes('단백질은 위에서') && /유화/.test(noSalivaBile.res) && noSalivaBile.res.includes('별 3개는 입에서 침을 쓰고, 쓸개즙으로 지방을 유화한 뒤 이자액으로 분해해야 받을 수 있다') && noSalivaBile.star3 === 1, noSalivaBile.res);
+  const lastDigest = await page.evaluate(() => window.__bq.S.records.filter(r => r.gym === 'digest').map(r => ({ stars: r.stars, saliva: r.salivaMouth, gastric: r.gastricStomach, emulsified: r.emulsified })));
+  const expectDigest = [{ stars: 3, saliva: true, gastric: true, emulsified: true }, { stars: 2, saliva: true, gastric: true, emulsified: false }, { stars: 2, saliva: false, gastric: false, emulsified: true }, { stars: 2, saliva: false, gastric: true, emulsified: false }];
+  check('소화 기록: 입 침·위 위액·유화 여부가 남고, 배지는 더 높은 별을 유지', JSON.stringify(lastDigest) === JSON.stringify(expectDigest) && (await page.evaluate(() => window.__bq.S.badges.digest)) === 3, JSON.stringify(lastDigest));
   // 밤 지도 + 도감 + 기록
   await page.evaluate(() => { window.__bq.S.timeMode = 'night'; window.__bq.warp('route1', 9, 12); });
   await page.waitForTimeout(200);

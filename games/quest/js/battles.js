@@ -105,6 +105,8 @@
    * 원작의 “속성 상성”을 효소-기질 특이성으로 바꾸었다: 맞지 않으면 “효과 없음”.
    * 지방: 쓸개즙으로 유화한 뒤 라이페이스(이자액)를 쓰면 한 번에 분해된다. 유화하지 않으면 이자액을 두 번 써야 한다.
    * 쓸개즙 없이 분해해도 이길 수는 있지만 별 3은 받을 수 없다(digestStars) — 쓸개즙의 역할(유화)이 점수에 드러나게 한다.
+   * 입에서 침(아밀레이스), 위에서 위액(펩신)을 쓰지 않아도 소장의 이자액이 녹말·단백질을 분해하므로 이길 수는 있다.
+   * 그러나 별 3은 받을 수 없다 — 녹말은 입에서, 단백질은 위에서 화학적 소화가 시작된다는 점이 점수에 드러나게 한다.
    */
   const DIGEST = {
     places: [
@@ -133,7 +135,8 @@
   };
 
   function digestInit() {
-    return { placeIdx: 0, turnInPlace: 0, food: { starch: 0, protein: 0, fat: 0 }, fatHP: 2, emulsified: false, done: false, phase: 'digest', history: [], wrong: 0 };
+    // salivaMouth: 입에서 침으로 녹말을 분해했다, gastricStomach: 위에서 위액으로 단백질을 분해했다
+    return { placeIdx: 0, turnInPlace: 0, food: { starch: 0, protein: 0, fat: 0 }, fatHP: 2, emulsified: false, salivaMouth: false, gastricStomach: false, done: false, phase: 'digest', history: [], wrong: 0 };
   }
   const final = st => st.food.starch === 2 && st.food.protein === 2 && st.food.fat === 2;
 
@@ -156,10 +159,10 @@
     } else if (moveId === 'saliva') {
       if (place.id === 'stomach') log.push({ t: 'bad', text: '효과 없음! 위의 강한 산성에서는 침 속 아밀레이스가 작용하지 못한다.' });
       else if (place.id === 'intestine') log.push({ t: 'bad', text: '효과 없음! 침은 입속으로 분비되고 소장으로는 분비되지 않는다. 소장에서 녹말을 분해하는 것은 이자액의 아밀레이스다.' });
-      else if (s.food.starch === 0) { s.food.starch = 1; effect = true; log.push({ t: 'ok', text: `분해 성공! ${C.starch[0]} → ${C.starch[1]}` }); }
+      else if (s.food.starch === 0) { s.food.starch = 1; s.salivaMouth = true; effect = true; log.push({ t: 'ok', text: `분해 성공! ${C.starch[0]} → ${C.starch[1]}` }); }
       else log.push({ t: 'bad', text: '효과 없음! 아밀레이스는 녹말만 분해한다. 이미 녹말이 남아 있지 않다.' });
     } else if (moveId === 'gastric') {
-      if (s.food.protein === 0) { s.food.protein = 1; effect = true; log.push({ t: 'ok', text: `분해 성공! ${C.protein[0]} → ${C.protein[1]} (펩신은 산성에서 잘 작용한다)` }); }
+      if (s.food.protein === 0) { s.food.protein = 1; if (place.id === 'stomach') s.gastricStomach = true; effect = true; log.push({ t: 'ok', text: `분해 성공! ${C.protein[0]} → ${C.protein[1]} (펩신은 산성에서 잘 작용한다)` }); }
       else log.push({ t: 'bad', text: '효과 없음! 펩신은 단백질을 분해한다. 녹말과 지방에는 작용하지 않는다.' });
     } else if (moveId === 'bile') {
       if (s.food.fat === 0) { s.food.fat = 1; s.fatHP = 1; s.emulsified = true; effect = true; log.push({ t: 'ok', text: '지방이 작은 방울로 나뉘었다(유화). 쓸개즙에는 소화 효소가 없지만, 라이페이스가 작용할 표면적을 넓혀 준다.' }); }
@@ -195,12 +198,22 @@
     return s;
   }
 
-  // 별: 쓸개즙으로 유화한 뒤 분해 + 헛수(효과 없음) 0개 + 흡수 모두 정답 = 3, 헛수 2개 이하 + 흡수 모두 정답 = 2, 그 밖 성공 = 1
+  // 별 3의 소화액 조건 가운데 지키지 못한 것: 'saliva'(입에서 침), 'gastric'(위에서 위액), 'bile'(쓸개즙으로 유화한 뒤 분해)
   // 쓸개즙은 지방이 다 분해되기 전에만 효과가 있으므로(위 bile), emulsified는 “유화한 뒤 라이페이스로 분해했다”와 같다.
+  // 이자액을 먼저 한 번 쓰고 쓸개즙 → 이자액으로 이어 가도 emulsified다(유화 전 이자액 사용은 감점하지 않는다).
+  function digestMissing(st) {
+    const miss = [];
+    if (!st.salivaMouth) miss.push('saliva');
+    if (!st.gastricStomach) miss.push('gastric');
+    if (!st.emulsified) miss.push('bile');
+    return miss;
+  }
+
+  // 별: 소화액 조건(digestMissing 없음) + 헛수(효과 없음) 0개 + 흡수 모두 정답 = 3, 헛수 2개 이하 + 흡수 모두 정답 = 2, 그 밖 성공 = 1
   function digestStars(st, absorbRes) {
     if (st.phase === 'fail') return 0;
     const allOk = absorbRes && Object.values(absorbRes).every(Boolean);
-    if (st.wrong === 0 && allOk && st.emulsified) return 3;
+    if (st.wrong === 0 && allOk && digestMissing(st).length === 0) return 3;
     if (st.wrong <= 2 && allOk) return 2;
     return 1;
   }
@@ -212,7 +225,7 @@
     return res;
   }
 
-  const api = { PHOTO, photoInit, photoToggle, photoStep, DIGEST, digestInit, digestStep, digestStars, absorbCheck };
+  const api = { PHOTO, photoInit, photoToggle, photoStep, DIGEST, digestInit, digestStep, digestMissing, digestStars, absorbCheck };
   root.Battles = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

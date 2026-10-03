@@ -64,12 +64,17 @@ const fmt = o => Object.entries(o).map(([k, v]) => `${k} ${JSON.stringify(v)}`).
 const dAll = askDist(D.SPECIES);
 for (const t of Object.keys(ASK)) {
   const v = Object.values(dAll[t] || {}), n = v.reduce((a, b) => a + b, 0);
-  chk(`관찰 질문 ${t}: 정답이 한 가지로 몰리지 않음(18종 전체)`, v.length >= 2 && Math.max(...v) / n <= 0.6, `${n}문항 ${JSON.stringify(dAll[t] || {})}`);
+  chk(`관찰 질문 ${t}: 정답이 한 가지로 몰리지 않음(${D.SPECIES.length}종 전체)`, v.length >= 2 && Math.max(...v) / n <= 0.6, `${n}문항 ${JSON.stringify(dAll[t] || {})}`);
 }
 chk('관찰 질문: 무리 질문의 정답에 식물·균류·동물이 모두 있음', ['식물', '균류', '동물'].every(k => (dAll.kind || {})[k] > 0), JSON.stringify(dAll.kind));
 chk('관찰 질문: 역할 질문의 정답에 생산자·소비자·분해자가 모두 있음', ['생산자', '소비자', '분해자'].every(r => (dAll.role || {})[r] > 0), JSON.stringify(dAll.role));
 const oyster = D.SPECIES.find(s => s.id === 'oyster');
 chk('관찰 질문: 느타리(균류·분해자)는 무리 질문을 먼저 받고 이어 역할 질문을 받음', asks(oyster).join() === 'kind,role');
+// 생물마다 처음 받는 질문만 세어도 역할 질문의 정답에 분해자가 있어야 한다(M1: 분해자 균류 추가)
+const dFirst = askDist(D.SPECIES, true);
+chk('관찰 질문: 첫 질문의 정답이 분해자인 생물이 있음', D.SPECIES.some(sp => asks(sp)[0] === 'role' && sp.role === '분해자'), D.SPECIES.filter(sp => asks(sp)[0] === 'role' && sp.role === '분해자').map(sp => sp.name).join(',') || '없음');
+chk('관찰 질문: 첫 질문만 세어도 역할 질문의 정답에 생산자·소비자·분해자가 모두 있음', ['생산자', '소비자', '분해자'].every(r => (dFirst.role || {})[r] > 0), JSON.stringify(dFirst.role));
+chk('관찰 질문: 분해자는 모두 균류', D.SPECIES.filter(sp => sp.role === '분해자').every(sp => sp.kind === '균류'));
 for (const h of ['forest', 'wetland']) for (const t of ['day', 'night']) {
   const pool = D.SPECIES.filter(s => s.habitat === h && (s.time === 'both' || s.time === t));
   const dp = askDist(pool, true);
@@ -108,7 +113,8 @@ const MODEL = ['saliva', 'chew', 'gastric', 'mix', 'bile', 'pancreas', 'intestin
 let d = B.digestInit(); for (const m of MODEL) d = B.digestStep(d, m);
 chk('소화: 모범 경로 → 흡수 단계', d.phase === 'absorb' && d.wrong === 0);
 chk('소화: 모범 경로는 쓸개즙으로 유화한 뒤 이자액으로 분해', MODEL.indexOf('bile') >= 0 && MODEL.indexOf('bile') < MODEL.indexOf('pancreas') && d.emulsified);
-chk('소화: 쓸개즙 사용 + 흡수 정답 → 별 3', B.digestStars(d, B.absorbCheck(ABS_OK)) === 3);
+chk('소화: 모범 경로는 입에서 침, 위에서 위액을 씀(장소별 소화액 기록)', d.salivaMouth === true && d.gastricStomach === true, `salivaMouth ${d.salivaMouth}, gastricStomach ${d.gastricStomach}`);
+chk('소화: 모범 경로(입 침·위 위액·쓸개즙 유화 뒤 이자액) + 흡수 정답 → 별 3', B.digestStars(d, B.absorbCheck(ABS_OK)) === 3);
 chk('소화: 지방을 모세 혈관으로 → 별 1', B.digestStars(d, B.absorbCheck({ starch: 'capillary', protein: 'capillary', fat: 'capillary' })) === 1);
 let d2 = B.digestInit(); d2 = B.digestStep(d2, 'chew'); d2 = B.digestStep(d2, 'chew'); d2 = B.digestStep(d2, 'saliva');
 chk('소화: 위에서 침 → 효과 없음(산성)', d2.lastLog.some(l => l.text.includes('산성')));
@@ -122,7 +128,19 @@ let d4 = B.digestInit(); for (const m of ['chew', 'chew', 'gastric', 'mix', 'pan
 chk('소화: 쓸개즙 없이도 라이페이스 2번이면 분해(비효율)', d4.phase === 'absorb' && d4.food.fat === 2);
 chk('소화: 쓸개즙 미사용 → 헛수 0·흡수 정답이어도 별 2(승리는 함)', !d4.emulsified && d4.wrong === 0 && B.digestStars(d4, B.absorbCheck(ABS_OK)) === 2);
 let d6 = B.digestInit(); for (const m of ['saliva', 'chew', 'gastric', 'mix', 'pancreas', 'bile', 'pancreas', 'intestinal']) d6 = B.digestStep(d6, m);
-chk('소화: 이자액을 먼저 썼어도 쓸개즙으로 유화한 뒤 이자액으로 분해를 끝내면 별 3 가능', d6.phase === 'absorb' && d6.emulsified && B.digestStars(d6, B.absorbCheck(ABS_OK)) === 3);
+chk('소화: 입 침·위 위액을 쓰고 소장에서 이자액→쓸개즙→이자액이어도 별 3 가능(M3: 유화 전 이자액은 감점 안 함)', d6.phase === 'absorb' && d6.emulsified && B.digestStars(d6, B.absorbCheck(ABS_OK)) === 3);
+// 장소별 소화액(M2): 녹말은 입에서 침으로, 단백질은 위에서 위액으로 소화가 시작된다. 빠뜨리면 이겨도 별 2까지
+const digestRun = seq => seq.reduce((s, m) => B.digestStep(s, m), B.digestInit());
+const missOf = s => (B.digestMissing ? B.digestMissing(s).join() : '(digestMissing 없음)');
+for (const [name, seq, miss] of [
+  ['입·위에서는 씹기·꿈틀 운동만', ['chew', 'chew', 'mix', 'mix', 'bile', 'pancreas', 'intestinal'], 'saliva,gastric'],
+  ['입에서 침만 빠짐', ['chew', 'chew', 'gastric', 'mix', 'bile', 'pancreas', 'intestinal'], 'saliva'],
+  ['위에서 위액만 빠짐', ['saliva', 'chew', 'mix', 'mix', 'bile', 'pancreas', 'intestinal'], 'gastric'],
+  ['입·위 소화액과 쓸개즙이 모두 빠짐', ['chew', 'chew', 'mix', 'mix', 'pancreas', 'pancreas', 'intestinal'], 'saliva,gastric,bile'],
+]) {
+  const s = digestRun(seq), st = B.digestStars(s, B.absorbCheck(ABS_OK));
+  chk(`소화: ${name} → 헛수 0·흡수 정답이어도 승리·별 2, 빠진 조건 ${miss}`, s.phase === 'absorb' && s.wrong === 0 && st === 2 && missOf(s) === miss, `별 ${st}, 빠진 조건 ${missOf(s)}`);
+}
 // 전수 탐색: 장소마다 쓸 수 있는 모든 기술 수열을 끝까지 돌린다(약 2만 2천 개)
 const dFinals = [];
 (function dfs(s) {
@@ -136,5 +154,14 @@ const maxStars = arr => Math.max(...arr.map(s => B.digestStars(s, B.absorbCheck(
 chk('소화 전수: 쓸개즙 없이 이긴 수열은 별 2 이하', noBileWins.length > 0 && maxStars(noBileWins) === 2, `${noBileWins.length}개, 최대 별 ${maxStars(noBileWins)}`);
 chk('소화 전수: 쓸개즙을 쓴 수열은 별 3 도달 가능', maxStars(bileWins) === 3, `${bileWins.length}개 중 별 3 ${bileWins.filter(s => B.digestStars(s, B.absorbCheck(ABS_OK)) === 3).length}개`);
 chk('소화 전수: emulsified = 쓸개즙이 효과를 낸 수열', dWins.every(s => s.emulsified === bileWins.includes(s)));
+// 장소별 소화액(M2): 기록(history)으로 판정한다 — 상태 플래그가 없거나 틀려도 이 단언은 실패한다
+const usedAt = (s, move, place) => s.history.some(h => h.move === move && h.place === place && h.effect);
+const placeWins = dWins.filter(s => usedAt(s, 'saliva', 'mouth') && usedAt(s, 'gastric', 'stomach'));
+const noPlaceWins = dWins.filter(s => !placeWins.includes(s));
+const starDist = arr => { const o = { 1: 0, 2: 0, 3: 0 }; for (const s of arr) o[B.digestStars(s, B.absorbCheck(ABS_OK))]++; return JSON.stringify(o); };
+chk('소화 전수: 입에서 침이나 위에서 위액을 쓰지 않고 이긴 수열은 별 2 이하', noPlaceWins.length > 0 && maxStars(noPlaceWins) === 2, `${noPlaceWins.length}개, 최대 별 ${maxStars(noPlaceWins)}, 별 분포 ${starDist(noPlaceWins)}`);
+chk('소화 전수: 입 침·위 위액·쓸개즙을 모두 제때 쓴 수열은 별 3 도달 가능', maxStars(placeWins.filter(s => bileWins.includes(s))) === 3, `${placeWins.filter(s => bileWins.includes(s)).length}개, 별 분포 ${starDist(placeWins.filter(s => bileWins.includes(s)))}`);
+chk('소화 전수: salivaMouth·gastricStomach = 입 침·위 위액이 효과를 낸 수열', dWins.every(s => s.salivaMouth === usedAt(s, 'saliva', 'mouth') && s.gastricStomach === usedAt(s, 'gastric', 'stomach')));
+console.log(`소화 전수: 수열 ${dFinals.length}개, 승리 ${dWins.length}개, 별 분포(흡수 정답 가정) ${starDist(dWins)}`);
 
 process.exit(fail ? 1 : 0);
