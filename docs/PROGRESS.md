@@ -12,7 +12,7 @@
 
 ## 다음 할 일
 
-- **T6 (진행 중) 혈액 순환 일주 구현(D-041~D-047).** 작업 방식은 총괄 Claude → 작업 GPT → 검토 Opus(`/gpt-delegate`). 1단계 규칙 모듈·Node 테스트 커밋(690a22c, PASS 36, Opus 2명 재검토 통과), 설계 문서 갱신(3afff80). 2단계(모듈 소수정 (a)~(g), 화면, GAMES 등록, sw.js v3, arcade-e2e)를 Sol이 작업 중(지시서·보고: `/private/tmp/claude-501/circ-impl/gpt/screen-*`). 다음: Claude가 E2E 실행 → Opus 검토 → README·DEVELOPMENT·rules 반영과 `/arcade-verify` → 커밋 → Netlify 재배포(교사 확인 뒤).
+- **T6 (진행 중) 혈액 순환 일주 구현(D-041~D-047).** 1단계 규칙 모듈 커밋(690a22c), 설계 갱신(3afff80). 2단계는 Sol이 마쳤고 **미커밋**이다(circulation.js·game.js·index.html·circulation-logic.js·arcade-e2e.js·shared/arcade.js·sw.js, 보고: `/private/tmp/claude-501/circ-impl/gpt/screen-report.json`). Sol 보고 circulation-logic PASS 42. Claude가 arcade-e2e를 돌려 통과(errors·failures none, circulation 별 3, 가로 넘침 없음). 다음: Opus 2명 독립 검토(화면·계약 / 과학·문구) → 지적 수정 → README·DEVELOPMENT·rules(minigames paths)·arcade-verify 반영 → `/arcade-verify` → 커밋 → Netlify 재배포(교사 확인 뒤).
 - **T2 실기기 확인.** 아이폰 Safari와 안드로이드 Chrome에서 허브 확인 창, PWA 설치·오프라인 실행, 입력칸 자동 확대를 본다. 교사가 시간이 날 때 한다(2026-10-03 보류).
 
 ## 교사 판단이 필요한 미결 사항
