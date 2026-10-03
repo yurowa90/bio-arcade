@@ -50,7 +50,7 @@ PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/arcade-e2e
 
 통과 기준: 종료 코드 0, `errors: none`, `failures: none`(arcade), `FAIL` 줄 없음(quest). 자동 플레이 결과가 "다시 도전!"인 것은 정상이다.
 
-`quest-e2e`는 화면 가시성을 검사하지 않는다(T1). 화면을 바꿨다면 스크린샷 몇 장을 직접 열어 겹침·잘림·가로 넘침을 본다.
+`quest-e2e`는 타이틀·'이어하기'처럼 단언을 둔 요소만 가시성을 검사한다. 화면을 바꿨다면 스크린샷 몇 장을 직접 열어 겹침·잘림·가로 넘침을 본다.
 
 ## 6. 보고와 기록
 

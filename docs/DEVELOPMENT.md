@@ -113,7 +113,7 @@ E2E는 서버 없이 `file://`로 페이지를 연다. 화면을 직접 보려�
 
 코드와 실행으로 확인한 것이다.
 
-1. **`hidden`과 `display`.** 요소에 `display`를 주면 `hidden` 속성이 무시된다. 일반 `[hidden]` 규칙은 ID·클래스 선택자보다 우선순위가 낮아 이기지 못하므로, 같은 선택자에 `[hidden]`을 붙인 규칙(`.btn[hidden]`, `#title[hidden]`)을 둔다. 탐사대 타이틀 버그(T1)가 이 때문이고, 공통 CSS는 `.btn[hidden]` 규칙으로 막았다. 염기쌍 팡은 `.refl { display: block }` 때문에 '설명해 보기'를 숨기지 않고 DOM에서 떼었다 붙인다.
+1. **`hidden`과 `display`.** 요소에 `display`를 주면 `hidden` 속성이 무시된다. 일반 `[hidden]` 규칙은 ID·클래스 선택자보다 우선순위가 낮아 이기지 못하므로, 같은 선택자에 `[hidden]`을 붙인 규칙(`.btn[hidden]`, `#title[hidden]`)을 둔다. 탐사대 타이틀이 '처음부터' 뒤에도 지도를 가리던 버그가 이 때문이었고 `#title[hidden], #title .btn[hidden]`으로 고쳤다. 공통 CSS는 `.btn[hidden]` 규칙으로 막는다. 염기쌍 팡은 `.refl { display: block }` 때문에 '설명해 보기'를 숨기지 않고 DOM에서 떼었다 붙인다.
 2. **탐사대는 독립 앱이다.** 공통 CSS·JS·토스트를 쓰지 않고 학번·이름도 따로 받는다. 체육관을 열면 9절 끝의 여섯 곳을 함께 고친다.
 3. **E2E 스크린샷 폴더**를 빼면 현재 폴더에 PNG가 쌓인다. 저장소 밖 폴더를 준다.
 4. **`arcade-e2e`는 실시간 플레이**라 2분 넘게 걸린다. 판정 함수는 `check(ok, msg)`이고, `quest-e2e`는 `check(name, cond, extra)`로 인자 순서가 다르다. 확인 창은 모두 [취소]로 처리하므로 [확인]으로 지우는 경로와 '기록 지우기' 버튼은 E2E가 다루지 않는다.
