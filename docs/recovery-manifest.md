@@ -1,5 +1,7 @@
 # bio-arcade 복구 기록서
 
+> 이 문서는 2026-10-01 복구 당시의 기록이다. 이후 수정으로 숫자와 동작이 바뀌었으니 현재 상태는 `docs/PROGRESS.md`와 `docs/DEVELOPMENT.md`를, 결정은 `docs/DECISIONS.md`를 본다.
+
 클라우드 세션(`claude.ai/code/session_01VEWxAFQcSmZdFHH7Me8kV2`)의 컨테이너에만 있던 bio-arcade 저장소를, 텔레포트로 넘어온 그 세션의 대화 기록을 근거로 재작성한 결과다.
 원본은 GitHub에 push된 적이 없고 로컬 `/Users/yurosung/Projects/bio-arcade`도 비어 있었으므로, 대화 기록이 유일한 출처다.
 

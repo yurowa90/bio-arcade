@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/session-context.sh\"; [ -f \"$f\" ] && bash \"$f\" || true",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/session-context.sh\"; [ -f \"$f\" ] && bash \"$f\" || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

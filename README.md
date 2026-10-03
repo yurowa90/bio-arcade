@@ -29,10 +29,12 @@
 ## 검증
 
 ```bash
-node tests/quest-logic.js            # 탐사대 지도 연결·체육관 규칙
-PW=$(npm root -g)/playwright node tests/arcade-e2e.js <스크린샷 폴더>   # 휴대폰 화면 전체 플레이
-PW=$(npm root -g)/playwright node tests/quest-e2e.js <스크린샷 폴더>
+node tests/quest-logic.js            # 탐사대 지도 연결·관찰 질문·체육관 규칙
+PW=~/.cache/bio-arcade-tools/node_modules/playwright node tests/arcade-e2e.js <저장소 밖 스크린샷 폴더>   # 휴대폰 화면 전체 플레이(약 2분)
+PW=~/.cache/bio-arcade-tools/node_modules/playwright node tests/quest-e2e.js <저장소 밖 스크린샷 폴더>
 ```
+
+Playwright는 저장소에 넣지 않고 `~/.cache/bio-arcade-tools`에 따로 설치합니다. 설치 명령과 통과 기준은 `docs/DEVELOPMENT.md`의 '테스트 환경'에 있습니다.
 
 - 멘델: F2 9:3:3:1, 검정 교배 1:1이 통계적으로 나오는지 확인했습니다.
 - 가계도: 4단계 모두 해결기의 “확실한 보인자”가 교과서 추론과 일치합니다. X 연관에서는 남성이 보인자로 판정되지 않습니다.
@@ -65,3 +67,20 @@ PW=$(npm root -g)/playwright node tests/quest-e2e.js <스크린샷 폴더>
 쓰려면 로컬에 Codex CLI를 설치하고(`npm install -g @openai/codex`), `codex login`으로 로그인하세요. ChatGPT 맥 앱을 쓰고 있다면 앱에 들어 있는 `/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex`를 그대로 써도 됩니다. 서브에이전트는 `codex`가 PATH에 없으면 이 경로를 씁니다. API 키는 대화창이나 저장소에 넣지 마세요.
 서브에이전트는 검토할 발췌를 셸 인자로 넘기지 않습니다. 코드 발췌에 든 백틱·`${…}`가 셸에서 실행되거나 바뀌기 때문입니다. 지시문과 발췌를 임시 파일에 쓰고 `codex exec --sandbox read-only - < 임시파일`처럼 표준 입력으로 넘깁니다.
 Claude Code 서브에이전트는 Claude 모델만 쓸 수 있으므로, GPT는 “모델”이 아니라 서브에이전트가 부르는 “도구”로 연결됩니다.
+
+## 작업 문서
+
+이 저장소를 고치는 사람과 코딩 에이전트(Claude Code, Codex)를 위한 문서입니다.
+
+| 파일 | 내용 |
+|---|---|
+| `AGENTS.md` | 모든 에이전트가 따르는 공통 작업 규칙(구조, 명령, 과학 문구, 개인정보, 커밋) |
+| `CLAUDE.md` | Claude Code 전용 지침. `AGENTS.md`와 `docs/PROGRESS.md`를 불러오고 압축 요약 지침을 둡니다 |
+| `docs/PROGRESS.md` | 현재 상태, 다음 할 일, 교사 판단이 필요한 미결 사항 |
+| `docs/DECISIONS.md` | 결정 기록. 무엇을 왜 정했고 어떤 대안을 버렸는지 |
+| `docs/DEVELOPMENT.md` | 구조, 코드 관례, 저장 키, 테스트 환경, 새 게임 추가 절차, 함정 |
+| `.claude/skills/` | Claude Code 스킬: `/arcade-verify`, `/add-game`, `/cross-review`, `/handoff` |
+| `.claude/rules/` | 폴더별 규칙(탐사대, 미니게임·공통, 테스트) |
+| `.claude/settings.json`, `.claude/hooks/session-context.sh` | 압축·재개 직후 git 상태(브랜치, 최근 커밋, 커밋하지 않은 변경)를 맥락에 넣는 SessionStart 훅 |
+| `.node-version` | Node 버전(24.21.0). fnm이 읽는다 |
+| `docs/recovery-manifest.md`, `docs/review-2026-10-01.md` | 2026-10-01 복구와 교차 검토의 당시 기록. 숫자가 현재와 다릅니다 |
