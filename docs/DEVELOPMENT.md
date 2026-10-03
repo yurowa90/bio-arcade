@@ -17,7 +17,7 @@
 | `games/mendel/` | 멘델의 텃밭. `genetics.js`(`window.Genetics`), `game.js`(화분·교배·검정 교배·추론). |
 | `games/pedigree/` | 가계도 지뢰찾기. `pedigree.js`(`window.Pedigree`, 단계 데이터·유전자형 조합 전수 해결기), `game.js`. |
 | `games/run/` | 에너지 런. `game.js` 하나(구간 `ZONES`, 아이템 묶음 `DECK`, 세포 전달). 규칙 모듈이 따로 없다. |
-| `games/quest/` | 생명 탐사대. **독립 앱**: `shared/`를 읽지 않는다. `js/data.js`(`window.GameData`: 생물 18종, 지도 4개, 체육관), `js/battles.js`(`window.Battles`: 광합성·소화 규칙), `js/main.js`(이동·대화·관찰·도감·체육관·저장), `css/style.css`. |
+| `games/quest/` | 생명 탐사대. **독립 앱**: `shared/`를 읽지 않는다. `js/data.js`(`window.GameData`: 생물 19종, 지도 4개, 체육관), `js/battles.js`(`window.Battles`: 광합성·소화 규칙), `js/main.js`(이동·대화·관찰·도감·체육관·저장), `css/style.css`. |
 | `tests/` | `quest-logic.js`(Node 단언), `quest-tune-photo.js`(광합성 난이도 보고), `arcade-e2e.js`·`quest-e2e.js`(Playwright). |
 | `docs/` | 진행 상황, 결정 기록, 이 문서, 당시 기록 2개(복구 기록서, 교차 검토 결과). |
 
