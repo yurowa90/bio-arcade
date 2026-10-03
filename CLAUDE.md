@@ -22,11 +22,15 @@
 
 검증 스킬 이름을 `verify`로 하지 않은 것은 Claude Code 내장 `/verify`(앱을 띄워 직접 확인)를 가리지 않기 위해서다.
 
-## 서브에이전트와 GPT
+## GPT(사용자의 Codex) 서브에이전트
 
-- `gpt-reviewer`(`.claude/agents/gpt-reviewer.md`)는 사용자의 GPT(Codex CLI)를 읽기 전용으로 불러 교차 검증을 받는다. 서브에이전트는 Claude 모델만 쓸 수 있으므로 GPT는 도구로 연결돼 있다(D-003).
-- codex는 PATH에 없고 `/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex`에 있다. 지시문은 파일로 만들어 표준 입력으로 넘긴다.
-- GPT의 지적은 그대로 믿지 않고 [동의/반박/불확실]로 나눠 근거와 함께 보고한다.
+서브에이전트는 Claude 모델만 쓸 수 있으므로, GPT는 `gpt-reviewer`(`.claude/agents/gpt-reviewer.md`)가 부르는 도구로 연결돼 있다(D-003, D-040).
+
+- **쓰는 때**: 과학 내용·학생용 문구·게임 규칙이 바뀌는 커밋 전(수정 검증), 새 게임이나 별 기준을 정하기 전(설계 의견), 결정 기록·문서의 사실을 대조할 때(내용 검토).
+- **부르는 법**: `Agent`의 `subagent_type: gpt-reviewer`, 또는 워크플로의 `agent(…, { agentType: 'gpt-reviewer' })`. 같은 대상을 Claude 검증자에게도 따로 맡겨 병렬로 돌리고, 둘 다 지적한 것을 우선한다.
+- **기본값**: 읽기 전용 샌드박스, 추론 강도 `high`(검토 한 번 약 2분), JSON 스키마 답, 시간 초과 때 `exec resume --last`. 사용자의 Codex 기본값은 `xhigh`·`danger-full-access`라서 옵션을 빼먹으면 오래 걸리거나 쓰기 권한으로 돈다.
+- **판정**: 중개자는 GPT의 지적을 저장소에서 직접 확인해 [동의/반박/불확실]로 나눈다. 지금까지 GPT 지적의 기각 비율이 높았으므로(112건 중 GPT 41건, 그중 31건 기각) 판정 없이 반영하지 않는다.
+- codex 경로: `/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex`(PATH에 없음).
 
 ## 폴더별 규칙과 훅
 
