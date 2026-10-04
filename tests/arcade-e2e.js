@@ -150,9 +150,12 @@ const root = path.resolve(__dirname, '..');
   }
   await finishCheck('run');
 
-  // 혈액 순환 일주: 연습 오답 한 번, 마지막 바퀴는 모두 정답으로 플레이한다.
+  // 혈액 순환 일주: 출발 이름·까닭·보충 이름 오답을 거치고 마지막 바퀴는 모두 정답으로 플레이한다.
   await go('games/circulation/index.html');
   await page.screenshot({ path: `${out}/circulation-intro.png` });
+  const introRules = await page.locator('#overlay li').allTextContents();
+  check(introRules[0] === '게임은 혈액 한 방울을 따라 온몸순환과 폐순환을 번갈아 돌지만, 실제 몸에서는 두 순환이 동시에 일어난다. 적혈구가 산소를, 혈장이 이산화 탄소를 나른다.', '순환 D-050 시작 규칙 1줄 불일치');
+  check(introRules[1] === '주사위 두 개 가운데 하나를 고른다. 모세 혈관 칸에 닿거나 출발 칸에 돌아오면 남은 눈을 버리고 멈춘다.', '순환 D-050 시작 규칙 2줄 불일치');
   // 보충 문항과 두 번째 기관 검사를 같은 판에서 반드시 거치게 시드만 고정한다.
   await page.evaluate(() => { window.__circRandom = Math.random; Math.random = () => 1 / 2 ** 32; });
   await page.click('#ar-start');
@@ -164,6 +167,93 @@ const root = path.resolve(__dirname, '..');
     new MutationObserver(() => {
       if (toast.textContent) window.__toastLog.push({ text: toast.textContent, dark: document.body.classList.contains('dark') });
     }).observe(toast, { childList: true, characterData: true, subtree: true });
+  });
+  // 빠른 재생에서도 매 걸음의 DOM 갱신을 관찰한다. 입력 대기 칸만 재지 않는다.
+  await page.evaluate(() => {
+    const $ = id => document.getElementById(id), C = window.Circulation;
+    const log = window.__circViewLog = { seen: [], failures: [], lungToasts: 0, fade: 0, motion: 0, correctFill: 0, doubleCap: 0 };
+    const hit = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    const bounds = (el, stroke = 0) => {
+      let b = el.getBoundingClientRect();
+      const matrix = el.getScreenCTM?.();
+      if (matrix && el.getBBox) {
+        const local = el.getBBox();
+        const a = new DOMPoint(local.x, local.y).matrixTransform(matrix);
+        const z = new DOMPoint(local.x + local.width, local.y + local.height).matrixTransform(matrix);
+        b = { left: a.x, top: a.y, right: z.x, bottom: z.y };
+      }
+      const pad = stroke * (matrix?.a || 1) / 2;
+      return { left: b.left - pad, top: b.top - pad, right: b.right + pad, bottom: b.bottom + pad };
+    };
+    const fail = (ok, msg) => { if (!ok && !log.failures.includes(msg)) log.failures.push(msg); };
+    const askedCheck = p => {
+      const groups = [...document.querySelectorAll('.square.asked')], expected = p.squares.slice().sort();
+      fail(JSON.stringify(groups.map(g => g.dataset.square).sort()) === JSON.stringify(expected) && !document.querySelector('.square.current'), 'R-01/05 보충 해설 점선·현재 칸');
+      fail(groups.every(g => g.getAttribute('aria-label').startsWith('점선으로 표시한 칸, ')), 'R-08 묻는 칸 aria-label');
+      const chips = document.querySelectorAll('#route .current');
+      fail(chips.length === 1 && chips[0].getAttribute('aria-current') === 'true' && chips[0].textContent === (window.__circ.state().labels[p.slot] ? C.STRUCTURES[p.slot].name : '□'), 'R-01/08 보충 칩 강조·aria-current');
+    };
+    const inspect = () => {
+      const d = $('drop'); if (!d || document.body.classList.contains('dark') || document.body.classList.contains('finished')) return;
+      const id = d.dataset.square, sq = C.SQUARES.find(q => q.id === id), box = bounds(d);
+      if (!log.seen.includes(id)) log.seen.push(id);
+      fail(!!sq, 'R-11 방울 위치 식별'); if (!sq) return;
+      fail(![...document.querySelectorAll('.square')].some(g => g.dataset.square !== id && [...g.querySelectorAll('rect')].some(r => hit(box, bounds(r)))), `R-11 ${id} 방울·다른 칸`);
+      fail(![...document.querySelectorAll('#board text')].some(t => hit(box, bounds(t))), `R-11 ${id} 방울·글자`);
+      fail(![...document.querySelectorAll('.square circle')].some(c => hit(box, bounds(c, 0))), `R-11 ${id} 방울·O₂ 점`);
+      const rect = document.querySelector(`.square[data-square="${id}"] rect:last-of-type`).getBoundingClientRect();
+      fail(sq.kind !== 'capillary' || (id === 'lung' ? box.left > (rect.left + rect.right) / 2 : box.right < (rect.left + rect.right) / 2), `R-11 ${id} 출구 위치`);
+      const rings = [...d.querySelectorAll('circle')];
+      fail(rings.every(c => c.getAttribute('fill') === 'none' && c.getAttribute('stroke') === '#fff' && c.getAttribute('r') === '2.5' && c.getAttribute('stroke-width') === '1.5'), 'R-07 CO₂ 고리 기호');
+      fail(rings.every((c, i) => rings.slice(i + 1).every(other => !hit(bounds(c, 1.5), bounds(other, 1.5)))), 'R-07 CO₂ 고리 간격');
+      if (rings.length === 1) fail(rings[0].getAttribute('cx') === '14', 'R-07 하나인 고리 중앙');
+      const legend = document.querySelector('.co2-legend rect'), zones = [...document.querySelectorAll('.circuit-name')];
+      fail(!!legend && zones.length === 2 && zones.every(t => getComputedStyle(t).fill === 'rgb(36, 91, 121)'), 'R-03 범례 틀·구역 이름 색');
+      if (legend) {
+        const l = bounds(legend);
+        fail(!hit(l, box) && ![...document.querySelectorAll('.square rect, .square circle, .candidate, #board path[marker-end]')].some(el => hit(l, bounds(el))), 'R-03 범례·방울·칸·점·후보·화살표');
+        fail(zones.every(t => !hit(l, bounds(t))), 'R-03 범례와 구역 이름 분리');
+        fail([...document.querySelectorAll('.co2-legend text')].every(t => { const b = bounds(t); return b.left >= l.left && b.right <= l.right && b.top >= l.top && b.bottom <= l.bottom && parseFloat(getComputedStyle(t).fontSize) >= 16; }), 'R-03 범례 글자 크기·틀 안 배치');
+      }
+      const candidates = [...document.querySelectorAll('.candidate')];
+      const preview = window.__circ.pending().type === 'die' ? C.preview(window.__circ.state()) : [];
+      for (const [index, candidate] of candidates.entries()) {
+        const b = bounds(candidate);
+        // 후보 글리프는 자기 원 안에 있다. 판 칸 이름·범례 글자만 비교한다.
+        fail(![...document.querySelectorAll('.square circle')].some(el => hit(b, bounds(el))), 'R-06 후보·O₂ 점');
+        if (C.SQUARES.find(q => q.id === preview[index]?.square)?.kind === 'capillary') fail(![...document.querySelectorAll('.square-name, .co2-legend text, .circuit-name, #board path[marker-end]')].some(el => hit(b, bounds(el))), 'R-06 모세 혈관 후보·이름·화살표');
+      }
+      if (preview.length === 2 && preview[0].square === preview[1].square && C.SQUARES.find(q => q.id === preview[0].square).kind === 'capillary') log.doubleCap++;
+      const p = window.__circ.pending();
+      // 재생 중에는 판이 직전 상태로 그려지므로, 판은 화면이 지금 그리는 문항(view)과 비교한다.
+      const v = window.__circ.view();
+      if (v.squares && $('mode').textContent === '보충') askedCheck(v);
+      if (p.squares && $('mode').textContent === '3/3바퀴') {
+        log.motion++;
+        fail(!document.querySelector('.square.asked') && document.querySelector('.square.current')?.dataset.square === id, 'R-05 이동 중 보충 점선 선행');
+        const key = sq.structure || (id === 'lung' ? '폐의 모세 혈관' : '온몸의 모세 혈관');
+        fail(document.querySelector('#route .current')?.textContent === (C.STRUCTURES[key] ? (window.__circ.state().labels[key] ? C.STRUCTURES[key].name : '□') : key), 'R-05 이동 중 경로 칩');
+      }
+      const record = window.__circ.state().practice.at(-1), fb = document.querySelector('#ctrl .feedback');
+      if (v.type === 'continue' && record?.at === 'fill' && record.kind === 'name' && record.ok && fb) {
+        log.correctFill++;
+        fail(fb.textContent === `정답! 점선으로 표시한 칸은 ${C.STRUCTURES[record.slot].name}이다.${C.STRUCTURES[record.slot].explain ? ' ' + C.STRUCTURES[record.slot].explain : ''}`, 'D-050 보충 정답 해설');
+        askedCheck(v);
+      }
+    };
+    new MutationObserver(inspect).observe($('board'), { childList: true });
+    new MutationObserver(() => {
+      inspect();
+      const t = $('toast');
+      if (!t.classList.contains('on') && !document.body.classList.contains('dark')) {
+        log.fade++; fail(!!t.textContent, 'R-09 사라지는 토스트 글자 유지');
+      }
+      if (t.classList.contains('on') && $('drop')?.dataset.square === 'lung') {
+        log.lungToasts++;
+        fail(t.classList.contains('low') && !hit(bounds(t), bounds($('drop'))) && !hit(bounds(t), bounds(document.querySelector('.square[data-square="lung"]'))) && !hit(bounds(t), bounds($('ctrl'))), 'R-02 폐 토스트·방울·폐 칸·조작 영역');
+      }
+    }).observe($('toast'), { attributes: true, attributeFilter: ['class'], childList: true });
+    inspect();
   });
   check(!/좌심실|우심실/.test(await page.textContent('#route')), '순환 출발 이름을 고르기 전에 경로 칩이 답을 보였다');
   const circulationFits = async height => {
@@ -186,8 +276,10 @@ const root = path.resolve(__dirname, '..');
   await page.screenshot({ path: `${out}/circulation-board-small.png` });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: `${out}/circulation-board.png` });
-  let intentionalWrong = false, wrongFeedbackSeen = false, frozenCircScore, darkNames = 0, darkSeen = false, boundarySeen = 0, circEnded = false, organKeySeen = false;
+  await page.setViewportSize({ width: 390, height: 660 });
+  let intentionalWrong = false, wrongFeedbackSeen = false, reasonWrong = false, reasonFeedbackSeen = false, fillWrong = false, fillFeedbackSeen = false, wrongKind, frozenCircScore, darkNames = 0, darkSeen = false, boundarySeen = 0, circEnded = false, organKeySeen = false;
   const fittedPhases = new Set();
+  let co2Shot = false;
   for (let guard = 0; guard < 300; guard++) {
     await page.waitForFunction(() => {
       const p = window.__circ.pending(), ctrl = document.getElementById('ctrl');
@@ -197,13 +289,17 @@ const root = path.resolve(__dirname, '..');
     if (p.type === 'end') { circEnded = true; break; }
     const answer = await page.evaluate(() => window.__circ.correct());
     if (['die', 'reason', 'organ', 'fillName', 'fillReason'].includes(p.type) && !fittedPhases.has(p.type)) {
-      fittedPhases.add(p.type); await circulationFits(660); await page.setViewportSize({ width: 390, height: 844 });
+      fittedPhases.add(p.type); await circulationFits(660);
+    }
+    if (!co2Shot && await page.locator('#drop circle').count() === 3) {
+      co2Shot = true;
+      await page.locator('#drop').screenshot({ path: `${out}/circulation-co2-three.png` });
     }
     if (p.type === 'die') {
       const buttons = await page.locator('.sheet-opts .btn').evaluateAll(bs => bs.map(b => ({ wordBreak: getComputedStyle(b).wordBreak, height: b.getBoundingClientRect().height })));
       check(buttons.every(b => b.wordBreak === 'keep-all' && b.height <= 64), '순환 주사위 버튼의 낱말 줄바꿈 또는 높이 실패');
     }
-    if (['fillName', 'fillReason'].includes(p.type)) {
+    if (p.squares) {
       const target = await page.evaluate(() => ({
         ids: [...document.querySelectorAll('.square.asked')].map(g => g.dataset.square).sort(),
         expected: window.Circulation.SQUARES.filter(q => q.structure === window.__circ.state().slot).map(q => q.id).sort(),
@@ -212,27 +308,12 @@ const root = path.resolve(__dirname, '..');
         route: [...document.querySelectorAll('#route .current')].map(c => c.textContent),
         label: window.__circ.state().labels[window.__circ.state().slot] ? window.Circulation.STRUCTURES[window.__circ.state().slot].name : '□',
         status: document.getElementById('status').textContent,
+        aria: [...document.querySelectorAll('.square.asked')].every(g => g.getAttribute('aria-label').startsWith('점선으로 표시한 칸, ')),
+        ariaCurrent: document.querySelector('#route .current')?.getAttribute('aria-current'),
       }));
-      check(JSON.stringify(target.ids) === JSON.stringify(target.expected) && target.current === 0 && target.dashed,
+      check(JSON.stringify(target.ids) === JSON.stringify(target.expected) && target.current === 0 && target.dashed && target.aria && target.ariaCurrent === 'true',
         '순환 보충 문항의 점선 칸·현재 위치 강조 실패');
       check(target.route.length === 1 && target.route[0] === target.label && target.status === '보충 문항', '순환 보충 문항 경로 칩·상태 줄 실패');
-    }
-    if (!p.type.startsWith('final')) {
-      const drop = await page.evaluate(() => {
-        const d = document.getElementById('drop'); if (!d) return null;
-        const local = d.getBBox(), matrix = d.getScreenCTM();
-        const a = new DOMPoint(local.x, local.y).matrixTransform(matrix), z = new DOMPoint(local.x + local.width, local.y + local.height).matrixTransform(matrix);
-        const box = { left: a.x, top: a.y, right: z.x, bottom: z.y };
-        const intersects = b => box.left < b.right && box.right > b.left && box.top < b.bottom && box.bottom > b.top;
-        const current = document.querySelector('.square.current')?.dataset.square || 'LV';
-        const sq = window.Circulation.SQUARES.find(s => s.id === current), rect = document.querySelector(`[data-square="${current}"] rect:last-of-type`).getBoundingClientRect();
-        return { overlaps: [...document.querySelectorAll('.square')].filter(g => g.dataset.square !== current && [...g.querySelectorAll('rect')].some(r => intersects(r.getBoundingClientRect()))).map(g => g.dataset.square),
-          text: [...document.querySelectorAll('#board text')].filter(t => intersects(t.getBoundingClientRect())).map(t => t.textContent),
-          oxygen: [...document.querySelectorAll('.square circle')].some(c => intersects(c.getBoundingClientRect())),
-          outlet: sq.kind !== 'capillary' || (sq.id === 'lung' ? box.left > (rect.left + rect.right) / 2 : box.right < (rect.left + rect.right) / 2),
-          symbols: [...d.querySelectorAll('circle')].every(c => c.getAttribute('fill') === 'none' && c.getAttribute('stroke') === '#fff') };
-      });
-      check(drop && !drop.overlaps.length && !drop.text.length && !drop.oxygen && drop.outlet && drop.symbols, `순환 방울 겹침·CO₂ 기호 실패: ${JSON.stringify(drop)}`);
     }
     if (p.type.startsWith('final')) {
       const view = await page.evaluate(() => ({
@@ -246,6 +327,7 @@ const root = path.resolve(__dirname, '..');
         mode: document.getElementById('mode').textContent,
         panel: document.getElementById('dark').textContent,
         ctrl: document.getElementById('ctrl').textContent,
+        accessible: [...document.querySelectorAll('#dark, #dark *, #ctrl, #ctrl *, #status, #status *, header, header *')].map(el => (el.getAttribute('aria-label') || '') + (el.getAttribute('title') || '')).join(' '),
         blankHidden: document.getElementById('blank').hidden,
         cursorLast: document.getElementById('trail').lastElementChild.id === 'dark-cursor',
         landmarks: [...document.querySelectorAll('#trail .landmark')].map(x => x.textContent),
@@ -256,13 +338,13 @@ const root = path.resolve(__dirname, '..');
       if (!darkSeen) {
         darkSeen = true; frozenCircScore = view.score;
         await page.screenshot({ path: `${out}/circulation-dark.png` });
-        await circulationFits(660); await page.setViewportSize({ width: 390, height: 844 });
+        await circulationFits(660);
       }
       check(view.board === 'hidden' && view.route === 'hidden' && view.dark === 'visible', '순환 불 꺼진 바퀴의 판·경로 감춤 또는 패널 표시 실패');
       check(!view.structureNames.some(name => view.boardText.includes(name)), '순환 감춘 판 DOM에 구조 이름이 남았다');
       check(view.score === frozenCircScore, '순환 불 꺼진 바퀴에서 점수가 바뀌었다');
       check(view.status === '불 꺼진 바퀴' && !/\d|산소|폐순환|온몸순환/.test(view.status), '순환 불 꺼진 상태 줄에 단서나 숫자가 있다');
-      check(view.mode === '불 꺼진 바퀴' && !/\/12|\/8|\d/.test(view.mode + view.status + view.panel + view.ctrl), '순환 불 꺼진 화면에 개수가 보인다');
+      check(view.mode === '불 꺼진 바퀴' && !/\/12|\/8|\d|(한|하나|두|세|네|다섯|여섯|일곱|여덟|아홉|열|열두)\s*(칸|개|문항|번째)/.test(view.mode + view.status + view.panel + view.ctrl + view.accessible), '순환 불 꺼진 화면에 개수가 보인다');
       check(!view.toast && !view.stars, '순환 불 꺼진 바퀴·경계 문항에서 토스트나 별이 보인다');
       check(view.chips.length === darkNames, '순환 패널이 지나온 이름 이외의 빈칸을 그렸다');
       check(view.cursorLast && view.blankHidden === (p.type !== 'finalName'), '순환 방울이 칩 줄 끝에 없거나 까닭·경계 문항에 빈칸이 보인다');
@@ -272,36 +354,57 @@ const root = path.resolve(__dirname, '..');
     }
     let key;
     if (!intentionalWrong && p.type === 'nameStart') {
-      key = p.options.find(o => o.key !== answer).key; intentionalWrong = true;
+      key = p.options.find(o => o.key !== answer).key; intentionalWrong = true; wrongKind = 'start';
       await page.screenshot({ path: `${out}/circulation-name.png` });
+    } else if (!reasonWrong && p.type === 'reason') {
+      key = p.options.find(o => o.key !== answer).key; reasonWrong = true; wrongKind = 'reason';
+    } else if (!fillWrong && p.type === 'fillName') {
+      key = p.options.find(o => o.key !== answer).key; fillWrong = true; wrongKind = 'fill';
     } else if (p.type === 'die') {
       // 빈칸을 피해서 보충 문항을 반드시 남긴다. 보충 없는 시드가 뽑히는 공백을 막는다.
       key = p.options.slice().sort((a, b) => Number(a.blank) - Number(b.blank) || b.steps - a.steps)[0].key;
     } else if (p.type === 'organ') key = p.options[0].key;
     else if (p.options.length) key = answer;
     if (p.type === 'continue') {
-      wrongFeedbackSeen = true;
+      const fb = await page.textContent('#ctrl .feedback');
       check(await page.isVisible('#ctrl .feedback') && (await page.textContent('#ctrl')).includes('계속'), '순환 연습 오답의 해설·계속 버튼이 없다');
-      check((await page.textContent('#ctrl .feedback')).includes('좌심실') && (await page.textContent('#ctrl .feedback')).startsWith('고른 답: '), '순환 출발 이름 오답의 정답·고른 답 설명이 없다');
-      await circulationFits(660); await page.setViewportSize({ width: 390, height: 844 });
+      if (wrongKind === 'start') {
+        wrongFeedbackSeen = true;
+        check(fb.includes('좌심실') && fb.startsWith('고른 답: '), '순환 출발 이름 오답의 정답·고른 답 설명이 없다');
+      } else if (wrongKind === 'reason') {
+        reasonFeedbackSeen = true;
+        const record = await page.evaluate(() => window.__circ.state().practice.at(-1));
+        const expected = await page.evaluate(r => window.Circulation.reasonExplanation(r.slot, r.pick), record);
+        check(!fb.startsWith('고른 답') && fb === expected, 'R-04 까닭 오답 해설에 머리말이 있거나 해설이 다르다');
+      } else if (wrongKind === 'fill') {
+        fillFeedbackSeen = true;
+        const record = await page.evaluate(() => window.__circ.state().practice.at(-1));
+        const expected = await page.evaluate(r => { const S = window.Circulation.STRUCTURES; return `고른 답: ${S[r.pick].name}. 점선으로 표시한 칸은 ${S[r.slot].name}이다.${S[r.slot].explain ? ' ' + S[r.slot].explain : ''}`; }, record);
+        check(fb === expected && !!p.squares, 'R-01/04 D-050 보충 오답 해설·점선 유지 실패');
+        await page.screenshot({ path: `${out}/circulation-fill-wrong.png` });
+      }
+      wrongKind = null;
+      await circulationFits(660);
     }
     if (p.type === 'organ' && !organKeySeen && await page.evaluate(() => window.Circulation.hud(window.__circ.state()).lap === 2)) {
       organKeySeen = true;
-      const second = await page.locator('.sheet-opts .btn').nth(1).evaluate(b => ({ key: b.dataset.k, disabled: b.disabled }));
+      check(await page.locator('.sheet-opts .btn').nth(0).isDisabled(), 'R-12 첫 기관 버튼이 비활성이 아니다');
+      await page.keyboard.press('1');
+      check(await page.evaluate(token => window.__circ.pending().token === token, p.token), 'R-12 비활성 기관 번호 1이 다른 기관을 골랐다');
       await page.keyboard.press('2');
-      if (second.disabled) {
-        check(await page.evaluate(token => window.__circ.pending().token === token, p.token), '순환 비활성 기관의 숫자 키가 다른 기관을 골랐다');
-      } else {
-        await page.waitForFunction(token => window.__circ.pending().token !== token, p.token);
-        check(await page.evaluate(key => window.__circ.state().organs.at(-1) === key, second.key), '순환 숫자 키 2가 화면 두 번째 기관을 고르지 않았다');
-        continue;
-      }
+      await page.waitForFunction(token => window.__circ.pending().token !== token, p.token);
+      check(await page.evaluate(() => window.__circ.state().organs.at(-1) === 'kidney'), 'R-12 숫자 키 2가 콩팥을 고르지 않았다');
+      continue;
     }
     await page.click(key === undefined ? '#ctrl button:not([disabled])' : `#ctrl button[data-k="${key}"]:not([disabled])`);
     if (p.type === 'finalName') darkNames++;
   }
-  check(circEnded && darkSeen && intentionalWrong && wrongFeedbackSeen && boundarySeen === 2, '순환 플레이·오답 해설 확인·경계 두 문항을 끝내지 못했다');
+  check(circEnded && darkSeen && intentionalWrong && wrongFeedbackSeen && reasonWrong && reasonFeedbackSeen && fillWrong && fillFeedbackSeen && boundarySeen === 2, '순환 플레이·오답 해설 확인·경계 두 문항을 끝내지 못했다');
   check(fittedPhases.has('fillName') && organKeySeen, '순환 보충 문항 또는 두 번째 바퀴 기관 숫자 키 검사가 실행되지 않았다');
+  const viewLog = await page.evaluate(() => window.__circViewLog);
+  console.log('순환 화면 관찰:', JSON.stringify(viewLog));
+  check(viewLog.seen.length === 18 && !viewLog.failures.length, `R-11 순환 18칸 관찰·배치 실패: ${JSON.stringify(viewLog)}`);
+  check(viewLog.lungToasts > 0 && viewLog.fade > 0 && viewLog.motion > 0 && viewLog.correctFill > 0 && viewLog.doubleCap > 0, '순환 폐 토스트·사라짐·이동·보충 정답·모세 혈관 후보 둘 관찰 공백');
   const toastLog = await page.evaluate(() => window.__toastLog);
   check(toastLog.filter(x => x.dark).length === 0, '순환 불 꺼진 바퀴에서 토스트가 발생했다');
   check(toastLog.filter(x => x.text === '모세 혈관에서는 혈액이 가장 느리게 흐르며 물질을 주고받는다.').length === 1, '순환 모세 혈관 공통 안내가 정확히 한 번 나오지 않았다');

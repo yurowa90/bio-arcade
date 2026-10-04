@@ -189,8 +189,9 @@
       return s.phase === 'fillName' ? { ...p, ...target, prompt: '점선으로 표시한 칸의 이름은?', options: nameOptions(s.options) } :
         { ...p, ...target, ...reasonQuestion(s.slot, s.options) };
     }
-    if (['nameStart', 'name', 'fillName'].includes(s.phase)) return { ...p, prompt: '이곳의 이름은?', options: nameOptions(s.options) };
-    if (['reason', 'fillReason'].includes(s.phase)) return { ...p, ...reasonQuestion(s.slot, s.options) };
+    if (s.phase === 'continue' && s.at === 'fill') return { ...p, slot: s.slot, squares: SQUARES.filter(q => q.structure === s.slot).map(q => q.id), options: [] };
+    if (['nameStart', 'name'].includes(s.phase)) return { ...p, prompt: '이곳의 이름은?', options: nameOptions(s.options) };
+    if (s.phase === 'reason') return { ...p, ...reasonQuestion(s.slot, s.options) };
     if (s.phase === 'organ') return { ...p, prompt: '이번 바퀴에 들를 기관은?', options: Object.entries(ORGANS).filter(([id]) => !s.organs.includes(id)).map(([key, o]) => ({ key, label: o.name })) };
     if (s.phase === 'die') return { ...p, options: preview(s).map(x => ({ ...x, key: x.index, label: x.steps + '칸 → ' + x.label })) };
     if (s.phase === 'finalName') return { ...p, prompt: '다음에 지나는 곳은?', options: nameOptions(NAME_OPTIONS[FINAL_NAMES[s.final.length]]) };

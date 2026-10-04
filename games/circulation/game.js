@@ -18,7 +18,7 @@
   }
   function drawBoard() {
     const dark = C.hud(state).dark;
-    const asked = C.pending(state).squares;
+    const asked = C.pending(hudFrom || state).squares;
     let svg = `<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10" fill="#786b74"/></marker>`;
     for (const sq of C.SQUARES.filter(sq => sq.kind === 'capillary')) {
       // 폐는 왼쪽에서 오른쪽, 기관은 오른쪽에서 왼쪽으로 흐른다.
@@ -29,9 +29,10 @@
     svg += `<rect x="12" y="55" width="112" height="22" rx="6" fill="${C.BLOOD.high.color}"/>${oxygen(42, 66, 'high')}`;
     svg += `<rect x="12" y="103" width="112" height="22" rx="6" fill="${C.BLOOD.low.color}"/>${oxygen(54, 114, 'low')}`;
     svg += text(68, 143, '그림 속 사람이') + text(68, 163, '나를 마주 본다');
-    // 두 혈관 열 사이의 빈자리에서 16px 글자를 유지해 범례를 나눠 쓴다.
-    svg += text(246, 99, '방울 안') + text(246, 116, '○ = CO₂') + text(246, 133, '(혈장의') + text(246, 150, '이산화') + text(246, 167, '탄소)');
-    svg += text(180, 465, '온몸순환') + text(246, 80, '폐순환');
+    // 범례는 흰 틀로 묶고, 두 구역 이름은 같은 색으로 구역 끝에 둔다.
+    svg += '<g class="co2-legend"><rect x="212" y="61" width="70" height="93" rx="6" fill="#fff" stroke="#b4cbd9"/>';
+    svg += text(246, 80, '방울 안') + text(246, 97, '○ = CO₂') + text(246, 114, '(혈장의') + text(246, 131, '이산화') + text(246, 148, '탄소)') + '</g>';
+    svg += text(180, 465, '온몸순환', 'circuit-name') + text(246, 174, '폐순환', 'circuit-name');
     // 겹치는 기관 가지는 한 번만 그린다. 심장 사이에는 벽을 두고 관은 그 앞을 지난다.
     svg += '<path d="M181 181 V278" stroke="#594650" stroke-width="7"/>';
     const edges = new Set();
@@ -60,12 +61,13 @@
       const aria = sq.kind === 'capillary' ? `${sq.name}, 들어올 때 ${C.BLOOD[sq.bloodIn].label}, 나갈 때 ${C.BLOOD[sq.bloodOut].label}` :
         (disclosed ? name : '이름 없는 ' + (sq.kind === 'chamber' ? '심장 방' : '혈관')) + ', ' + blood.label;
       const thick = sq.kind === 'chamber' ? { RA: 2, LA: 2, RV: 5, LV: 8 }[sq.id] : 2;
-      svg += `<g class="square${asked?.includes(sq.id) ? ' asked' : !asked && shownSquare === sq.id ? ' current' : ''}" data-square="${sq.id}" role="img" aria-label="${aria}">`;
+      svg += `<g class="square${asked?.includes(sq.id) ? ' asked' : !asked && shownSquare === sq.id ? ' current' : ''}" data-square="${sq.id}" role="img" aria-label="${asked?.includes(sq.id) ? '점선으로 표시한 칸, ' : ''}${aria}">`;
       if (sq.kind === 'chamber') svg += `<rect x="${x - 3}" y="${y - 3}" width="${w + 6}" height="${h + 6}" rx="10" fill="${sq.circuit === 'systemic' ? '#ffd7a6' : '#acd4f0'}"/>`;
       svg += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${sq.kind === 'vessel' ? 5 : 9}" fill="${sq.kind === 'capillary' ? 'url(#blood-' + sq.id + ')' : blood.color}" stroke="#342129" stroke-width="${thick}"/>`;
       if (sq.kind === 'capillary') {
-        svg += text(x + w / 2, y + 18, sq.id === 'lung' ? '폐의' : C.ORGANS[sq.id].name + '의', 'square-name');
-        svg += text(x + w / 2, y + 36, '모세 혈관', 'square-name');
+        const nameX = x + w / 2 - 10;
+        svg += text(nameX, y + 18, sq.id === 'lung' ? '폐의' : C.ORGANS[sq.id].name + '의', 'square-name');
+        svg += text(nameX, y + 36, '모세 혈관', 'square-name');
         svg += oxygen(x + 7, y + 8, 'low') + oxygen(x + w - 48, y + 8, 'high');
       } else svg += text(x + w / 2, y + 25, name, 'square-name') + oxygen(x + 7, y + 36, sq.blood);
       svg += '</g>';
@@ -79,8 +81,10 @@
     const list = !dark && C.pending(state).type === 'die' ? C.preview(state) : [];
     for (const candidate of list) {
       const shared = list.filter(c => c.square === candidate.square).length > 1;
-      const { x, y, w } = xy(squares[candidate.square]), dx = shared ? candidate.index * 24 : 0;
-      svg += `<g><circle class="candidate" cx="${x + w - 8 - dx}" cy="${y + 2}" r="12"/>${text(x + w - 8 - dx, y + 8, faces[candidate.steps - 1])}</g>`;
+      const sq = squares[candidate.square], { x, y, w, h } = xy(sq), dx = shared ? candidate.index * 24 : 0;
+      const cx = x + w - (sq.kind === 'capillary' ? 30 : 8) - dx;
+      const cy = y + (sq.kind === 'capillary' ? h - 14 : 2);
+      svg += `<g><circle class="candidate" cx="${cx}" cy="${cy}" r="12"/>${text(cx, cy + 6, faces[candidate.steps - 1])}</g>`;
     }
     if (!dark) {
       const blood = C.BLOOD[shownBlood], at = xy(squares[shownSquare]);
@@ -90,18 +94,19 @@
       const dx = capillary ? shownSquare === 'lung' ? at.x + at.w - 19 : at.x + 2 :
         squares[shownSquare].kind === 'chamber' ? at.x + at.w + 4 : at.x + at.w - 18;
       const dy = capillary ? at.y + 19 : at.y - 10;
-      svg += `<g id="drop" transform="translate(${dx},${dy}) scale(${dropScale})" role="img" aria-label="혈액 한 방울, ${blood.label}, 이산화 탄소 ${blood.co2 === 3 ? '많음' : '적음'}"><path d="M14 0 C11 8 0 16 0 25 A14 13 0 0 0 28 25 C28 16 17 8 14 0" fill="${blood.color}" stroke="#fff" stroke-width="2"/>`;
-      svg += Array.from({ length: blood.co2 }, (_, i) => `<circle cx="${8 + i * 6}" cy="26" r="2.5" fill="none" stroke="#fff" stroke-width="1.5"/>`).join('') + '</g>';
+      svg += `<g id="drop" data-square="${shownSquare}" transform="translate(${dx},${dy}) scale(${dropScale})" role="img" aria-label="혈액 한 방울, ${blood.label}, 이산화 탄소 ${blood.co2 === 3 ? '많음' : '적음'}"><path d="M14 0 C11 8 0 16 0 25 A14 13 0 0 0 28 25 C28 16 17 8 14 0" fill="${blood.color}" stroke="#fff" stroke-width="2"/>`;
+      const rings = blood.co2 === 3 ? [[9, 23], [19, 23], [14, 31]] : [[14, 26]];
+      svg += rings.map(([cx, cy]) => `<circle cx="${cx}" cy="${cy}" r="2.5" fill="none" stroke="#fff" stroke-width="1.5"/>`).join('') + '</g>';
     }
     $('board').innerHTML = svg;
   }
   function drawRoute() {
     const sq = squares[shownSquare];
-    const current = C.pending(state).slot || sq.structure || (shownSquare === 'lung' ? '폐의 모세 혈관' : sq.kind === 'capillary' ? '온몸의 모세 혈관' : null);
+    const current = C.pending(hudFrom || state).slot || sq.structure || (shownSquare === 'lung' ? '폐의 모세 혈관' : sq.kind === 'capillary' ? '온몸의 모세 혈관' : null);
     const chip = key => {
       if (!C.STRUCTURES[key]) return `<span class="chip${current === key ? ' current' : ''}">${key}</span>`;
       const record = state.practice.find(x => x.kind === 'name' && x.slot === key);
-      return `<span class="chip ${record ? record.ok ? 'right' : 'fixed' : ''}${current === key ? ' current' : ''}">${state.labels[key] ? C.STRUCTURES[key].name : '□'}</span>`;
+      return `<span class="chip ${record ? record.ok ? 'right' : 'fixed' : ''}${current === key ? ' current' : ''}"${current === key ? ' aria-current="true"' : ''}>${state.labels[key] ? C.STRUCTURES[key].name : '□'}</span>`;
     };
     $('route').innerHTML = [['폐순환', ['RV', 'PA', '폐의 모세 혈관', 'PV', 'LA']], ['온몸순환', ['LV', 'Ao', '온몸의 모세 혈관', 'VC', 'RA']]]
       .map(([name, keys]) => `<div class="route-line"><b>${name}:</b>${keys.map(chip).join('<span>→</span>')}</div>`).join('');
@@ -124,7 +129,12 @@
     $('trail').appendChild($('dark-cursor'));
     let html = '';
     const button = (label, pick, disabled = false) => `<button class="btn" data-k="${pick}"${disabled || busy ? ' disabled' : ''}>${label}</button>`;
-    if (p.type === 'continue') html = `<p class="feedback">${feedback.ok ? '정답! ' : feedback.kind === 'name' ? '고른 답: ' + C.STRUCTURES[feedback.pick].name + '. ' : ''}${feedback.text}</p>${button('계속', '')}`;
+    if (p.type === 'continue') {
+      const target = C.STRUCTURES[feedback.slot];
+      // 보충 이름 해설은 '이곳은' 대신 점선 칸을 가리키고(D-050 ④), 심장 방이면 하는 일 문장을 잇는다.
+      const explanation = feedback.at === 'fill' && feedback.kind === 'name' ? `점선으로 표시한 칸은 ${target.name}이다.${target.explain ? ' ' + target.explain : ''}` : feedback.text;
+      html = `<p class="feedback">${feedback.ok ? '정답! ' : feedback.kind === 'name' ? '고른 답: ' + C.STRUCTURES[feedback.pick].name + '. ' : ''}${explanation}</p>${button('계속', '')}`;
+    }
     else if (p.type === 'roll') html = button('주사위 굴리기', '');
     else if (p.type === 'darkStart') html = `<p class="prompt">완성된 판을 보고 경로를 떠올리세요.</p>${button('불 끄고 출발', '')}`;
     else if (p.options.length) {
@@ -139,9 +149,10 @@
   function draw() { drawBoard(); drawRoute(); drawHud(); drawCtrl(); }
   async function toast(value) {
     if (C.hud(state).dark) return;
+    $('toast').classList.toggle('low', squares[shownSquare].row <= 2);
     $('toast').textContent = value; $('toast').classList.add('on');
     await wait(Math.min(6000, Math.max(2200, Array.from(value).length * 70)));
-    $('toast').classList.remove('on'); $('toast').textContent = '';
+    $('toast').classList.remove('on');
   }
   function trail(value, landmark = false) {
     const chip = document.createElement('span'); chip.className = 'dark-chip' + (landmark ? ' landmark' : ''); chip.textContent = value;
@@ -158,7 +169,7 @@
       } else if (e.type === 'exchange') {
         shownBlood = e.bloodOut; drawBoard(); drawHud(); await toast(e.text);
         if (!noteSeen) { noteSeen = true; await toast(e.note); }
-      } else if (e.type === 'lapEnd') { hudFrom = null; drawHud(); await toast(e.text); }
+      } else if (e.type === 'lapEnd') { hudFrom = null; drawBoard(); drawRoute(); drawHud(); await toast(e.text); }
       else if (/Feedback$/.test(e.type)) {
         feedback = e; draw();
         if (e.ok) await wait(Math.min(6000, Math.max(2200, Array.from(e.text).length * 70)));
@@ -221,7 +232,7 @@
     document.body.classList.remove('dark', 'finished'); $('dark').hidden = true; $('trail').replaceChildren($('dark-cursor'));
     $('toast').textContent = ''; $('toast').classList.remove('on'); lastInput = performance.now(); draw();
   }
-  window.__circ = { state: () => state, pending: () => C.pending(state), correct: () => C.correct(state), fast: on => { fast = !!on; } };
+  window.__circ = { state: () => state, pending: () => C.pending(state), correct: () => C.correct(state), fast: on => { fast = !!on; }, view: () => C.pending(hudFrom || state) };
   window.addEventListener('keydown', e => {
     if (!playing || busy || !$('overlay').hidden || e.repeat || e.target.closest('input, textarea, select, [contenteditable]') || ([' ', 'Enter'].includes(e.key) && e.target.closest('a, button'))) return;
     const p = C.pending(state);
@@ -233,8 +244,8 @@
   });
   state = C.newGame(1); draw();
   A.intro($('overlay'), { id: 'circulation', rules: [
-    '게임은 혈액 한 방울을 따라 폐순환과 온몸순환을 차례로 돌지만, 실제 몸에서는 두 순환이 동시에 일어난다. 적혈구가 산소를, 혈장이 이산화 탄소를 나른다.',
-    '주사위 두 개 가운데 하나를 고른다. 모세 혈관 칸과, 출발 칸으로 돌아오는 곳에서는 남은 눈을 버리고 멈춘다.',
+    '게임은 혈액 한 방울을 따라 온몸순환과 폐순환을 번갈아 돌지만, 실제 몸에서는 두 순환이 동시에 일어난다. 적혈구가 산소를, 혈장이 이산화 탄소를 나른다.',
+    '주사위 두 개 가운데 하나를 고른다. 모세 혈관 칸에 닿거나 출발 칸에 돌아오면 남은 눈을 버리고 멈춘다.',
     '이름이 지워진 칸에 이름표를 붙인다. 혈관은 이름을 확인한 뒤, 그 혈관을 「동맥」 또는 「정맥」이라고 부르는 까닭도 고른다.',
     '그림 속 사람이 나를 마주 본다. 화면 왼쪽이 그림 속 사람의 오른쪽이다.',
     '연습 세 바퀴 뒤, 완성된 판을 보고 불을 끈다. 불 꺼진 바퀴는 기억만으로 돌며, 맞힌 개수는 끝에서 알려 준다.',

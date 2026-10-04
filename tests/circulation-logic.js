@@ -7,8 +7,12 @@ const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
 const modulePath = path.join(__dirname, '../games/circulation/circulation.js');
 const source = fs.readFileSync(modulePath, 'utf8');
-const mutant = process.argv.find(x => x.startsWith('--mutant='))?.split('=')[1];
+const moduleMutant = process.argv.find(x => x.startsWith('--mutant='))?.split('=')[1];
+const screenMutant = process.argv.find(x => x.startsWith('--screen-mutant='))?.split('=')[1];
+const mutant = moduleMutant || screenMutant;
 const mutations = {
+  fillUnreachable: ["if (['nameStart', 'name'].includes(s.phase)) return", "if (['nameStart', 'name', 'fillName'].includes(s.phase)) return"],
+  fillContinue: ["if (s.phase === 'continue' && s.at === 'fill')", "if (false)"],
   resultLock: ["function result(s, playNo = 1) {\n    if (s.phase !== 'end') return null;", 'function result(s, playNo = 1) {'],
   hudMode: ["const mode = s.phase === 'end' ? 'end' : dark ? 'dark'", "const mode = s.phase === 'end' ? 'end' : dark ? 'practice'"],
   exchangeSplit: ['note: GUIDES.capillary', "note: ''"],
@@ -31,8 +35,8 @@ const mutations = {
   landmark: ["events.push({ type: 'landmark', label: s.final.length === 4 ? '폐의 모세 혈관' : '온몸의 모세 혈관' });", 'void 0;'],
 };
 let C, testedSource = source;
-if (mutant) {
-  const [before, after] = mutations[mutant];
+if (moduleMutant) {
+  const [before, after] = mutations[moduleMutant];
   assert.equal(source.split(before).length, 2, '고의 변이 대상은 정확히 한 곳이어야 한다.');
   const context = { module: { exports: {} } };
   testedSource = source.replace(before, after);
@@ -583,7 +587,7 @@ test('D 정오 누출 차분: 정답·보기 안 오답의 pending·events·hud�
 test('E 보충 문항 칸 목록·질문과 마지막 바퀴의 위치 비노출', () => {
   const seen = new Set();
   for (let seed = 1; seed <= 32; seed++) C.simulate({ dice: 'first', visit: (s, p) => {
-    if (['fillName', 'fillReason'].includes(p.type)) {
+    if (['fillName', 'fillReason'].includes(p.type) || (p.type === 'continue' && s.at === 'fill')) {
       seen.add(p.type); assert.equal(p.slot, s.slot);
       eq(p.squares, C.SQUARES.filter(q => q.structure === s.slot).map(q => q.id));
       if (p.type === 'fillName') assert.equal(p.prompt, '점선으로 표시한 칸의 이름은?');
@@ -592,7 +596,7 @@ test('E 보충 문항 칸 목록·질문과 마지막 바퀴의 위치 비노출
       if (['nameStart', 'name'].includes(p.type)) assert.equal(p.prompt, '이곳의 이름은?');
     }
   } }, seed);
-  eq([...seen].sort(), ['fillName', 'fillReason']);
+  eq([...seen].sort(), ['continue', 'fillName', 'fillReason']);
 });
 test('E 결과 잠금·경계 문항까지 null·완료 결과와 playNo 전달', () => {
   const end = C.simulate({ visit: (s, p, events, next) => {
@@ -641,6 +645,143 @@ test('E 바퀴 끝 안내는 심장을 두 번 지났다는 문장', () => {
   C.simulate({ visit: (s, p, events) => events.filter(e => e.type === 'lapEnd').forEach(e => assert.equal(e.text, text)) }, 1);
 });
 
+// 화면 코드를 메모리에서 그대로 실행한다. DOM 대역은 문자열·속성·분기만 검사하며 실측은 E2E가 맡는다.
+const screenPath = path.join(path.dirname(modulePath), 'game.js');
+const screenSource = fs.readFileSync(screenPath, 'utf8');
+const screenMutations = {
+  toastPosition: ['row <= 2', 'row < 0'],
+  legendFrame: ['class="co2-legend"', 'class="old-legend"'],
+  reasonPrefix: ["feedback.kind === 'name' ? '고른 답: '", "true ? '고른 답: '"],
+  boardPlayback: ['const asked = C.pending(hudFrom || state).squares;', 'const asked = C.pending(state).squares;'],
+  routePlayback: ['const current = C.pending(hudFrom || state).slot', 'const current = C.pending(state).slot'],
+  lapEndRedraw: ['hudFrom = null; drawBoard(); drawRoute(); drawHud(); await toast(e.text);', 'hudFrom = null; drawHud(); await toast(e.text);'],
+  candidatePosition: ["sq.kind === 'capillary' ? 30 : 8", "sq.kind === 'capillary' ? 8 : 8"],
+  co2Spacing: ['[[9, 23], [19, 23], [14, 31]]', '[[8, 26], [14, 26], [20, 26]]'],
+  askedAria: ["'점선으로 표시한 칸, '", "''"],
+  routeAria: [' aria-current="true"', ''],
+  toastFade: ["$('toast').classList.remove('on');\n  }", "$('toast').classList.remove('on'); $('toast').textContent = '';\n  }"],
+  fillExplanation: ["feedback.at === 'fill' && feedback.kind === 'name'", 'false'],
+  introOrder: ['온몸순환과 폐순환을 번갈아', '폐순환과 온몸순환을 차례로'],
+  introStop: ['모세 혈관 칸에 닿거나 출발 칸에 돌아오면', '모세 혈관 칸과, 출발 칸으로 돌아오는 곳에서는'],
+};
+function screenView() {
+  let code = screenSource;
+  if (screenMutant) {
+    const [before, after] = screenMutations[screenMutant];
+    assert.equal(code.split(before).length, 2, '화면 고의 변이 대상 한 곳'); code = code.replace(before, after);
+  }
+  const elements = new Map(), timers = [];
+  const element = id => {
+    if (!elements.has(id)) {
+      const classes = new Set();
+      elements.set(id, { innerHTML: '', textContent: '', hidden: true, dataset: {},
+        classList: { add: x => classes.add(x), remove: x => classes.delete(x), contains: x => classes.has(x), toggle: (x, on) => on ? classes.add(x) : classes.delete(x) },
+        querySelectorAll: () => [], querySelector: () => null, appendChild: () => {} });
+    }
+    return elements.get(id);
+  };
+  const context = vm.createContext({ window: { Circulation: C, Arcade: { intro: (el, options) => { context.rules = options.rules; } },
+    matchMedia: () => ({ matches: false }), addEventListener: () => {} },
+    document: { getElementById: element, body: element('body') }, setTimeout: fn => timers.push(fn) }, { microtaskMode: 'afterEvaluate' });
+  // 공개 게임에는 테스트용 위치 변경 훅을 더하지 않는다.
+  code = code.replace('  state = C.newGame(1); draw();', `  window.__view = { drawBoard, drawRoute, drawCtrl, drawHud, toast, replay,
+    set(s, h = null, sq = 'LV', fb = null, blood = 'high') { state = s; hudFrom = h; shownSquare = sq; feedback = fb; shownBlood = blood; } };
+  state = C.newGame(1); draw();`);
+  vm.runInContext(code, context);
+  return { api: context.window.__view, el: element, rules: context.rules,
+    run: code => vm.runInContext(code, context), tick: () => { assert(timers.length); timers.shift()(); vm.runInContext('void 0', context); } };
+}
+test('F 보충 전용 분기 뒤 닿지 않는 문항 종류 제거', () => {
+  const body = testedSource.slice(testedSource.indexOf("if (s.phase === 'continue' && s.at === 'fill')"), testedSource.indexOf('// 화면에는 노출하지 않는다.'));
+  assert(!/\['nameStart', 'name', 'fillName'\]|\['reason', 'fillReason'\]/.test(body));
+});
+test('F 시작 규칙 D-050 두 줄 원문', () => {
+  const v = screenView();
+  eq(v.rules.slice(0, 2), ['게임은 혈액 한 방울을 따라 온몸순환과 폐순환을 번갈아 돌지만, 실제 몸에서는 두 순환이 동시에 일어난다. 적혈구가 산소를, 혈장이 이산화 탄소를 나른다.', '주사위 두 개 가운데 하나를 고른다. 모세 혈관 칸에 닿거나 출발 칸에 돌아오면 남은 눈을 버리고 멈춘다.']);
+});
+test('F 보충·까닭 정오 해설 조립과 접근성', () => {
+  const v = screenView(); let count = 0;
+  C.simulate({ dice: 'first', visit: (s, p) => {
+    if (['fillName', 'reason', 'fillReason'].includes(p.type)) {
+      for (const pick of [C.correct(s), wrong(s, p)]) {
+        const out = submit(s, pick), fb = out.events[0];
+        v.api.set(out.state, s, 'LV', fb); v.api.drawBoard(); v.api.drawRoute(); v.api.drawCtrl();
+        const prefix = fb.ok ? '정답! ' : fb.kind === 'name' ? '고른 답: ' + C.STRUCTURES[pick].name + '. ' : '';
+        const explanation = p.type === 'fillName' ? '점선으로 표시한 칸은 ' + C.STRUCTURES[s.slot].name + '이다.' + (C.STRUCTURES[s.slot].explain ? ' ' + C.STRUCTURES[s.slot].explain : '') : C.reasonExplanation(s.slot, pick);
+        assert(v.el('ctrl').innerHTML.includes(`<p class="feedback">${prefix}${explanation}</p>`));
+        if (s.at === 'fill') {
+          const asked = [...v.el('board').innerHTML.matchAll(/class="square asked" data-square="([^"]+)" role="img" aria-label="점선으로 표시한 칸, /g)].map(x => x[1]);
+          eq(asked, C.SQUARES.filter(q => q.structure === s.slot).map(q => q.id));
+          assert(!v.el('board').innerHTML.includes('square current'));
+          assert(v.el('route').innerHTML.includes('aria-current="true"'));
+          // 재생 뒤 continue도 같은 대상을 가리킨다.
+          v.api.set(out.state, null, 'LV', fb); v.api.drawBoard(); v.api.drawRoute();
+          assert(v.el('board').innerHTML.includes('square asked'));
+        }
+        count++;
+      }
+    }
+  } }, 1);
+  assert(count >= 8);
+});
+test('F 이동 재생·바퀴 끝의 판과 경로 강조 동기화', () => {
+  const v = screenView(); let seen = 0;
+  C.simulate({ dice: 'first', visit: (s, p, events, next) => {
+    if (events.some(e => e.type === 'lapEnd') && C.pending(next).squares) {
+      v.api.set(next, s, 'PV2'); v.api.drawBoard(); v.api.drawRoute(); v.api.drawHud();
+      assert(!v.el('board').innerHTML.includes('square asked')); assert(v.el('board').innerHTML.includes('square current" data-square="PV2"'));
+      const route = v.el('route').innerHTML;
+      const current = route.match(/<span class="chip [^"]* current"[^>]*>(.*?)<\/span>/)[1];
+      assert.equal(current, s.labels.PV ? '폐정맥' : '□');
+      v.api.replay(events.filter(e => e.type === 'lapEnd'));
+      assert(v.el('board').innerHTML.includes('square asked'));
+      const asked = C.pending(next).slot, label = next.labels[asked] ? C.STRUCTURES[asked].name : '□';
+      assert(v.el('route').innerHTML.includes(`aria-current="true">${label}</span>`));
+      seen++;
+    }
+  } }, 1);
+  assert.equal(seen, 1);
+});
+test('F 범례 분리·모세 혈관 후보·CO₂ 고리 좌표', () => {
+  const v = screenView(); v.api.drawBoard();
+  const svg = v.el('board').innerHTML;
+  assert(svg.includes('class="co2-legend"><rect x="212" y="61" width="70" height="93"'));
+  assert(svg.includes('y="174" text-anchor="middle" class="circuit-name">폐순환'));
+  let doubles = 0;
+  C.simulate({ dice: 'first', visit: (s, p) => {
+    if (p.type !== 'die') return;
+    const cap = C.preview(s).filter(q => C.SQUARES.find(x => x.id === q.square).kind === 'capillary');
+    v.api.set(s, null, s.square); v.api.drawBoard();
+    const markers = [...v.el('board').innerHTML.matchAll(/class="candidate" cx="([^"]+)" cy="([^"]+)"/g)].map(x => x.slice(1).map(Number));
+    for (const c of cap) {
+      const sq = square(c.square), x = 7 + sq.col * 70, y = 13 + sq.row * 56, w = sq.span * 70 - 12;
+      const [cx, cy] = markers[c.index], dx = cap.length === 2 && cap[0].square === cap[1].square ? c.index * 24 : 0;
+      assert.equal(cx, x + w - 30 - dx); assert.equal(cy, y + 30);
+      // O₂ 점은 위쪽 y+8, 후보 위쪽은 y+18. 화살표는 아래쪽 y+44부터다.
+      assert(cy - 12 > y + 8 + 2.5 && cy + 12 < y + 44);
+    }
+    if (cap.length === 2 && cap[0].square === cap[1].square) doubles++;
+  } }, 1);
+  assert(doubles > 0);
+  for (const blood of ['low', 'high']) {
+    v.api.set(C.newGame(1), null, 'LV', null, blood); v.api.drawBoard();
+    const drop = v.el('board').innerHTML.split('id="drop"')[1];
+    const rings = [...drop.matchAll(/<circle cx="([^"]+)" cy="([^"]+)" r="2.5" fill="none" stroke="#fff" stroke-width="1.5"/g)].map(x => x.slice(1).map(Number));
+    assert.equal(rings.length, blood === 'low' ? 3 : 1);
+    for (let i = 0; i < rings.length; i++) for (let j = i + 1; j < rings.length; j++) {
+      const [x, y] = rings[i], [a, b] = rings[j]; assert(Math.abs(x - a) > 6.5 || Math.abs(y - b) > 6.5);
+    }
+    if (rings.length === 1) assert.equal(rings[0][0], 14);
+  }
+});
+test('F 폐 토스트 위치·사라지는 동안 글자 유지', () => {
+  const v = screenView();
+  v.api.set(C.newGame(1), null, 'lung'); v.run("window.__view.toast('폐 안내')");
+  assert(v.el('toast').classList.contains('low')); v.tick(); assert(!v.el('toast').classList.contains('on')); assert.equal(v.el('toast').textContent, '폐 안내');
+  v.api.set(C.newGame(1), null, 'LV'); v.run("window.__view.toast('심장 안내')");
+  assert(!v.el('toast').classList.contains('low')); v.tick(); assert.equal(v.el('toast').textContent, '심장 안내');
+});
+
 if (!mutant) {
   test('⑧ 시드 1,000×정책 4×전략 8: 별 불변·문항 불변·연습 12피드백 선행', () => {
     let games = 0, maxScore = 0; const metrics = {};
@@ -684,15 +825,22 @@ if (!mutant) {
   });
   // 원본 파일을 바꾸지 않고 VM에서 규칙을 고의로 깨뜨린다. 자식 테스트가 FAIL·종료 1인지 확인한다.
   // 강제 멈춤·까닭 문턱 제거, 이벤트·선택지 정오 노출, 경계 가산점,
-  // 연습 심장 방·까닭 섞기 제거, 모세 혈관 표지 제거와 2단계 API·문구·이름 교정 순서 변경의 20종이다.
-  test('고의 변이 20종은 실제 단언 FAIL·종료 1, 원본 파일은 보존', () => {
-    const targets = { resultLock: 'E 결과 잠금', hudMode: 'E HUD mode', exchangeSplit: 'E 교환 이벤트', exchangeBlood: 'E 교환 이벤트', practiceKeep: 'E 연습 정오', resultText: 'B 결과:', resultOrder: 'B 결과:', nextStar: 'B 결과:', forbiddenJoined: '⑪ 게임 폴더', forbiddenSpaced: '⑪ 게임 폴더', lapGuide: 'E 바퀴 끝', capillary: '⑤ 모든 위치', stars: '⑦ 답 전수', leak: '⑩ 마지막 바퀴', boundary: 'D-044 경계 2개',
+  // 연습 심장 방·까닭 섞기 제거, 모세 혈관 표지 제거와 2단계 API·문구·이름 교정 순서 변경과 보충 해설 표시의 22종이다.
+  test('고의 변이 22종은 실제 단언 FAIL·종료 1, 원본 파일은 보존', () => {
+    const targets = { fillUnreachable: 'F 보충 전용', fillContinue: 'E 보충 문항', resultLock: 'E 결과 잠금', hudMode: 'E HUD mode', exchangeSplit: 'E 교환 이벤트', exchangeBlood: 'E 교환 이벤트', practiceKeep: 'E 연습 정오', resultText: 'B 결과:', resultOrder: 'B 결과:', nextStar: 'B 결과:', forbiddenJoined: '⑪ 게임 폴더', forbiddenSpaced: '⑪ 게임 폴더', lapGuide: 'E 바퀴 끝', capillary: '⑤ 모든 위치', stars: '⑦ 답 전수', leak: '⑩ 마지막 바퀴', boundary: 'D-044 경계 2개',
       optionLeak: 'D 정오 누출 차분', chamberOrder: 'D 선택지 순서', reasonOrder: 'D 선택지 순서', landmark: 'D landmark', namesPriorityOrder: 'B 결과:' };
     for (const name of Object.keys(mutations)) {
       const run = spawnSync(process.execPath, [__filename, '--mutant=' + name], { encoding: 'utf8', timeout: 60000 });
       assert.equal(run.status, 1, name + ': ' + run.stderr); assert(run.stdout.includes('FAIL ' + targets[name]), name + ' 목표 단언');
       console.log('고의 변이 ' + name + ': 목표 FAIL 확인, 종료 ' + run.status);
     }
+    const screenTargets = { toastPosition: 'F 폐 토스트', legendFrame: 'F 범례 분리', reasonPrefix: 'F 보충·까닭', boardPlayback: 'F 이동 재생', routePlayback: 'F 이동 재생', lapEndRedraw: 'F 이동 재생', candidatePosition: 'F 범례 분리', co2Spacing: 'F 범례 분리', askedAria: 'F 보충·까닭', routeAria: 'F 보충·까닭', toastFade: 'F 폐 토스트', fillExplanation: 'F 보충·까닭', introOrder: 'F 시작 규칙', introStop: 'F 시작 규칙' };
+    for (const name of Object.keys(screenMutations)) {
+      const run = spawnSync(process.execPath, [__filename, '--screen-mutant=' + name], { encoding: 'utf8', timeout: 60000 });
+      assert.equal(run.status, 1, name + ': ' + run.stderr); assert(run.stdout.includes('FAIL ' + screenTargets[name]), name + ' 화면 목표 단언');
+      console.log('화면 분기 고의 변이 ' + name + ': 목표 FAIL 확인, 종료 ' + run.status);
+    }
+    assert.equal(fs.readFileSync(screenPath, 'utf8'), screenSource);
     assert.equal(fs.readFileSync(modulePath, 'utf8'), source);
     eq(require(modulePath).simulate('first', 23), C.simulate('first', 23));
   });
