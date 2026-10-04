@@ -8,17 +8,18 @@
 |---|---|
 | `index.html` | 허브. `GAMES`로 게임 칸을 그리고 학번·이름, 기록 요약(요약 복사·JSON 저장·기록 지우기), 공용 기기 확인 창을 맡는다. https일 때만 `sw.js`를 등록한다. |
 | `manifest.webmanifest`, `icons/` | PWA 설정과 아이콘(180·192·512). |
-| `sw.js` | 서비스 워커. `CACHE='bio-arcade-v2'`, `FILES`(7절 명령으로 생성), 네트워크 우선 후 캐시 대체, 정상 응답만 캐시. |
+| `sw.js` | 서비스 워커. `CACHE='bio-arcade-v3'`, `FILES`(7절 명령으로 생성), 네트워크 우선 후 캐시 대체, 정상 응답만 캐시. |
 | `shared/arcade.js` | `window.Arcade`: `GAMES` 목록, 기록 저장, 시작·결과 카드, 모달 처리, 성취기준 표시, 탐사대 배지 읽기, 기록 지우기. |
 | `shared/arcade.css` | 미니게임 공통 스타일(세로 휴대폰 기준). |
 | `shared/standards.js` | `window.ARCADE_STANDARDS`: 2022 개정 성취기준 13개 코드, 성취수준 65개 발췌. |
 | `games/basepang/` | 염기쌍 팡. `engine.js`(`window.BasePang`, 판·짝 규칙·연쇄), `game.js`(화면·오개념 신호·흐름 문항). |
+| `games/circulation/` | 혈액 순환 일주. `circulation.js`(`window.Circulation`, 판·경로·혈액 상태, 연습 3바퀴와 불 꺼진 바퀴 상태 기계, 별·결과 문장·오개념 신호), `game.js`(SVG 판·이벤트 재생·불 꺼진 바퀴 패널). 설계는 `docs/design/circulation-board.md`. |
 | `games/glucose/` | 혈당 지키기. `model.js`(`window.GlucoseModel`, 45초=하루 모델·별), `game.js`(캔버스·모드 선택). |
 | `games/mendel/` | 멘델의 텃밭. `genetics.js`(`window.Genetics`), `game.js`(화분·교배·검정 교배·추론). |
 | `games/pedigree/` | 가계도 지뢰찾기. `pedigree.js`(`window.Pedigree`, 단계 데이터·유전자형 조합 전수 해결기), `game.js`. |
 | `games/run/` | 에너지 런. `game.js` 하나(구간 `ZONES`, 아이템 묶음 `DECK`, 세포 전달). 규칙 모듈이 따로 없다. |
 | `games/quest/` | 생명 탐사대. **독립 앱**: `shared/`를 읽지 않는다. `js/data.js`(`window.GameData`: 생물 19종, 지도 4개, 체육관), `js/battles.js`(`window.Battles`: 광합성·소화 규칙), `js/main.js`(이동·대화·관찰·도감·체육관·저장), `css/style.css`. |
-| `tests/` | `quest-logic.js`(Node 단언), `quest-tune-photo.js`(광합성 난이도 보고), `arcade-e2e.js`·`quest-e2e.js`(Playwright). |
+| `tests/` | `quest-logic.js`·`circulation-logic.js`(Node 단언), `quest-tune-photo.js`(광합성 난이도 보고), `arcade-e2e.js`·`quest-e2e.js`(Playwright). |
 | `docs/` | 진행 상황, 결정 기록, 이 문서, 당시 기록 2개(복구 기록서, 교차 검토 결과). |
 
 ## 2. 모듈 관례
@@ -57,6 +58,7 @@ node -e "global.window=global; const S=require('./shared/standards.js'); const A
 ## 6. 테스트 훅
 
 - `window.__game`(염기쌍 팡): `grid()`, `level()`, `moves()`, `trySwap(a, b)`.
+- `window.__circ`(혈액 순환 일주): `state()`, `pending()`, `correct()`(지금 입력의 정답 키, 테스트 전용), `fast(on)`(이벤트 재생 대기를 없앤다). `window.__game`은 염기쌍 팡이 쓰므로 이름을 나눴다.
 - `window.__bq`(탐사대): 상태 `S`, `mode`, `player`, `warp(map, x, y)`, `encounter(habitat, sp?)`, `observationQuestions(sp)`, `gymPhoto`, `gymDigest`, `openDex`.
 - E2E는 전역 모듈도 직접 쓴다(`window.Pedigree.solve`, `window.BasePang.findPairs`, `window.GameData.SPECIES`). 혈당·에너지 런·멘델은 DOM 선택자와 포인터로 조작한다.
 
@@ -87,6 +89,7 @@ mkdir -p ~/.cache/bio-arcade-tools && cd ~/.cache/bio-arcade-tools && { [ -f pac
 | 명령 | 걸리는 시간 | 통과 기준 |
 |---|---|---|
 | `node tests/quest-logic.js` | 1초 미만 | `FAIL` 0, 종료 코드 0 |
+| `node tests/circulation-logic.js` | 약 1분 | `FAIL` 0, 종료 코드 0. 별 전수 분포와 32,000판 시뮬레이션 값을 함께 출력한다 |
 | `node tests/quest-tune-photo.js` | 1초 미만 | 보고만 한다. 광합성 규칙을 바꿀 때 별 분포를 본다 |
 | `PW=~/.cache/bio-arcade-tools/node_modules/playwright node tests/arcade-e2e.js <저장소 밖 폴더>` | 약 2분 | `errors: none`, `failures: none`, 종료 코드 0 |
 | `PW=~/.cache/bio-arcade-tools/node_modules/playwright node tests/quest-e2e.js <저장소 밖 폴더>` | 약 15초 | `FAIL` 없음, `errors: none`, 종료 코드 0 |
