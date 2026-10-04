@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>혈액 순환 일주</title>
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../../icons/icon-180.png">
+  <link rel="stylesheet" href="../../shared/arcade.css">
+  <style>
+    body { background: #301923; height: 100dvh; overflow: hidden; }
+    .bar { flex: 0 0 44px; padding: max(4px, env(safe-area-inset-top)) 8px 4px; gap: 6px; }
+    .bar a { white-space: nowrap; }
+    .bar b { font-size: 14px; white-space: nowrap; }
+    .bar .hud { gap: 4px; font-size: 12px; white-space: nowrap; }
+    .bar .hud span { padding: 3px 4px; }
+    #stage { min-height: 0; gap: 0; padding: 0 10px max(10px, env(safe-area-inset-bottom)); }
+    #route { flex: 0 0 56px; display: flex; flex-direction: column; justify-content: center; gap: 4px; color: #fff; }
+    .route-line { display: flex; align-items: center; justify-content: center; gap: 2px; font-size: 12px; white-space: nowrap; }
+    .chip { border: 1px solid #999; border-radius: 5px; padding: 2px; background: #fffaf0; color: #302932; }
+    .chip.right { border-color: #1f8a4c; background: #e5f5ea; }
+    .chip.fixed { border: 2px solid #c57b19; }
+    .chip.current { outline: 2px solid #fff; outline-offset: 1px; font-weight: 800; }
+    #map { position: relative; flex: 1; min-height: 0; margin: 5px 0; }
+    #board { display: block; width: 100%; height: 100%; border-radius: 12px; }
+    #board text { font-size: 16px; font-weight: 700; font-family: inherit; }
+    #board .square-name { fill: #fff; paint-order: stroke; stroke: #342129; stroke-width: 2px; }
+    #board .square.current rect { stroke: #e0a412; }
+    #board .square.asked rect { stroke: #e0a412; stroke-width: 4; stroke-dasharray: 6 4; }
+    #board .candidate { fill: #fffaf0; stroke: #302932; stroke-width: 2px; }
+    #board .valve.open { stroke: #e0a412; stroke-width: 5px; }
+    #dark { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 16px; border-radius: 12px; background: #171820; color: #eee; }
+    #dark[hidden] { display: none; }
+    #trail { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }
+    #dark-cursor { display: flex; align-items: center; gap: 6px; }
+    .dark-chip { border: 1px solid #777; background: #35363d; color: #ddd; border-radius: 8px; padding: 6px; font-size: 16px; }
+    .dark-chip.landmark { background: #464750; }
+    .dark-drop { width: 30px; height: 38px; filter: drop-shadow(0 0 9px #fff); }
+    #blank { font-size: 24px; border: 2px solid #aaa; border-radius: 10px; padding: 6px 22px; }
+    #status { flex: 0 0 24px; margin: 0; color: #fff; text-align: center; font-size: 12px; line-height: 24px; white-space: nowrap; }
+    #ctrl { flex: 0 0 150px; height: 150px; padding-top: 6px; color: #fff; }
+    .sheet { display: flex; flex-direction: column; gap: 6px; }
+    .sheet[hidden], #ctrl .btn[hidden] { display: none; }
+    .prompt { margin: 0; font-size: 14px; line-height: 19px; font-weight: 700; }
+    .sheet-opts { display: flex; gap: 6px; }
+    .sheet-opts .btn { flex: 1; min-width: 0; min-height: 56px; padding: 6px 2px; font-size: 16px; word-break: keep-all; }
+    .sheet-opts.dice .btn { min-height: 64px; font-size: 15px; }
+    .sheet-opts.reasons { flex-direction: column; }
+    .sheet-opts.reasons .btn { min-height: 48px; padding: 5px 4px; font-size: 16px; }
+    .sheet > .btn { min-height: 56px; width: 100%; margin: 0; }
+    .feedback { margin: 0; font-size: 14px; line-height: 18px; }
+    .feedback + .btn { min-height: 48px; }
+    body.dark #board, body.dark #route, body.finished #board, body.finished #route, body.finished #dark { visibility: hidden; }
+    body.dark #toast { visibility: hidden; }
+    .flow-quiz { background: #f3ecdc; border-radius: 12px; padding: 10px; margin-top: 10px; }
+    .flow-opts { display: grid; gap: 6px; }
+    .flow-fb { font-size: 14px !important; }
+    #ar-refl { min-height: 144px; }
+    @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+  </style>
+</head>
+<body>
+  <header class="bar"><a href="../../index.html">← 오락실</a><b>혈액 순환 일주</b><div class="hud"><span id="mode"></span><span id="score">0점</span></div></header>
+  <main id="stage">
+    <div id="route" aria-label="두 순환의 경로"></div>
+    <div id="map">
+      <svg id="board" viewBox="0 0 360 470" role="group" aria-label="혈액 순환 판"></svg>
+      <section id="dark" aria-label="불 꺼진 바퀴" hidden>
+        <div id="trail"><div id="dark-cursor">
+        <svg class="dark-drop" viewBox="0 0 30 38" aria-label="혈액 한 방울"><path d="M15 1 C12 10 2 17 2 25 A13 12 0 0 0 28 25 C28 17 18 10 15 1" fill="#eee"/></svg>
+        <div id="blank" aria-label="지금 묻는 빈칸">?</div>
+        </div></div>
+      </section>
+      <div class="toast" id="toast" role="status"></div>
+    </div>
+    <p id="status" role="status"></p>
+    <div id="ctrl" aria-live="polite"></div>
+  </main>
+  <div class="overlay" id="overlay" hidden></div>
+  <script src="../../shared/standards.js"></script>
+  <script src="../../shared/arcade.js"></script>
+  <script src="circulation.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

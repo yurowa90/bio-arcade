@@ -9,6 +9,18 @@ const modulePath = path.join(__dirname, '../games/circulation/circulation.js');
 const source = fs.readFileSync(modulePath, 'utf8');
 const mutant = process.argv.find(x => x.startsWith('--mutant='))?.split('=')[1];
 const mutations = {
+  resultLock: ["function result(s, playNo = 1) {\n    if (s.phase !== 'end') return null;", 'function result(s, playNo = 1) {'],
+  hudMode: ["const mode = s.phase === 'end' ? 'end' : dark ? 'dark'", "const mode = s.phase === 'end' ? 'end' : dark ? 'practice'"],
+  exchangeSplit: ['note: GUIDES.capillary', "note: ''"],
+  exchangeBlood: ['bloodIn: sq.bloodIn, bloodOut: sq.bloodOut', 'bloodIn: sq.bloodOut, bloodOut: sq.bloodIn'],
+  practiceKeep: ["s.phase = 'finalName'; s.slot = null; s.options = [];", "s.phase = 'finalName'; s.slot = null; s.options = []; s.practice = s.practice.map(({ ok, tag, ...x }) => x);"],
+  resultText: ['동맥은 심장에서 나가는 혈액이 흐르는 혈관이고, 정맥은', '동맥은 심장에서 나가는, 정맥은'],
+  resultOrder: ['a.priority === 0 ? -1 : b.priority === 0 ? 1 : a.order - b.order', 'a.order - b.order'],
+  namesPriorityOrder: ['a.priority === 0 ? -1 : b.priority === 0 ? 1 : a.order - b.order', 'a.priority - b.priority || a.order - b.order'],
+  nextStar: ["'다음 별까지: '", "'다음 별: '"],
+  forbiddenJoined: ['/* 혈액 순환 일주', '/* 관상동맥 혈액 순환 일주'],
+  forbiddenSpaced: ['/* 혈액 순환 일주', '/* 관상 동맥 혈액 순환 일주'],
+  lapGuide: ['심장을 두 번 지났다. ', ''],
   capillary: ["BY_ID[path[to]].kind === 'capillary'", 'false'],
   stars: ['names >= 7 && reasons === 4', 'names >= 7'],
   leak: ["{ type: 'finalAnswer', kind, pick: action.pick }", "{ type: 'finalAnswer', kind, pick: action.pick, ok: true }"],
@@ -18,12 +30,13 @@ const mutations = {
   reasonOrder: ["shuffle(s, ['direction', 'oxygen'])", "['direction', 'oxygen']"],
   landmark: ["events.push({ type: 'landmark', label: s.final.length === 4 ? '폐의 모세 혈관' : '온몸의 모세 혈관' });", 'void 0;'],
 };
-let C;
+let C, testedSource = source;
 if (mutant) {
   const [before, after] = mutations[mutant];
   assert.equal(source.split(before).length, 2, '고의 변이 대상은 정확히 한 곳이어야 한다.');
   const context = { module: { exports: {} } };
-  vm.runInNewContext(source.replace(before, after), context);
+  testedSource = source.replace(before, after);
+  vm.runInNewContext(testedSource, context);
   C = context.module.exports;
 } else C = require(modulePath);
 let pass = 0, fail = 0;
@@ -133,7 +146,7 @@ test('B 까닭 정답·오답 해설과 기관·바퀴 끝 안내의 지정 문�
   }
   eq(C.ORGANS.kidney.guide, '혈액 속 요소 같은 노폐물이 걸러진다. 콩팥의 세포에도 산소와 포도당을 주고 이산화 탄소를 받는다.');
   eq(C.GUIDES.lung, '폐포의 산소는 모세 혈관으로, 모세 혈관의 이산화 탄소는 폐포로 이동한다.');
-  eq(C.GUIDES.lapEnd, '심장 칸을 지날 때는 혈액 색이 바뀌지 않았다. 심장은 혈액을 내보낼 뿐, 혈액에 산소를 더하지 않는다.');
+  eq(C.GUIDES.lapEnd, '심장을 두 번 지났다. 심장 칸을 지날 때는 혈액 색이 바뀌지 않았다. 심장은 혈액을 내보낼 뿐, 혈액에 산소를 더하지 않는다.');
   eq(C.STRUCTURES.RA.explain, '온몸을 돌고 온 혈액이 들어오는 방이다.'); eq(C.STRUCTURES.LA.explain, '폐를 거쳐 온 혈액이 들어오는 방이다.');
   for (const pick of ['direction', 'oxygen']) {
     let feedback = [];
@@ -213,6 +226,13 @@ test('⑦ 전략별 별·실제 선택 가능성·반개념 전략 최고 별 1'
   // 산소로 정의·이름 붙이기·한 고리 전략도 남은 까닭 16가지에서 별 1을 넘지 않는다.
   for (const strategy of STRATEGIES.slice(2, 4)) for (let bits = 0; bits < 16; bits++) {
     assert(C.stars(answerList(strategy.names, REASONS.map((_, i) => bits & (1 << i) ? 'oxygen' : 'direction'))) <= 1);
+  }
+});
+test('E 심실 다음 심방·정맥 없이 심방 전략은 까닭 16조합에서 최고 별 1', () => {
+  for (const names of [['VC', 'RA', 'RV', 'RA', 'PV', 'LA', 'LV', 'LA'], ['RA', 'RA', 'RV', 'PA', 'LA', 'LA', 'LV', 'Ao']]) {
+    names.forEach((k, i) => assert(OPTIONS[i].includes(k)));
+    const values = Array.from({ length: 16 }, (_, bits) => C.stars(answerList(names, REASONS.map((_, i) => bits & (1 << i) ? 'oxygen' : 'direction'))));
+    assert.equal(Math.max(...values), 1);
   }
 });
 test('⑦ 까닭 위/아래 고정·교대 전략은 2개만 맞힘', () => {
@@ -362,18 +382,20 @@ test('B 결과: 까닭 묶음·이름 우선 선택 후 경로 순서·반복 �
     '온몸으로 혈액을 내보내는 방은 좌심실이다', '좌심실에서 나간 혈액이 지나는 혈관은 대동맥이다',
   ];
   const allWrong = OPTIONS.map((options, i) => options.find(k => k !== NAMES[i]));
+  eq(C.resultLines(stateFor(['PA', 'RA', 'RV', 'PV', 'PV', 'LA', 'LV', 'Ao'])).slice(2, 4),
+    [nameSentences[0] + '(고른 답: 폐동맥).', nameSentences[3] + '(고른 답: 폐정맥).']);
   for (let i = 0; i < 8; i++) {
     const names = NAMES.slice(); names[i] = allWrong[i];
     const lines = C.resultLines(stateFor(names)); assert.equal(lines.length, 4);
     eq(lines[2], nameSentences[i] + '(고른 답: ' + C.STRUCTURES[names[i]].name + ').');
-    eq(lines.at(-1), '다음 별: 이름 1개 더.');
+    eq(lines.at(-1), '다음 별까지: 이름 1개를 더 맞히기.');
   }
-  const group = n => '「동맥」은 심장에서 나가는, 「정맥」은 심장으로 들어오는 혈액이 흐르는 혈관이다(까닭 ' + n + '개 틀림).';
-  // 까닭 묶음과 폐동맥 이름을 우선 골라야 한다. 까닭 묶음의 첫 자리인 대정맥이 먼저다.
+  const group = n => '동맥은 심장에서 나가는 혈액이 흐르는 혈관이고, 정맥은 심장으로 들어오는 혈액이 흐르는 혈관이다(까닭 ' + n + '개 틀림).';
+  // 까닭 묶음과 폐동맥 이름을 우선 고르고, 까닭 묶음을 맨 앞에 둔다.
   const reasons = ['oxygen', 'oxygen', 'oxygen', 'oxygen'];
   eq(C.resultLines(stateFor(allWrong, reasons)).slice(2, 4), [group(4), nameSentences[3] + '(고른 답: 폐정맥).']);
-  // 대동맥 까닭만 틀렸으면, 고른 두 줄은 폐동맥 이름 → 대동맥 까닭 순서다.
-  eq(C.resultLines(stateFor(allWrong, ['oxygen', 'direction', 'direction', 'direction'])).slice(2, 4), [nameSentences[3] + '(고른 답: 폐정맥).', group(1)]);
+  // 대동맥 까닭만 틀려도 까닭 묶음은 교정 줄 맨 앞이다.
+  eq(C.resultLines(stateFor(allWrong, ['oxygen', 'direction', 'direction', 'direction'])).slice(2, 4), [group(1), nameSentences[3] + '(고른 답: 폐정맥).']);
   eq(C.resultLines(stateFor(allWrong)).slice(2, 4), [nameSentences[3] + '(고른 답: 폐정맥).', nameSentences[4] + '(고른 답: 폐동맥).']);
   eq(C.resultLines(perfect), ['마지막 바퀴: 이름 8/8 · 까닭 4/4', '연습 바퀴에서 처음 고른 답 12/12 → 마지막 바퀴 12/12', '별 3 조건을 모두 채웠다.']);
   const repeated = C.simulate({ answer: (s, p) => p.type === 'finalBoundary' ? C.correct(s) : p.type.toLowerCase().includes('reason') ? 'oxygen' : C.correct(s) }, 3);
@@ -383,13 +405,13 @@ test('B 결과: 까닭 묶음·이름 우선 선택 후 경로 순서·반복 �
     const r = REASONS.map((_, i) => i < reasonCount ? 'direction' : 'oxygen');
     const lines = C.resultLines(stateFor(names, r)); assert(lines.length >= 3 && lines.length <= 5);
     const next = nameCount === 8 && reasonCount === 4 ? '별 3 조건을 모두 채웠다.' :
-      nameCount < 5 ? '다음 별: 이름 ' + (5 - nameCount) + '개 더.' :
-      reasonCount === 4 && nameCount === 7 ? '다음 별: 이름 1개 더.' :
-      '다음 별: ' + [nameCount < 7 ? '이름 ' + (7 - nameCount) + '개 더' : '', reasonCount < 4 ? '까닭 ' + (4 - reasonCount) + '개 더' : ''].filter(Boolean).join(' · ') + (reasonCount === 4 ? '(까닭은 모두 맞힘)' : '') + '.';
+      nameCount < 5 ? '다음 별까지: 이름 ' + (5 - nameCount) + '개를 더 맞히기.' :
+      reasonCount === 4 && nameCount === 7 ? '다음 별까지: 이름 1개를 더 맞히기.' :
+      '다음 별까지: ' + [nameCount < 7 ? '이름 ' + (7 - nameCount) + '개' : '', reasonCount < 4 ? '까닭 ' + (4 - reasonCount) + '개' : ''].filter(Boolean).join(', ') + '를 더 맞히기' + (reasonCount === 4 ? '(까닭은 모두 맞힘)' : '') + '.';
     eq(lines.at(-1), next);
   }
-  eq(C.resultLines(stateFor(NAMES.map((key, i) => i < 6 ? key : allWrong[i]))).at(-1), '다음 별: 이름 1개 더(까닭은 모두 맞힘).');
-  eq(C.resultLines(stateFor(NAMES.map((key, i) => i < 7 ? key : allWrong[i]), ['oxygen', 'oxygen', 'direction', 'direction'])).at(-1), '다음 별: 까닭 2개 더.');
+  eq(C.resultLines(stateFor(NAMES.map((key, i) => i < 6 ? key : allWrong[i]))).at(-1), '다음 별까지: 이름 1개를 더 맞히기(까닭은 모두 맞힘).');
+  eq(C.resultLines(stateFor(NAMES.map((key, i) => i < 7 ? key : allWrong[i]), ['oxygen', 'oxygen', 'direction', 'direction'])).at(-1), '다음 별까지: 까닭 2개를 더 맞히기.');
 });
 test('브라우저 전역 내보내기·불변 데이터·금지된 외부 의존 없음', () => {
   const context = { window: {} }; vm.runInNewContext(source, context);
@@ -398,12 +420,12 @@ test('브라우저 전역 내보내기·불변 데이터·금지된 외부 의�
   assert(!/\b(?:document|localStorage|fetch|XMLHttpRequest)\b|Date\.now|Math\.random/.test(source));
 });
 test('⑪ 게임 폴더 아래 모든 JS·HTML 금지어 검사', () => {
-  const forbidden = /동맥혈|정맥혈|거품|혈구|마블|모세혈관|이산화탄소|온몸 순환|폐 순환|중격|이중 순환|상대정맥|하대정맥|반월판|방실판|간문맥|관상 동맥|기포/;
+  const forbidden = /동맥혈|정맥혈|거품|혈구|마블|모세혈관|이산화탄소|온몸 순환|폐 순환|중격|이중 순환|상대정맥|하대정맥|반월판|방실판|간문맥|관상 ?동맥|기포/;
   function inspect(dir) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const target = path.join(dir, entry.name);
       if (entry.isDirectory()) inspect(target);
-      else if (/\.(js|html)$/.test(entry.name)) assert(!forbidden.test(fs.readFileSync(target, 'utf8').replaceAll('적혈구', '')), target);
+      else if (/\.(js|html)$/.test(entry.name)) assert(!forbidden.test((target === modulePath ? testedSource : fs.readFileSync(target, 'utf8')).replaceAll('적혈구', '')), target);
     }
   }
   inspect(path.dirname(modulePath));
@@ -461,14 +483,14 @@ test('C detail 신호 두 칸·측정 불가능한 칸은 null', () => {
 test('C hud 연습 바퀴 번호·기관 선택 동안 다음 번호·마지막 점수 고정', () => {
   let organs = [], frozen;
   const end = C.simulate({ visit: (s, p, events, next) => {
-    const h = C.hud(s); eq(Object.keys(h).sort(), ['dark', 'lap', 'score']); assert.equal(h.score, C.score(s));
+    const h = C.hud(s); eq(Object.keys(h).sort(), ['dark', 'lap', 'mode', 'score']); assert.equal(h.score, C.score(s));
     const dark = p.type.startsWith('final'); assert.equal(h.dark, dark);
     if (p.type === 'organ') { assert.equal(h.lap, s.organs.length + 1); organs.push(h.lap); }
     else assert.equal(h.lap, dark || p.type === 'darkStart' ? null : s.lap);
-    if (p.type === 'darkStart') { frozen = C.score(next); eq(C.hud(next), { lap: null, dark: true, score: frozen }); }
+    if (p.type === 'darkStart') { frozen = C.score(next); eq(C.hud(next), { mode: 'dark', lap: null, dark: true, score: frozen }); }
     if (dark) assert.equal(h.score, frozen);
   } }, 11);
-  eq(organs, [1, 2, 3]); eq(C.hud(end), { lap: null, dark: false, score: C.score(end) });
+  eq(organs, [1, 2, 3]); eq(C.hud(end), { mode: 'end', lap: null, dark: false, score: C.score(end) });
 });
 test('C 모세 혈관 입구·출구 혈액 상태와 기존 blood 호환', () => {
   const caps = C.SQUARES.filter(s => s.kind === 'capillary'); assert.equal(caps.length, 4);
@@ -547,7 +569,7 @@ test('D 정오 누출 차분: 정답·보기 안 오답의 pending·events·hud�
       if (a.state.phase !== 'end') {
         eq(withoutPicks(a.state, []).state, withoutPicks(b.state, []).state);
         for (const s of [a.state, b.state]) {
-          assert(!/"(?:ok|tag|stars|correct|remaining|total|finalCorrect)"/.test(JSON.stringify(s)));
+          assert(!/"(?:ok|tag|stars|correct|remaining|total|finalCorrect)"/.test(JSON.stringify({ ...s, practice: undefined })));
           eq(C.resultLines(s), []); assert.equal(C.detail(s), null);
         }
       }
@@ -555,6 +577,68 @@ test('D 정오 누출 차분: 정답·보기 안 오답의 pending·events·hud�
     }
     assert.equal(steps, 14); assert.equal(C.stars(right.final), 3); assert.equal(C.stars(incorrect.final), 0);
   }
+});
+
+
+test('E 보충 문항 칸 목록·질문과 마지막 바퀴의 위치 비노출', () => {
+  const seen = new Set();
+  for (let seed = 1; seed <= 32; seed++) C.simulate({ dice: 'first', visit: (s, p) => {
+    if (['fillName', 'fillReason'].includes(p.type)) {
+      seen.add(p.type); assert.equal(p.slot, s.slot);
+      eq(p.squares, C.SQUARES.filter(q => q.structure === s.slot).map(q => q.id));
+      if (p.type === 'fillName') assert.equal(p.prompt, '점선으로 표시한 칸의 이름은?');
+    } else {
+      assert(!Object.hasOwn(p, 'slot') && !Object.hasOwn(p, 'squares'));
+      if (['nameStart', 'name'].includes(p.type)) assert.equal(p.prompt, '이곳의 이름은?');
+    }
+  } }, seed);
+  eq([...seen].sort(), ['fillName', 'fillReason']);
+});
+test('E 결과 잠금·경계 문항까지 null·완료 결과와 playNo 전달', () => {
+  const end = C.simulate({ visit: (s, p, events, next) => {
+    assert.equal(C.result(s, 9), null, p.type);
+    if (next.phase !== 'end') assert.equal(C.result(next), null);
+  } }, 4);
+  eq(C.result(end, 9), { stars: 3, score: C.score(end), lines: C.resultLines(end), detail: C.detail(end, 9) });
+  assert.equal(C.result(end, 9).detail.playNo, 9);
+});
+test('E HUD mode 다섯 단계 전이', () => {
+  const modes = [];
+  const end = C.simulate({ dice: 'first', visit: s => {
+    const mode = C.hud(s).mode;
+    const expected = s.phase.startsWith('final') ? 'dark' : s.phase === 'darkStart' ? 'ready' : s.completedLaps === 3 ? 'fill' : 'practice';
+    assert.equal(mode, expected);
+    if (modes.at(-1) !== mode) modes.push(mode);
+  } }, 1);
+  modes.push(C.hud(end).mode); eq(modes, ['practice', 'fill', 'ready', 'dark', 'end']);
+});
+test('E 교환 이벤트 text·note 분리·입구와 출구·토스트 85자 이하', () => {
+  let seen = [];
+  C.simulate({ visit: (s, p, events) => events.forEach(e => {
+    if (e.type === 'exchange') {
+      const sq = square(e.square);
+      eq([e.bloodIn, e.bloodOut], sq.id === 'lung' ? ['low', 'high'] : ['high', 'low']);
+      assert.equal(e.blood, e.bloodOut);
+      assert.equal(e.text, e.square === 'lung' ? C.GUIDES.lung : C.ORGANS[e.square].guide);
+      assert.equal(e.note, '모세 혈관에서는 혈액이 가장 느리게 흐르며 물질을 주고받는다.');
+      assert(e.text.length <= 85 && e.note.length <= 85); seen.push(e.square);
+    }
+    if (e.type === 'lapEnd') assert(e.text.length <= 85);
+  }) }, 1);
+  assert.equal(seen.length, 6); eq([...new Set(seen)].sort(), ['brain', 'kidney', 'leg', 'lung']);
+});
+test('E 연습 정오·꼬리표는 불 끄기 뒤에도 보존', () => {
+  C.simulate({ answer: wrong, visit: (s, p, events, next) => {
+    if (p.type === 'darkStart') {
+      eq(next.practice, s.practice); assert.equal(next.practice.length, 12);
+      assert(next.practice.every(x => typeof x.ok === 'boolean' && Object.hasOwn(x, 'tag')));
+    }
+  } }, 2);
+});
+test('E 바퀴 끝 안내는 심장을 두 번 지났다는 문장', () => {
+  const text = '심장을 두 번 지났다. 심장 칸을 지날 때는 혈액 색이 바뀌지 않았다. 심장은 혈액을 내보낼 뿐, 혈액에 산소를 더하지 않는다.';
+  assert.equal(C.GUIDES.lapEnd, text); assert(text.length <= 85);
+  C.simulate({ visit: (s, p, events) => events.filter(e => e.type === 'lapEnd').forEach(e => assert.equal(e.text, text)) }, 1);
 });
 
 if (!mutant) {
@@ -600,10 +684,10 @@ if (!mutant) {
   });
   // 원본 파일을 바꾸지 않고 VM에서 규칙을 고의로 깨뜨린다. 자식 테스트가 FAIL·종료 1인지 확인한다.
   // 강제 멈춤·까닭 문턱 제거, 이벤트·선택지 정오 노출, 경계 가산점,
-  // 연습 심장 방·까닭 섞기 제거, 모세 혈관 표지 제거의 8종이다.
-  test('고의 변이 8종은 실제 단언 FAIL·종료 1, 원본 파일은 보존', () => {
-    const targets = { capillary: '⑤ 모든 위치', stars: '⑦ 답 전수', leak: '⑩ 마지막 바퀴', boundary: 'D-044 경계 2개',
-      optionLeak: 'D 정오 누출 차분', chamberOrder: 'D 선택지 순서', reasonOrder: 'D 선택지 순서', landmark: 'D landmark' };
+  // 연습 심장 방·까닭 섞기 제거, 모세 혈관 표지 제거와 2단계 API·문구·이름 교정 순서 변경의 20종이다.
+  test('고의 변이 20종은 실제 단언 FAIL·종료 1, 원본 파일은 보존', () => {
+    const targets = { resultLock: 'E 결과 잠금', hudMode: 'E HUD mode', exchangeSplit: 'E 교환 이벤트', exchangeBlood: 'E 교환 이벤트', practiceKeep: 'E 연습 정오', resultText: 'B 결과:', resultOrder: 'B 결과:', nextStar: 'B 결과:', forbiddenJoined: '⑪ 게임 폴더', forbiddenSpaced: '⑪ 게임 폴더', lapGuide: 'E 바퀴 끝', capillary: '⑤ 모든 위치', stars: '⑦ 답 전수', leak: '⑩ 마지막 바퀴', boundary: 'D-044 경계 2개',
+      optionLeak: 'D 정오 누출 차분', chamberOrder: 'D 선택지 순서', reasonOrder: 'D 선택지 순서', landmark: 'D landmark', namesPriorityOrder: 'B 결과:' };
     for (const name of Object.keys(mutations)) {
       const run = spawnSync(process.execPath, [__filename, '--mutant=' + name], { encoding: 'utf8', timeout: 60000 });
       assert.equal(run.status, 1, name + ': ' + run.stderr); assert(run.stdout.includes('FAIL ' + targets[name]), name + ' 목표 단언');

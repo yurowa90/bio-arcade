@@ -1,10 +1,13 @@
 // 오프라인 실행용 서비스 워커: 네트워크 우선, 끊기면 캐시로 실행한다.
-const CACHE = 'bio-arcade-v2'; // v2: 오류 응답이 들어갔을 수 있는 v1 캐시를 비우고 새로 받는다
+const CACHE = 'bio-arcade-v3'; // v3: 새 게임 혈액 순환 일주를 추가한다
 const FILES = [
   './',
   'games/basepang/engine.js',
   'games/basepang/game.js',
   'games/basepang/index.html',
+  'games/circulation/circulation.js',
+  'games/circulation/game.js',
+  'games/circulation/index.html',
   'games/glucose/game.js',
   'games/glucose/index.html',
   'games/glucose/model.js',

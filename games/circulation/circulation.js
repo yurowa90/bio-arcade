@@ -7,7 +7,9 @@
  * seconds는 직전 입력 이후 경과 초. 유한한 0 이상 숫자만 합산한다.
  * 누락·null·잘못된 시간은 입력을 막지 않고 untimedCount에 센다(시간 합계는 0부터).
  * continue는 피드백을 읽은 뒤 호출한다. 맞힌 답도 화면 연출 뒤 continue를 보낸다.
- * 화면은 pending·events, HUD는 hud만 쓴다. correct와 FINAL_*는 검사 전용이다.
+ * 화면은 pending·events·preview, HUD는 hud, 별·점수·결과 문장·detail은 result(state, playNo)로만 얻는다.
+ * stars(final)은 경계 문항 중에도 값을 내므로 검사 전용이다. correct와 FINAL_*도 검사 전용이다.
+ * 화면이 읽어도 되는 state 필드는 labels와 practice[].kind·slot·ok뿐이다.
  * 모세 혈관 칸의 bloodIn·bloodOut은 BLOOD 키다. 기존 blood는 bloodOut과 같다.
  * detail의 두 칸 신호는 [연습, 마지막]이고 측정 불가능한 칸은 null이다.
  * 신호                            연습 보기/조건                  마지막 보기/조건
@@ -48,7 +50,7 @@
   const GUIDES = freeze({
     lung: '폐포의 산소는 모세 혈관으로, 모세 혈관의 이산화 탄소는 폐포로 이동한다.',
     capillary: '모세 혈관에서는 혈액이 가장 느리게 흐르며 물질을 주고받는다.',
-    lapEnd: '심장 칸을 지날 때는 혈액 색이 바뀌지 않았다. 심장은 혈액을 내보낼 뿐, 혈액에 산소를 더하지 않는다.',
+    lapEnd: '심장을 두 번 지났다. 심장 칸을 지날 때는 혈액 색이 바뀌지 않았다. 심장은 혈액을 내보낼 뿐, 혈액에 산소를 더하지 않는다.',
   });
   const SQUARES = [];
   function square(id, structure, col, row) {
@@ -182,6 +184,11 @@
   }
   function pending(s) {
     const p = { type: s.phase, token: s.revision };
+    if (['fillName', 'fillReason'].includes(s.phase)) {
+      const target = { slot: s.slot, squares: SQUARES.filter(q => q.structure === s.slot).map(q => q.id) };
+      return s.phase === 'fillName' ? { ...p, ...target, prompt: '점선으로 표시한 칸의 이름은?', options: nameOptions(s.options) } :
+        { ...p, ...target, ...reasonQuestion(s.slot, s.options) };
+    }
     if (['nameStart', 'name', 'fillName'].includes(s.phase)) return { ...p, prompt: '이곳의 이름은?', options: nameOptions(s.options) };
     if (['reason', 'fillReason'].includes(s.phase)) return { ...p, ...reasonQuestion(s.slot, s.options) };
     if (s.phase === 'organ') return { ...p, prompt: '이번 바퀴에 들를 기관은?', options: Object.entries(ORGANS).filter(([id]) => !s.organs.includes(id)).map(([key, o]) => ({ key, label: o.name })) };
@@ -240,7 +247,8 @@
       s.pos = dest.to; s.square = dest.square; s.dice = [];
       const sq = BY_ID[s.square];
       if (dest.stop === 'capillary') {
-        events.push({ type: 'exchange', square: sq.id, blood: sq.blood, text: (sq.id === 'lung' ? GUIDES.lung : ORGANS[sq.id].guide) + ' ' + GUIDES.capillary });
+        events.push({ type: 'exchange', square: sq.id, blood: sq.blood, bloodIn: sq.bloodIn, bloodOut: sq.bloodOut,
+          text: sq.id === 'lung' ? GUIDES.lung : ORGANS[sq.id].guide, note: GUIDES.capillary });
         s.phase = 'roll';
       } else if (dest.stop === 'lapEnd') {
         s.completedLaps++; events.push({ type: 'lapEnd', lap: s.completedLaps, text: GUIDES.lapEnd }); nextPractice(s);
@@ -258,8 +266,6 @@
       s.phase = 'continue'; s.options = [];
     } else if (phase === 'darkStart') {
       s.phase = 'finalName'; s.slot = null; s.options = [];
-      // 이전 연습 기록도 정오를 보이지 않는다. 점수·결과는 고른 답에서 다시 계산한다.
-      s.practice = s.practice.map(({ ok, tag, ...record }) => record);
       events.push({ type: 'darkStart', landmark: '온몸의 모세 혈관' });
     } else if (phase === 'finalName' || phase === 'finalReason' || phase === 'finalBoundary') {
       const kind = phase === 'finalName' ? 'name' : phase === 'finalReason' ? 'reason' : 'boundary';
@@ -302,7 +308,9 @@
   function score(s) { return scoreParts(s).total; }
   function hud(s) {
     const dark = ['finalName', 'finalReason', 'finalBoundary'].includes(s.phase);
-    return { lap: dark || ['darkStart', 'end'].includes(s.phase) ? null : s.phase === 'organ' ? s.completedLaps + 1 : s.lap,
+    const mode = s.phase === 'end' ? 'end' : dark ? 'dark' : s.phase === 'darkStart' ? 'ready' :
+      s.completedLaps === LAPS ? 'fill' : 'practice';
+    return { mode, lap: dark || ['darkStart', 'end'].includes(s.phase) ? null : s.phase === 'organ' ? s.completedLaps + 1 : s.lap,
       dark, score: score(s) };
   }
   function detail(s, playNo = 1) {
@@ -344,8 +352,9 @@
       (d.repeatWrong.length ? ' (연습 때와 같은 오답 ' + d.repeatWrong.length + '개)' : '')];
     const corrections = [], wrongReasons = d.final.filter(x => x.kind === 'reason' && !x.ok);
     if (wrongReasons.length) corrections.push({ priority: 0,
+      // 맨 앞 고정이라 결과 순서에는 쓰이지 않는다. 고의 변이 resultOrder가 이 값으로 까닭 줄을 뒤로 보내 실패를 내므로 남긴다.
       order: Math.min(...wrongReasons.map(x => FINAL_NAMES.indexOf(x.slot))),
-      text: '「동맥」은 심장에서 나가는, 「정맥」은 심장으로 들어오는 혈액이 흐르는 혈관이다(까닭 ' + wrongReasons.length + '개 틀림).' });
+      text: '동맥은 심장에서 나가는 혈액이 흐르는 혈관이고, 정맥은 심장으로 들어오는 혈액이 흐르는 혈관이다(까닭 ' + wrongReasons.length + '개 틀림).' });
     const nameLines = {
       VC: '온몸의 모세 혈관 다음 혈관은 대정맥이다', RA: '온몸을 돌고 온 혈액이 들어오는 방은 우심방이다',
       RV: '폐로 혈액을 내보내는 방은 우심실이다', PA: '우심실에서 나간 혈액이 지나는 혈관은 폐동맥이다',
@@ -356,19 +365,23 @@
       priority: ['PA', 'PV'].includes(x.slot) ? 1 : 2, order: FINAL_NAMES.indexOf(x.slot),
       text: nameLines[x.slot] + '(고른 답: ' + STRUCTURES[x.pick].name + ').',
     }));
-    // 까닭 묶음은 틀린 혈관 가운데 경로상 첫 자리에서 보여 준다.
+    // 까닭 묶음을 맨 앞에 두고, 선택한 이름 교정만 경로 순서로 놓는다.
     corrections.sort((a, b) => a.priority - b.priority || a.order - b.order).slice(0, 2)
-      .sort((a, b) => a.order - b.order).forEach(x => lines.push(x.text));
+      .sort((a, b) => (a.priority === 0 ? -1 : b.priority === 0 ? 1 : a.order - b.order)).forEach(x => lines.push(x.text));
     if (n === 3) lines.push('별 3 조건을 모두 채웠다.');
     else {
       const missingNames = Math.max(0, (n === 0 ? 5 : n === 1 ? 7 : 8) - c.names);
       const missingReasons = n === 1 ? 4 - c.reasons : 0;
       const needs = [];
-      if (missingNames) needs.push('이름 ' + missingNames + '개 더');
-      if (missingReasons) needs.push('까닭 ' + missingReasons + '개 더');
-      lines.push('다음 별: ' + needs.join(' · ') + (n === 1 && !missingReasons ? '(까닭은 모두 맞힘)' : '') + '.');
+      if (missingNames) needs.push('이름 ' + missingNames + '개');
+      if (missingReasons) needs.push('까닭 ' + missingReasons + '개');
+      lines.push('다음 별까지: ' + needs.join(', ') + '를 더 맞히기' + (n === 1 && !missingReasons ? '(까닭은 모두 맞힘)' : '') + '.');
     }
     return lines;
+  }
+  function result(s, playNo = 1) {
+    if (s.phase !== 'end') return null;
+    return { stars: stars(s.final), score: score(s), lines: resultLines(s), detail: detail(s, playNo) };
   }
   // policy: 'blank'|'random'|'first' 또는 { dice, organ: 'first'|'random', answer(s,p), visit(s,p,events,next) }.
   // organ: 'random'은 주사위 정책 난수와 독립인 시드 난수로 기관 방문 순서를 섞는다.
@@ -396,7 +409,7 @@
   }
   const api = { STRUCTURES, ORGANS, SQUARES, BLOOD, GUIDES, VALVES, NAME_OPTIONS, FINAL_NAMES, FINAL_REASONS, FINAL_REASON_OPTIONS, FINAL_BOUNDARIES,
     LAPS, rng, lapPath, move, preview, bloodAt, circuitAt, judgeName, judgeReason, nameExplanation, reasonExplanation,
-    newGame, pending, act, correct, stars, score, hud, detail, resultLines, simulate };
+    newGame, pending, act, correct, stars, score, hud, detail, resultLines, result, simulate };
   root.Circulation = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
