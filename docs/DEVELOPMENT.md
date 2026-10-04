@@ -58,7 +58,7 @@ node -e "global.window=global; const S=require('./shared/standards.js'); const A
 ## 6. 테스트 훅
 
 - `window.__game`(염기쌍 팡): `grid()`, `level()`, `moves()`, `trySwap(a, b)`.
-- `window.__circ`(혈액 순환 일주): `state()`, `pending()`, `correct()`(지금 입력의 정답 키, 테스트 전용), `fast(on)`(이벤트 재생 대기를 없앤다). `window.__game`은 염기쌍 팡이 쓰므로 이름을 나눴다.
+- `window.__circ`(혈액 순환 일주): `state()`, `pending()`, `correct()`(지금 입력의 정답 키, 테스트 전용), `fast(on)`(이벤트 재생 대기를 없앤다), `view()`(화면이 지금 그리는 문항. 재생 중에는 판이 직전 상태로 그려지므로 판·경로 칩 검사는 `pending()`이 아니라 이것과 비교한다). `window.__game`은 염기쌍 팡이 쓰므로 이름을 나눴다.
 - `window.__bq`(탐사대): 상태 `S`, `mode`, `player`, `warp(map, x, y)`, `encounter(habitat, sp?)`, `observationQuestions(sp)`, `gymPhoto`, `gymDigest`, `openDex`.
 - E2E는 전역 모듈도 직접 쓴다(`window.Pedigree.solve`, `window.BasePang.findPairs`, `window.GameData.SPECIES`). 혈당·에너지 런·멘델은 DOM 선택자와 포인터로 조작한다.
 

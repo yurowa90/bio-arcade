@@ -12,7 +12,7 @@
 
 ## 다음 할 일
 
-- **T6 (진행 중) 혈액 순환 일주 구현(D-041~D-049).** 1단계 규칙 모듈 커밋(690a22c). 2단계(화면·GAMES·sw.js v3·E2E)는 **미커밋**: Sol 작업 → Opus 5관점 검토(워크플로, high 0·medium 5·low 20) → 교사 결정 D-049 → Sol 수정(fix2) → Claude가 arcade-e2e·화면 실측·화면 변이 3종 통과 확인. 문서(README 단순화·기록 읽기, AGENTS, DEVELOPMENT, rules, 설계 문서)도 미커밋으로 반영했다. 지금: Opus 재검토 워크플로(wf_2231d53d-96b, 결과는 journal.jsonl). 자료: `/private/tmp/claude-501/circ-impl/`(s2-synthesis.json, gpt/fix2-*). 다음: 남은 지적 수정(판 위쪽 '폐순환' 구역 이름과 CO₂ 범례가 붙어 읽히는 문제 포함) → `/arcade-verify` → 게임·문서 커밋 → Netlify 재배포(교사 확인 뒤).
+- **T6 (진행 중) 혈액 순환 일주 구현(D-041~D-050).** 규칙 모듈(690a22c)·화면(6381bd0)·재검토 반영(R-01~R-21, Sol fix3 + 총괄 직접 수정 3건: 범례 위치, 테스트 훅 view(), 보충 심장 방 기능 문장)을 커밋했다. 마지막 Opus 확인(wf_b58810b0-2ab): high 0, 전체 E2E·순환 E2E 4크기·화면 변이 23종 통과. 남은 것(결과: 워크플로 journal.jsonl의 synthesize): F-01 medium 보충 심장 방 정답 해설 대기 시간이 화면 문장이 아닌 e.text 기준(game.js 175줄), F-02 medium 설계 228줄이 심장 방 기능 문장을 '안 나온다'고 반대로 적음, F-03 D-050 ④ 보완(심장 방 기능 문장) 교사 확인, F-04 '폐순환' 기준선 174→171, F-05 .feedback keep-all, F-06 설계 테스트 서술(view(), 줄 수), F-07 README cueConflict·reasonOxygenNameRight, F-08 D-049 원문 복원과 상태 줄, F-09 이 문서. 다음: F 항목 수정 → `/arcade-verify` → 커밋 → 교사 확인(F-03) → Netlify 재배포(교사 확인 뒤).
 - **T2 실기기 확인.** 아이폰 Safari와 안드로이드 Chrome에서 허브 확인 창, PWA 설치·오프라인 실행, 입력칸 자동 확대를 본다. 교사가 시간이 날 때 한다(2026-10-03 보류). 혈액 순환 일주의 작은 화면(아이폰 SE·mini Safari, 구형 안드로이드)에서 판 글자 크기와 주사위 글리프 표시, 홈 화면 실행 상태의 innerHeight도 본다(D-049).
 
 ## 교사 판단이 필요한 미결 사항
