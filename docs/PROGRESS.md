@@ -12,8 +12,8 @@
 
 ## 다음 할 일
 
-- **T6 (진행 중) 혈액 순환 일주 구현(D-041~D-047).** 1단계 규칙 모듈 커밋(690a22c), 설계 갱신(3afff80). 2단계는 Sol이 마쳤고 **미커밋**이다(circulation.js·game.js·index.html·circulation-logic.js·arcade-e2e.js·shared/arcade.js·sw.js, 보고: `/private/tmp/claude-501/circ-impl/gpt/screen-report.json`). Sol 보고 circulation-logic PASS 42. Claude가 arcade-e2e를 돌려 통과(errors·failures none, circulation 별 3, 가로 넘침 없음). 다음: Opus 2명 독립 검토(화면·계약 / 과학·문구) → 지적 수정 → README·DEVELOPMENT·rules(minigames paths)·arcade-verify 반영 → `/arcade-verify` → 커밋 → Netlify 재배포(교사 확인 뒤).
-- **T2 실기기 확인.** 아이폰 Safari와 안드로이드 Chrome에서 허브 확인 창, PWA 설치·오프라인 실행, 입력칸 자동 확대를 본다. 교사가 시간이 날 때 한다(2026-10-03 보류).
+- **T6 (진행 중) 혈액 순환 일주 구현(D-041~D-049).** 1단계 규칙 모듈 커밋(690a22c). 2단계(화면·GAMES·sw.js v3·E2E)는 **미커밋**: Sol 작업 → Opus 5관점 검토(워크플로, high 0·medium 5·low 20) → 교사 결정 D-049 → Sol 수정(fix2) → Claude가 arcade-e2e·화면 실측·화면 변이 3종 통과 확인. 문서(README 단순화·기록 읽기, AGENTS, DEVELOPMENT, rules, 설계 문서)도 미커밋으로 반영했다. 지금: Opus 재검토 워크플로(wf_2231d53d-96b, 결과는 journal.jsonl). 자료: `/private/tmp/claude-501/circ-impl/`(s2-synthesis.json, gpt/fix2-*). 다음: 남은 지적 수정(판 위쪽 '폐순환' 구역 이름과 CO₂ 범례가 붙어 읽히는 문제 포함) → `/arcade-verify` → 게임·문서 커밋 → Netlify 재배포(교사 확인 뒤).
+- **T2 실기기 확인.** 아이폰 Safari와 안드로이드 Chrome에서 허브 확인 창, PWA 설치·오프라인 실행, 입력칸 자동 확대를 본다. 교사가 시간이 날 때 한다(2026-10-03 보류). 혈액 순환 일주의 작은 화면(아이폰 SE·mini Safari, 구형 안드로이드)에서 판 글자 크기와 주사위 글리프 표시도 본다(D-049).
 
 ## 교사 판단이 필요한 미결 사항
 
