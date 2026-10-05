@@ -32,7 +32,7 @@
     // 범례는 흰 틀로 묶고, 두 구역 이름은 같은 색으로 구역 끝에 둔다.
     svg += '<g class="co2-legend"><rect x="212" y="61" width="70" height="93" rx="6" fill="#fff" stroke="#b4cbd9"/>';
     svg += text(246, 80, '방울 안') + text(246, 97, '○ = CO₂') + text(246, 114, '(혈장의') + text(246, 131, '이산화') + text(246, 148, '탄소)') + '</g>';
-    svg += text(180, 465, '온몸순환', 'circuit-name') + text(246, 174, '폐순환', 'circuit-name');
+    svg += text(180, 465, '온몸순환', 'circuit-name') + text(246, 171, '폐순환', 'circuit-name');
     // 겹치는 기관 가지는 한 번만 그린다. 심장 사이에는 벽을 두고 관은 그 앞을 지난다.
     svg += '<path d="M181 181 V278" stroke="#594650" stroke-width="7"/>';
     const edges = new Set();
@@ -129,12 +129,7 @@
     $('trail').appendChild($('dark-cursor'));
     let html = '';
     const button = (label, pick, disabled = false) => `<button class="btn" data-k="${pick}"${disabled || busy ? ' disabled' : ''}>${label}</button>`;
-    if (p.type === 'continue') {
-      const target = C.STRUCTURES[feedback.slot];
-      // 보충 이름 해설은 '이곳은' 대신 점선 칸을 가리키고(D-050 ④), 심장 방이면 하는 일 문장을 잇는다.
-      const explanation = feedback.at === 'fill' && feedback.kind === 'name' ? `점선으로 표시한 칸은 ${target.name}이다.${target.explain ? ' ' + target.explain : ''}` : feedback.text;
-      html = `<p class="feedback">${feedback.ok ? '정답! ' : feedback.kind === 'name' ? '고른 답: ' + C.STRUCTURES[feedback.pick].name + '. ' : ''}${explanation}</p>${button('계속', '')}`;
-    }
+    if (p.type === 'continue') html = `<p class="feedback">${feedbackText(feedback)}</p>${button('계속', '')}`;
     else if (p.type === 'roll') html = button('주사위 굴리기', '');
     else if (p.type === 'darkStart') html = `<p class="prompt">완성된 판을 보고 경로를 떠올리세요.</p>${button('불 끄고 출발', '')}`;
     else if (p.options.length) {
@@ -147,6 +142,13 @@
     $('ctrl').querySelectorAll('button').forEach(b => b.addEventListener('click', () => input(b.dataset.k, p)));
   }
   function draw() { drawBoard(); drawRoute(); drawHud(); drawCtrl(); }
+  // 연습 해설 한 줄. 화면 글자와 정답 해설의 표시 시간이 같은 문자열을 쓴다.
+  function feedbackText(feedback) {
+    const target = C.STRUCTURES[feedback.slot];
+    // 보충 이름 해설은 '이곳은' 대신 점선 칸을 가리키고(D-050 ④), 심장 방이면 하는 일 문장을 잇는다.
+    const explanation = feedback.at === 'fill' && feedback.kind === 'name' ? `점선으로 표시한 칸은 ${target.name}이다.${target.explain ? ' ' + target.explain : ''}` : feedback.text;
+    return (feedback.ok ? '정답! ' : feedback.kind === 'name' ? '고른 답: ' + C.STRUCTURES[feedback.pick].name + '. ' : '') + explanation;
+  }
   async function toast(value) {
     if (C.hud(state).dark) return;
     $('toast').classList.toggle('low', squares[shownSquare].row <= 2);
@@ -172,7 +174,7 @@
       } else if (e.type === 'lapEnd') { hudFrom = null; drawBoard(); drawRoute(); drawHud(); await toast(e.text); }
       else if (/Feedback$/.test(e.type)) {
         feedback = e; draw();
-        if (e.ok) await wait(Math.min(6000, Math.max(2200, Array.from(e.text).length * 70)));
+        if (e.ok) await wait(Math.min(6000, Math.max(2200, Array.from(feedbackText(e)).length * 70)));
       } else if (e.type === 'darkStart') {
         hudFrom = null;
         document.body.classList.add('dark'); $('dark').hidden = false;

@@ -661,6 +661,7 @@ const screenMutations = {
   routeAria: [' aria-current="true"', ''],
   toastFade: ["$('toast').classList.remove('on');\n  }", "$('toast').classList.remove('on'); $('toast').textContent = '';\n  }"],
   fillExplanation: ["feedback.at === 'fill' && feedback.kind === 'name'", 'false'],
+  fillDelay: ['Array.from(feedbackText(e)).length', 'Array.from(e.text).length'],
   introOrder: ['온몸순환과 폐순환을 번갈아', '폐순환과 온몸순환을 차례로'],
   introStop: ['모세 혈관 칸에 닿거나 출발 칸에 돌아오면', '모세 혈관 칸과, 출발 칸으로 돌아오는 곳에서는'],
 };
@@ -670,7 +671,7 @@ function screenView() {
     const [before, after] = screenMutations[screenMutant];
     assert.equal(code.split(before).length, 2, '화면 고의 변이 대상 한 곳'); code = code.replace(before, after);
   }
-  const elements = new Map(), timers = [];
+  const elements = new Map(), timers = [], delays = [];
   const element = id => {
     if (!elements.has(id)) {
       const classes = new Set();
@@ -682,13 +683,13 @@ function screenView() {
   };
   const context = vm.createContext({ window: { Circulation: C, Arcade: { intro: (el, options) => { context.rules = options.rules; } },
     matchMedia: () => ({ matches: false }), addEventListener: () => {} },
-    document: { getElementById: element, body: element('body') }, setTimeout: fn => timers.push(fn) }, { microtaskMode: 'afterEvaluate' });
+    document: { getElementById: element, body: element('body') }, setTimeout: (fn, ms) => { timers.push(fn); delays.push(ms); } }, { microtaskMode: 'afterEvaluate' });
   // 공개 게임에는 테스트용 위치 변경 훅을 더하지 않는다.
   code = code.replace('  state = C.newGame(1); draw();', `  window.__view = { drawBoard, drawRoute, drawCtrl, drawHud, toast, replay,
     set(s, h = null, sq = 'LV', fb = null, blood = 'high') { state = s; hudFrom = h; shownSquare = sq; feedback = fb; shownBlood = blood; } };
   state = C.newGame(1); draw();`);
   vm.runInContext(code, context);
-  return { api: context.window.__view, el: element, rules: context.rules,
+  return { api: context.window.__view, el: element, rules: context.rules, delays,
     run: code => vm.runInContext(code, context), tick: () => { assert(timers.length); timers.shift()(); vm.runInContext('void 0', context); } };
 }
 test('F 보충 전용 분기 뒤 닿지 않는 문항 종류 제거', () => {
@@ -746,7 +747,7 @@ test('F 범례 분리·모세 혈관 후보·CO₂ 고리 좌표', () => {
   const v = screenView(); v.api.drawBoard();
   const svg = v.el('board').innerHTML;
   assert(svg.includes('class="co2-legend"><rect x="212" y="61" width="70" height="93"'));
-  assert(svg.includes('y="174" text-anchor="middle" class="circuit-name">폐순환'));
+  assert(svg.includes('y="171" text-anchor="middle" class="circuit-name">폐순환'));
   let doubles = 0;
   C.simulate({ dice: 'first', visit: (s, p) => {
     if (p.type !== 'die') return;
@@ -772,6 +773,17 @@ test('F 범례 분리·모세 혈관 후보·CO₂ 고리 좌표', () => {
       const [x, y] = rings[i], [a, b] = rings[j]; assert(Math.abs(x - a) > 6.5 || Math.abs(y - b) > 6.5);
     }
     if (rings.length === 1) assert.equal(rings[0][0], 14);
+  }
+});
+test('F 정답 해설 표시 시간은 화면 글자 기준', () => {
+  // 보충 심장 방 정답 해설은 하는 일 문장까지 화면에 나오므로, 표시 시간도 그 글자 수로 정한다(글자당 70ms, 2.2~6초).
+  for (const slot of ['RA', 'RV', 'LA']) {
+    const v = screenView(), S = C.STRUCTURES[slot];
+    const fb = { type: 'nameFeedback', kind: 'name', slot, pick: slot, ok: true, at: 'fill', text: C.nameExplanation(slot) };
+    v.api.set(C.newGame(1), null, 'LV', null); v.api.replay([fb]);
+    const shown = '정답! 점선으로 표시한 칸은 ' + S.name + '이다. ' + S.explain;
+    eq(v.delays.at(-1), Math.min(6000, Math.max(2200, Array.from(shown).length * 70)));
+    assert(v.delays.at(-1) > 2200, slot + ' 하는 일 문장까지 읽을 시간');
   }
 });
 test('F 폐 토스트 위치·사라지는 동안 글자 유지', () => {
@@ -834,7 +846,7 @@ if (!mutant) {
       assert.equal(run.status, 1, name + ': ' + run.stderr); assert(run.stdout.includes('FAIL ' + targets[name]), name + ' 목표 단언');
       console.log('고의 변이 ' + name + ': 목표 FAIL 확인, 종료 ' + run.status);
     }
-    const screenTargets = { toastPosition: 'F 폐 토스트', legendFrame: 'F 범례 분리', reasonPrefix: 'F 보충·까닭', boardPlayback: 'F 이동 재생', routePlayback: 'F 이동 재생', lapEndRedraw: 'F 이동 재생', candidatePosition: 'F 범례 분리', co2Spacing: 'F 범례 분리', askedAria: 'F 보충·까닭', routeAria: 'F 보충·까닭', toastFade: 'F 폐 토스트', fillExplanation: 'F 보충·까닭', introOrder: 'F 시작 규칙', introStop: 'F 시작 규칙' };
+    const screenTargets = { toastPosition: 'F 폐 토스트', legendFrame: 'F 범례 분리', reasonPrefix: 'F 보충·까닭', boardPlayback: 'F 이동 재생', routePlayback: 'F 이동 재생', lapEndRedraw: 'F 이동 재생', candidatePosition: 'F 범례 분리', co2Spacing: 'F 범례 분리', askedAria: 'F 보충·까닭', routeAria: 'F 보충·까닭', toastFade: 'F 폐 토스트', fillExplanation: 'F 보충·까닭', fillDelay: 'F 정답 해설 표시 시간', introOrder: 'F 시작 규칙', introStop: 'F 시작 규칙' };
     for (const name of Object.keys(screenMutations)) {
       const run = spawnSync(process.execPath, [__filename, '--screen-mutant=' + name], { encoding: 'utf8', timeout: 60000 });
       assert.equal(run.status, 1, name + ': ' + run.stderr); assert(run.stdout.includes('FAIL ' + screenTargets[name]), name + ' 화면 목표 단언');
