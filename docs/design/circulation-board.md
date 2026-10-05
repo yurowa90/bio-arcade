@@ -207,7 +207,7 @@ A.finish는 별 → 사실 문장 → 인출 문항 → 이어서 떠올리기 �
 - boundaries: 경계 문항 2개의 기록({ id: 'pulmonaryEnd'|'systemicStart', pick, sec, ok }). 별과 점수에 넣지 않는다.
 - finalSec·boundarySec: 마지막 바퀴 12문항과 경계 2문항의 응답 시간 합(초). 문항별 값은 final[i].sec·boundaries[i].sec이고, 시간이 빠진 입력은 null이다. 관찰값만 남기고 '찍었다' 같은 판정 문구는 만들지 않는다.
 - untimedCount: 시간(seconds)이 빠졌거나 유한한 0 이상 숫자가 아니었던 입력 수. 0이 아니면 playSec·finalSec·boundarySec가 실제보다 작다.
-- quizCorrect(폐정맥에 흐르는 혈액), flowQuizCorrect(좌심실 벽이 가장 두꺼운 까닭): A.finish와 patchLast로 저장한다.
+- quizCorrect(폐정맥에 흐르는 혈액), flowQuizCorrect(좌심실 벽이 가장 두꺼운 까닭): A.finish가 기록하고, A.finish가 돌려준 patchPlay(그 판의 기록만 고친다)로 저장한다.
 - 맥락값(오개념 신호는 아님): organs(들른 순서), turns, blankOpportunities(빈칸에 설 수 있었던 굴림 수)·blankChosen(빈칸을 고른 수), score(점수 내역 practice·board·final·total), playSec(화면이 입력마다 넘긴 경과 초의 합). 화면은 시작 카드를 닫은 때부터 재므로 playSec은 결과 카드가 뜰 때까지의 초이고, 설명해 보기는 들지 않는다. playSec은 첫 수업에서 실제 플레이 시간을 재는 데 쓴다. 저장은 Arcade.record(bioArcade.v1)뿐이고 다른 localStorage 키는 만들지 않는다. 개인정보는 없다.
 - README 해석 주의(신호 설명에는 넣지 않는다). 아래는 답이 나올 수 있는 생각의 예이고, 한 판의 답으로 단정하지 않는다.
  · pulmonarySwap만 있으면 혈액 색이나 산소로 혈관 이름을 붙였을 수 있다. systemicSwap은 판의 혈액 색을 따르면 나오지 않는 답이라, 둘이 함께 나오면 동맥·정맥 구분 자체가 흔들린 것일 수 있다.

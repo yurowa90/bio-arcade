@@ -45,15 +45,18 @@ node -e "global.window=global; const S=require('./shared/standards.js'); const A
 - `bioQuest.v1`(`games/quest/js/main.js`): 탐사대 전용. 위치, 도감, 배지, 시간 모드, 체육관 기록, 학번·이름, 인트로 완료 여부.
 - 허브의 `Arcade.hasRecords()`는 `bioArcade.v1`의 `games`에 게임 기록이 하나라도 있거나 `bioQuest.v1` 키가 있으면 참이다. 학번·이름만 저장된 상태는 기록 없음으로 본다. `clearRecords()`는 두 키를 모두 지운다. 'JSON 저장'은 `생명오락실_<학번>.json`으로 내려받는다.
 - 기록은 기기 밖으로 보내지 않는다. `detail`에는 교사가 볼 오개념 신호를 넣는다.
+- **설명해 보기 답(미니게임).** `A.finish`가 판 기록을 만드는 순간 그 판의 번호(`plays` 안의 위치)와 `at`을 고정하고, 그 판만 고치는 함수 `patchPlay(patch)`를 돌려준다. 답은 입력을 멈추고 약 300ms 뒤(`input`·`compositionend`), `pagehide`, `visibilitychange`(hidden), '다시 하기'·'오락실로' 버튼에서 저장한다. 판 번호와 `at`이 다르거나 판이 지워졌으면(다른 탭의 지우기는 `storage` 이벤트로 알아챈다) 쓰지 않는다. 마지막 판을 찾아 쓰지 않는 것은 다음 판이나 다른 탭의 기록을 덮어쓰지 않기 위해서다. 답을 모두 지우면 `reflection`이 빈 문자열로 저장된다(키는 남는다). '오락실로'는 답만 저장하고 리스너를 떼지 않으므로, 뒤로 가기(bfcache)로 결과 카드가 복원돼도 같은 판에 이어 저장된다. 리스너는 카드가 닫히거나 `A.intro`·`A.finish`가 다시 불릴 때 정리된다(`stopReflection`).
+- **흐름 문항.** 염기쌍 팡·혈액 순환 일주의 `addFlowQuiz`는 `A.finish`가 돌려준 `patchPlay`로 `flowQuizCorrect`를 쓴다. 설명해 보기 칸을 떼었다 붙여도 같은 textarea와 리스너를 쓴다. `A.patchLast`는 정의만 남았고 게임 코드는 부르지 않는다.
+- **탐사대 체육관(`games/quest/js/main.js`).** 결과가 나오는 순간 `saveBattleResult(play)`가 `appendBattleRecord`로 대결 기록을 더하고 최고 배지(`badges[gym]`)를 갱신해 한 번 저장한다. 다른 탭이 저장한 `records`·`badges`는 보존한다. 서술 답은 그 기록(기록 위치·`at`·`gym`이 같을 때만)에 `patchBattleReflection`으로 갱신하며, 시점은 미니게임과 같다. 패널을 닫거나 다른 패널을 열면 마지막으로 저장하고 리스너를 정리한다(`endBattleReflection`). 허브에서 기록을 지운 뒤(`storage` 이벤트로 `bioQuest.v1`이 사라지면) 열려 있던 탐사대가 `writeSave`로 기록을 되살리지 않는다. '처음부터'를 누르면 다시 쓰기 시작한다.
 
 ## 5. 결과 화면 API (`window.Arcade`)
 
 - `A.intro(overlay, { id, rules: [HTML], onStart })`: 시작 카드.
-- `A.finish(overlay, { id, stars(0~3), score, lines: [HTML], detail, quiz: { q, options(2개), answer, explain }, reflection, onRetry })`: 기록을 먼저 저장하고 결과 카드를 띄운다. 인출 문항 정답 여부는 고르는 즉시, '설명해 보기' 답은 '다시 하기'(`#ar-retry`)나 '오락실로'(`#ar-hub`)를 누를 때 저장된다.
+- `A.finish(overlay, { id, stars(0~3), score, lines: [HTML], detail, quiz: { q, options(2개), answer, explain }, reflection, onRetry })`: 기록을 먼저 저장하고 결과 카드를 띄운 뒤, 그 판만 고치는 `patchPlay`를 돌려준다. 인출 문항 정답 여부는 고르는 즉시, '설명해 보기' 답은 쓰는 동안과 화면을 떠날 때 저장된다(4절).
 - 그 밖: `A.GAMES`, `A.game(id)`, `A.data()`, `A.student()`, `A.setStudent()`, `A.record()`, `A.patchLast()`, `A.best()`, `A.questBadges()`, `A.hasRecords()`, `A.clearRecords()`, `A.standards()`, `A.standardsHTML()`, `A.stars()`.
 - 결과 카드를 꾸밀 때는 공통 클릭 처리(`.quiz-opts .btn`)에 걸리지 않게 클래스를 따로 쓴다. 혈당은 `addModePicker`, 염기쌍 팡은 `addFlowQuiz`(`.flow-quiz`, `.flow-opts`)를 쓴다.
 - 모달: intro·finish가 뜨면 overlay의 형제 요소에 `inert`를 달고, 캡처 단계 keydown을 끊는다. 게임이 같은 overlay의 `hidden`을 직접 바꿔도 MutationObserver가 맞춘다.
-- 토스트: 공용 함수가 없다. 게임마다 `#toast`와 자체 `toast()`가 있고, 표시 시간은 글자당 약 70ms(최소 2.2초, 최대 6초)다. 가계도만 글자당 80ms이고 상한이 없다(`Math.max(2200, t.length * 80)`). 탐사대에는 토스트가 없고 대화창을 쓴다.
+- 토스트: 공용 함수가 없다. 게임마다 `#toast`와 자체 `toast()`가 있고, 표시 시간은 모든 미니게임이 같은 규칙으로 글자당 약 70ms(최소 2.2초, 최대 6초)다. 가계도도 D-051부터 같다. 탐사대에는 토스트가 없고 대화창을 쓴다.
 
 ## 6. 테스트 훅
 
@@ -86,6 +89,8 @@ mkdir -p ~/.cache/bio-arcade-tools && cd ~/.cache/bio-arcade-tools && { [ -f pac
 
 브라우저는 `~/Library/Caches/ms-playwright/chromium_headless_shell-1243`을 쓴다. 다른 컴퓨터에서 브라우저가 없으면 `cd ~/.cache/bio-arcade-tools && pnpm exec playwright install chromium-headless-shell`이 필요할 수 있다(미검증).
 
+WebKit(아이폰 Safari와 같은 계열의 엔진)으로도 돌릴 수 있다. 이 맥에는 `~/Library/Caches/ms-playwright/webkit-2359`가 설치돼 있고, 없으면 `cd ~/.cache/bio-arcade-tools && pnpm exec playwright install webkit`으로 받는다(설치 명령 자체는 미검증). WebKit 실행은 아이폰 실기기 확인을 대신하지 않는다(T2).
+
 | 명령 | 걸리는 시간 | 통과 기준 |
 |---|---|---|
 | `node tests/quest-logic.js` | 1초 미만 | `FAIL` 0, 종료 코드 0 |
@@ -93,6 +98,16 @@ mkdir -p ~/.cache/bio-arcade-tools && cd ~/.cache/bio-arcade-tools && { [ -f pac
 | `node tests/quest-tune-photo.js` | 1초 미만 | 보고만 한다. 광합성 규칙을 바꿀 때 별 분포를 본다 |
 | `PW=~/.cache/bio-arcade-tools/node_modules/playwright node tests/arcade-e2e.js <저장소 밖 폴더>` | 약 2분 | `errors: none`, `failures: none`, 종료 코드 0 |
 | `PW=~/.cache/bio-arcade-tools/node_modules/playwright node tests/quest-e2e.js <저장소 밖 폴더>` | 약 15초 | `FAIL` 없음, `errors: none`, 종료 코드 0 |
+
+두 E2E(`arcade-e2e`·`quest-e2e`)는 환경 변수 두 개로 실행 조건을 고른다. 첫 출력 줄에 `엔진: webkit · 동작 줄이기: 켬`처럼 조건이 찍힌다.
+
+- `E2E_BROWSER=chromium`(기본)|`webkit`: 엔진을 고른다. 다른 값은 오류로 멈춘다.
+- `E2E_REDUCED_MOTION=1`: 모든 페이지(새 컨텍스트·팝업 포함)에 `prefers-reduced-motion: reduce`를 적용한다. 학생 가운데 '동작 줄이기'를 켠 아이폰이 있을 수 있어서 둔 조건이다.
+- WebKit은 `file://`로 연 페이지의 `manifest.webmanifest` 요청을 CORS로 막아 콘솔에 `Origin null is not allowed by Access-Control-Allow-Origin. Status code: 0`(앞에 `Failed to load resource: `가 붙은 꼴 포함) 두 문장을 낸다. E2E는 WebKit에서 이 두 문장 가운데 manifest 요청 실패로 확인된 것만 걸러 `무시한 오류: webkit file:// manifest N건`으로 따로 출력하고, 다른 오류는 `errors`에 남긴다. Chromium에서는 걸러지는 것이 없다(0건). 건수는 2026-10-06 실행에서 arcade 48건, quest 18건이었다.
+
+```bash
+PW=~/.cache/bio-arcade-tools/node_modules/playwright E2E_BROWSER=webkit E2E_REDUCED_MOTION=1 node tests/arcade-e2e.js /tmp/bio-arcade-e2e/arcade-webkit-reduce
+```
 
 E2E는 서버 없이 `file://`로 페이지를 연다. 화면을 직접 보려면 저장소 루트에서 `python3 -m http.server 18923 --bind 127.0.0.1`을 띄운다(8765·8791은 이 맥의 다른 도구와 겹친 적이 있어 피한다). 서비스 워커는 https에서만 등록되므로 로컬 서버에서는 오프라인 캐시가 동작하지 않는다.
 
