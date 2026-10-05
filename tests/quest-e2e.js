@@ -1,16 +1,62 @@
 // 휴대폰 화면(390×844, 터치)에서 처음부터 두 체육관까지 실제로 플레이한다.
-const { chromium } = require(process.env.PW || 'playwright');
+const playwright = require(process.env.PW || 'playwright');
+const browserName = process.env.E2E_BROWSER || 'chromium';
+const reducedMotion = process.env.E2E_REDUCED_MOTION === '1';
+if (!['chromium', 'webkit'].includes(browserName)) throw new Error(`지원하지 않는 E2E_BROWSER: ${browserName}`);
 const path = require('path');
 (async () => {
   const out = process.argv[2] || '.';
-  const browser = await chromium.launch();
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+  console.log(`엔진: ${browserName} · 동작 줄이기: ${reducedMotion ? '켬' : '끔'}`);
+  const browser = await playwright[browserName].launch();
+  const mediaReady = new WeakMap();
+  const createContext = async options => {
+    // 컨텍스트 설정은 팝업도 첫 문서부터 같은 미디어 설정을 물려받게 한다.
+    const context = await browser.newContext(reducedMotion ? { ...options, reducedMotion: 'reduce' } : options);
+    if (reducedMotion) context.on('page', p => {
+      const ready = p.emulateMedia({ reducedMotion: 'reduce' });
+      mediaReady.set(p, ready);
+      ready.catch(e => { console.error('동작 줄이기 설정 실패:', e.message); process.exitCode = 1; });
+    });
+    return context;
+  };
+  const ctx = await createContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
+  if (reducedMotion) await mediaReady.get(page);
   const errors = [];
-  page.on('pageerror', e => errors.push(e.message));
-  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  const consoleErrors = [];
+  let ignoredManifestErrors = 0;
+  const isFileManifest = url => {
+    try { const u = new URL(url); return u.protocol === 'file:' && u.pathname.endsWith('/manifest.webmanifest') && !u.search && !u.hash; } catch { return false; }
+  };
+  const manifestMessages = new Set([
+    'Origin null is not allowed by Access-Control-Allow-Origin. Status code: 0',
+    'Failed to load resource: Origin null is not allowed by Access-Control-Allow-Origin. Status code: 0',
+  ]);
+  const watchErrors = p => {
+    let evidence = { url: p.url(), manifestFailed: false, otherFailed: false };
+    p.on('framenavigated', f => { if (f === p.mainFrame()) evidence = { url: f.url(), manifestFailed: false, otherFailed: false }; });
+    p.on('requestfailed', r => { if (isFileManifest(r.url())) evidence.manifestFailed = true; else evidence.otherFailed = true; });
+    p.on('pageerror', e => errors.push(e.message));
+    p.on('console', m => {
+      if (m.type() !== 'error') return;
+      const text = m.text(), url = m.location().url || '';
+      if (isFileManifest(url) && manifestMessages.has(text)) evidence.manifestFailed = true;
+      consoleErrors.push({ text, url, evidence });
+    });
+  };
+  const finishErrors = () => {
+    for (const { text, url, evidence } of consoleErrors) {
+      // WebKit은 file:// manifest만 CORS로 막는다. https에서는 없으며, 다른 요청·문구는 실패로 남긴다.
+      // 첫 문장은 위치가 비어 있을 수 있어 같은 문서의 실패 요청(또는 두 번째 문장의 manifest URL)로 확인한다.
+      const confirmed = isFileManifest(url) || ((!url || url === evidence.url) && evidence.manifestFailed && !evidence.otherFailed);
+      if (browserName === 'webkit' && manifestMessages.has(text) && confirmed) ignoredManifestErrors++;
+      else errors.push(text);
+    }
+  };
+  watchErrors(page);
   // 확인 항목: 실패하면 FAIL을 찍고 종료 코드를 1로 둔다
   const check = (name, cond, extra = '') => { if (!cond) process.exitCode = 1; console.log(`${cond ? 'OK  ' : 'FAIL'} ${name}${extra ? ' — ' + extra : ''}`); };
+  const questSave = () => page.evaluate(() => JSON.parse(localStorage.getItem('bioQuest.v1')));
   await page.goto('file://' + path.resolve(__dirname, '../games/quest/index.html'));
   await page.screenshot({ path: `${out}/01-title.png` });
   // 화면에 실제로 보이는지: hidden 속성이 아니라 계산된 display와 isVisible로 판단한다(CSS가 hidden을 덮는 함정 대비)
@@ -173,11 +219,16 @@ const path = require('path');
   const starchLabel = await page.$$eval('#panel-body .meter', ms => ms.map(m => m.querySelector('.meter-label').textContent.replace(/\s+/g, ' ').trim()).find(t => t.startsWith('녹말')));
   check('광합성 결과: 밤에 닫으면 별 3 + 칭찬', photoStars === 3 && photoRes.includes('밤에 기공을 닫아'), `별 ${photoStars} · ${photoRes}`);
   check('녹말 막대 숫자 = 결과 녹말', starchLabel.includes((photoRes.match(/녹말 (\d+)/) || [])[1] + ' '), starchLabel);
+  let stored = await questSave();
+  check('광합성 버튼 전 결과 기록 1개·별 3 배지가 저장됨', stored.records.filter(r => r.gym === 'photo').length === 1 && stored.badges.photo === 3);
   await page.fill('#refl', '밤에는 빛이 없어 광합성을 못 하므로 기공을 닫아 물을 아꼈다.');
+  await page.waitForTimeout(500);
+  check('광합성 버튼 전 0.5초 서술 답 저장', (await questSave()).records.find(r => r.gym === 'photo')?.reflection === '밤에는 빛이 없어 광합성을 못 하므로 기공을 닫아 물을 아꼈다.');
   await page.screenshot({ path: `${out}/07-photo-result.png` });
   await page.click('#p-done');
   await page.waitForTimeout(200);
   await drain();
+  check('광합성 결과 버튼 뒤에도 대결은 1개', (await questSave()).records.filter(r => r.gym === 'photo').length === 1);
   console.log('photo badge:', await page.evaluate(() => window.__bq.S.badges.photo));
   // 체육관 2
   await page.evaluate(() => { window.__bq.warp('route2', 21, 8); window.__bq.player.dir = 'up'; });
@@ -195,10 +246,18 @@ const path = require('path');
   const digestStarsOn = () => page.$eval('#panel-body .feedback .stars', el => 3 - el.querySelectorAll('.off').length);
   const bileRes = await page.$eval('#panel-body .feedback', el => el.textContent.replace(/\s+/g, ' ').trim());
   check('소화 결과: 쓸개즙으로 유화한 뒤 분해 → 별 3', (await digestStarsOn()) === 3 && bileRes.includes('완벽한'), bileRes);
+  stored = await questSave();
+  check('소화 버튼 전 결과 기록 1개·별 3 배지가 저장됨', stored.records.filter(r => r.gym === 'digest').length === 1 && stored.badges.digest === 3);
+  await page.fill('#refl', '쓸개즙은 지방을 작은 방울로 만들어 라이페이스가 닿는 표면적을 넓힌다.');
+  await page.waitForTimeout(500);
+  check('소화 버튼 전 0.5초 서술 답 저장', (await questSave()).records.find(r => r.gym === 'digest')?.reflection === '쓸개즙은 지방을 작은 방울로 만들어 라이페이스가 닿는 표면적을 넓힌다.');
+  await page.fill('#refl', '   '); await page.waitForTimeout(500);
+  check('탐사대 공백 답은 D-051 ④에 따라 이전 답을 지움', (await questSave()).records.find(r => r.gym === 'digest')?.reflection === '');
   await page.fill('#refl', '쓸개즙은 지방을 작은 방울로 만들어 라이페이스가 닿는 표면적을 넓힌다.');
   await page.click('#d-done');
   await page.waitForTimeout(200);
   await drain();
+  check('소화 결과 버튼 뒤에도 대결은 1개', (await questSave()).records.filter(r => r.gym === 'digest').length === 1);
   console.log('digest badge:', await page.evaluate(() => window.__bq.S.badges.digest));
   // 다시 도전: 쓸개즙 없이 이자액 두 번 → 이기지만 별 2, 결과에 유화 안내
   await page.evaluate(() => { window.__bq.gymDigest(); });
@@ -261,7 +320,79 @@ const path = require('path');
   // 새로고침 후 이어하기
   await page.reload();
   console.log('continue button visible:', await page.isVisible('#btn-continue'));
+
+  // 별도 가상 기기에서 결과 재시도·이탈·허브 삭제를 검사한다.
+  const saveCtx = await createContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const resultPage = await saveCtx.newPage(), hubPage = await saveCtx.newPage();
+  if (reducedMotion) await Promise.all([mediaReady.get(resultPage), mediaReady.get(hubPage)]);
+  watchErrors(resultPage); watchErrors(hubPage);
+  const questURL = 'file://' + path.resolve(__dirname, '../games/quest/index.html');
+  const hubURL = 'file://' + path.resolve(__dirname, '../index.html');
+  await resultPage.goto(questURL);
+  const seed = await questSave(); seed.records = []; seed.badges = { photo: 3 }; seed.student = { id: '20315', name: '테스트' };
+  await resultPage.evaluate(s => localStorage.setItem('bioQuest.v1', JSON.stringify(s)), seed);
+  await resultPage.reload(); await resultPage.click('#btn-continue');
+  const resultSave = () => resultPage.evaluate(() => JSON.parse(localStorage.getItem('bioQuest.v1')));
+  const drainResult = async () => {
+    for (let i = 0; i < 40 && await resultPage.evaluate(() => window.__bq.mode === 'dialog'); i++) {
+      const choice = await resultPage.$('#dialog-choices button');
+      if (choice) await choice.click(); else await resultPage.click('#dialog');
+      await resultPage.waitForTimeout(60);
+    }
+  };
+  const completeDigest = async () => {
+    await drainResult();
+    for (const m of ['saliva', 'chew', 'gastric', 'mix', 'bile', 'pancreas', 'intestinal']) await resultPage.click(`[data-m="${m}"]`);
+    for (const [k, v] of [['starch', 'capillary'], ['protein', 'capillary'], ['fat', 'lacteal']]) await resultPage.click(`[data-k="${k}"][data-v="${v}"]`);
+    await resultPage.click('#ab-go');
+  };
+  await resultPage.evaluate(() => { window.__bq.gymDigest(); }); await completeDigest();
+  await resultPage.evaluate(() => { window.__oldReflection = document.getElementById('refl'); });
+  await resultPage.fill('#refl', '다시 도전 전 답'); await resultPage.click('#d-retry');
+  await completeDigest();
+  check('다시 도전은 대결마다 기록 1개', (await resultSave()).records.length === 2);
+  await resultPage.evaluate(() => { window.__oldReflection.value = '닫힌 카드 오염'; window.__oldReflection.dispatchEvent(new Event('input')); });
+  await resultPage.fill('#refl', '둘째 대결 답'); await resultPage.waitForTimeout(500);
+  stored = await resultSave();
+  check('다시 도전 뒤 타이머·리스너 정리와 판 분리', stored.records.length === 2 && stored.records[0].reflection === '다시 도전 전 답' && stored.records[1].reflection === '둘째 대결 답');
+  await hubPage.goto(hubURL);
+  await hubPage.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('bioQuest.v1'));
+    const last = s.records.at(-1);
+    s.records.push({ ...last, at: new Date(Date.parse(last.at) + 1).toISOString(), reflection: '' });
+    localStorage.setItem('bioQuest.v1', JSON.stringify(s));
+  });
+  await resultPage.fill('#refl', '고정한 둘째 대결 답'); await resultPage.waitForTimeout(500);
+  stored = await resultSave();
+  check('탐사대 다른 탭이 뒤 판을 더해도 대상 판만 갱신', stored.records.length === 3 && stored.records[1].reflection === '고정한 둘째 대결 답' && stored.records[2].reflection === '');
+  await resultPage.fill('#refl', '탐사대 숨김 직전 답');
+  await resultPage.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange')); delete document.visibilityState;
+  });
+  check('탐사대 hidden 이벤트 즉시 저장', (await resultSave()).records[1]?.reflection === '탐사대 숨김 직전 답');
+  await resultPage.fill('#refl', '탐사대 pagehide 직전 답');
+  await resultPage.evaluate(() => { window.dispatchEvent(new Event('pagehide')); window.dispatchEvent(new Event('pagehide')); });
+  stored = await resultSave();
+  check('탐사대 pagehide 반복 저장은 대결 추가 없음', stored.records.length === 3 && stored.records[1].reflection === '탐사대 pagehide 직전 답' && stored.records[2].reflection === '');
+  await resultPage.fill('#refl', '탐사대 실제 이동 직전 답');
+  await resultPage.goto(hubURL);
+  stored = await resultSave();
+  check('탐사대 버튼 없는 실제 이동 뒤 결과·배지·서술 보존', stored.records.length === 3 && stored.badges.digest === 3 && stored.records[1].reflection === '탐사대 실제 이동 직전 답' && stored.records[2].reflection === '');
+  await resultPage.goto(questURL); await resultPage.click('#btn-continue');
+  await resultPage.evaluate(() => { window.__bq.gymDigest(); }); await completeDigest();
+  await hubPage.goto(hubURL); hubPage.on('dialog', d => d.accept()); await hubPage.click('#clear');
+  await resultPage.fill('#refl', '삭제 뒤 입력'); await resultPage.waitForTimeout(500);
+  check('허브 삭제 뒤 탐사대 입력 저장은 복구하지 않음', await hubPage.evaluate(() => localStorage.getItem('bioQuest.v1') === null));
+  await resultPage.fill('#refl', '삭제 뒤 버튼'); await resultPage.click('#d-done'); await drainResult();
+  // 메뉴의 일반 writeSave도 삭제된 세션을 복구하지 않는다.
+  await resultPage.click('#btn-b'); await resultPage.click('#m-save');
+  await resultPage.goto(hubURL);
+  check('허브 삭제 뒤 탐사대 버튼·일반 저장·이탈은 복구하지 않음', await hubPage.evaluate(() => localStorage.getItem('bioQuest.v1') === null));
+  await saveCtx.close();
+  finishErrors();
   console.log('errors:', errors.length ? errors : 'none');
+  console.log(`무시한 오류: webkit file:// manifest ${ignoredManifestErrors}건`);
   if (errors.length) process.exitCode = 1;
   await browser.close();
 })();

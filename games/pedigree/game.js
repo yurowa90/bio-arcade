@@ -64,7 +64,7 @@
     draw();
   }
   let toastT;
-  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), Math.max(2200, t.length * 80)); }
+  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), Math.min(6000, Math.max(2200, Array.from(t).length * 70))); }
 
   function startLevel() {
     judged = false; marks = {};

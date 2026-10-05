@@ -1,5 +1,23 @@
 /* 생명 탐사대 — 게임 본체 (지도·대화·조우·도감·체육관·저장) */
 (function () {
+  // 저장 형식은 유지하고, 결과 추가와 그 결과의 답 갱신을 나눈다.
+  function appendBattleRecord(state, play) {
+    const record = { at: new Date().toISOString(), ...play, reflection: '' };
+    state.records.push(record);
+    if (record.win) state.badges[record.gym] = Math.max(state.badges[record.gym] || 0, record.stars);
+    return { index: state.records.length - 1, at: record.at, gym: record.gym };
+  }
+  function patchBattleReflection(state, target, answer) {
+    const record = state?.records?.[target.index];
+    if (!record || record.at !== target.at || record.gym !== target.gym) return false;
+    const reflection = answer.trim();
+    if (record.reflection === reflection) return false;
+    record.reflection = reflection;
+    return true;
+  }
+  if (typeof window === 'undefined' && typeof module !== 'undefined') {
+    module.exports = { appendBattleRecord, patchBattleReflection }; return;
+  }
   const { SPECIES, MAPS, PARTNERS, GYMS } = window.GameData;
   const B = window.Battles;
   const $ = id => document.getElementById(id);
@@ -13,8 +31,53 @@
     dex: {}, badges: {}, timeMode: 'real', records: [], student: { id: '', name: '' }, introDone: false,
   });
   function loadSave() { try { return JSON.parse(localStorage.getItem(SAVE_KEY)); } catch { return null; } }
-  function writeSave() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* 저장 불가 환경 */ } }
+  let saveInvalidated = false, hadSave = !!loadSave();
+  function writeSave() {
+    try {
+      // 허브에서 지운 뒤 남아 있던 탐사대 세션 전체가 기록을 되살리지 않게 한다.
+      if (saveInvalidated || (hadSave && localStorage.getItem(SAVE_KEY) === null)) { saveInvalidated = true; return; }
+      localStorage.setItem(SAVE_KEY, JSON.stringify(S)); hadSave = true;
+    } catch { /* 저장 불가 환경 */ }
+  }
+  window.addEventListener('storage', e => { if ((e.key === SAVE_KEY || e.key === null) && e.newValue === null) saveInvalidated = true; });
   let S = freshSave();
+  let stopBattleReflection = null;
+  function endBattleReflection() { const stop = stopBattleReflection; stopBattleReflection = null; if (stop) stop(); }
+  function saveBattleResult(play) {
+    endBattleReflection();
+    // 다른 탭이 이미 저장한 판·배지를 보존하고 새 결과를 한 번만 추가한다.
+    const latest = loadSave();
+    if (latest) { S.records = latest.records || []; S.badges = latest.badges || {}; }
+    const target = appendBattleRecord(S, play);
+    writeSave();
+    const textarea = $('refl');
+    let timer, active = true;
+    const save = () => {
+      clearTimeout(timer);
+      if (!active || saveInvalidated) return;
+      const stored = loadSave(), record = stored?.records?.[target.index];
+      if (!record || record.at !== target.at || record.gym !== target.gym) { active = false; return; }
+      if (patchBattleReflection(stored, target, textarea.value)) {
+        try { localStorage.setItem(SAVE_KEY, JSON.stringify(stored)); } catch { /* 저장 불가 환경 */ }
+      }
+      // 이후 메뉴·이동 저장도 최신 판·배지를 사용한다.
+      S.records = stored.records; S.badges = stored.badges;
+    };
+    const input = () => { clearTimeout(timer); timer = setTimeout(save, 300); };
+    const hidden = () => { if (document.visibilityState === 'hidden') save(); };
+    textarea.addEventListener('input', input);
+    textarea.addEventListener('compositionend', input);
+    window.addEventListener('pagehide', save);
+    document.addEventListener('visibilitychange', hidden);
+    stopBattleReflection = () => {
+      save(); active = false; clearTimeout(timer);
+      textarea.removeEventListener('input', input);
+      textarea.removeEventListener('compositionend', input);
+      window.removeEventListener('pagehide', save);
+      document.removeEventListener('visibilitychange', hidden);
+    };
+    return save;
+  }
 
   /* ---------------- 시간(낮·밤) ---------------- */
   function isNight() {
@@ -113,6 +176,7 @@
   /* ---------------- 패널(도감·조우·대결·메뉴) ---------------- */
   let panelOnClose = null;
   function openPanel(title, closable, onClose) {
+    endBattleReflection();
     $('panel-title').textContent = title;
     $('panel-close').hidden = !closable;
     $('panel').hidden = false;
@@ -122,6 +186,7 @@
     return $('panel-body');
   }
   function closePanel() {
+    endBattleReflection();
     $('panel').hidden = true;
     mode = 'walk';
     const f = panelOnClose; panelOnClose = null;
@@ -573,11 +638,7 @@
         <div class="row-btns"><button class="btn primary" id="p-done">${st.win ? '배지 받기' : '저장하고 나가기'}</button><button class="btn" id="p-retry">다시 도전</button></div>`;
       body.prepend(box);
       body.scrollTop = 0;
-      const save = () => {
-        S.records.push({ gym: 'photo', at: new Date().toISOString(), win: st.win, stars, starch: st.starch, history: st.history, reflection: $('refl').value.trim() });
-        if (st.win) S.badges.photo = Math.max(S.badges.photo || 0, stars);
-        writeSave();
-      };
+      const save = saveBattleResult({ gym: 'photo', win: st.win, stars, starch: st.starch, history: st.history });
       $('p-retry').onclick = () => { save(); closePanel(); gymPhoto(); };
       $('p-done').onclick = async () => {
         save(); closePanel();
@@ -662,11 +723,7 @@
         <textarea id="refl" placeholder="두세 문장으로 써 보세요."></textarea>
         <div class="row-btns"><button class="btn primary" id="d-done">${win ? '배지 받기' : '저장하고 나가기'}</button><button class="btn" id="d-retry">다시 도전</button></div>`;
       body.scrollTop = 0; // 흡수 화면에서 내려간 채로 두면 별과 결과 안내가 화면 위로 가려진다
-      const save = () => {
-        S.records.push({ gym: 'digest', at: new Date().toISOString(), win, stars, wrong: st.wrong, salivaMouth: st.salivaMouth, gastricStomach: st.gastricStomach, emulsified: st.emulsified, absorb: absorbRes, history: st.history, reflection: $('refl').value.trim() });
-        if (win) S.badges.digest = Math.max(S.badges.digest || 0, stars);
-        writeSave();
-      };
+      const save = saveBattleResult({ gym: 'digest', win, stars, wrong: st.wrong, salivaMouth: st.salivaMouth, gastricStomach: st.gastricStomach, emulsified: st.emulsified, absorb: absorbRes, history: st.history });
       $('d-retry').onclick = () => { save(); closePanel(); gymDigest(); };
       $('d-done').onclick = async () => {
         save(); closePanel();
@@ -744,6 +801,7 @@
   if (saved && saved.v === 1) $('btn-continue').hidden = false;
   $('btn-new').addEventListener('click', () => {
     if (saved && !confirm('저장된 기록을 지우고 처음부터 시작할까요?')) return;
+    saveInvalidated = false; hadSave = false;
     S = freshSave(); writeSave(); startGame(false);
   });
   $('btn-continue').addEventListener('click', () => { S = Object.assign(freshSave(), saved); startGame(true); });

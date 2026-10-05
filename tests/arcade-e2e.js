@@ -1,15 +1,60 @@
 // 휴대폰 화면에서 오락실 허브와 모든 미니게임을 실제로 플레이해 본다.
-const { chromium } = require(process.env.PW || 'playwright');
+const playwright = require(process.env.PW || 'playwright');
+const browserName = process.env.E2E_BROWSER || 'chromium';
+const reducedMotion = process.env.E2E_REDUCED_MOTION === '1';
+if (!['chromium', 'webkit'].includes(browserName)) throw new Error(`지원하지 않는 E2E_BROWSER: ${browserName}`);
 const path = require('path');
 const root = path.resolve(__dirname, '..');
 (async () => {
   const out = process.argv[2] || '.';
-  const browser = await chromium.launch();
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+  console.log(`엔진: ${browserName} · 동작 줄이기: ${reducedMotion ? '켬' : '끔'}`);
+  const browser = await playwright[browserName].launch();
+  const mediaReady = new WeakMap();
+  const createContext = async options => {
+    // 컨텍스트 설정은 팝업도 첫 문서부터 같은 미디어 설정을 물려받게 한다.
+    const context = await browser.newContext(reducedMotion ? { ...options, reducedMotion: 'reduce' } : options);
+    if (reducedMotion) context.on('page', p => {
+      const ready = p.emulateMedia({ reducedMotion: 'reduce' });
+      mediaReady.set(p, ready);
+      ready.catch(e => { console.error('동작 줄이기 설정 실패:', e.message); process.exitCode = 1; });
+    });
+    return context;
+  };
+  const ctx = await createContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
+  if (reducedMotion) await mediaReady.get(page);
   const errors = [], failures = [], dialogs = [];
-  page.on('pageerror', e => errors.push(`${page.url().split('/').slice(-2).join('/')}: ${e.message}`));
-  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  const consoleErrors = [];
+  let ignoredManifestErrors = 0;
+  const isFileManifest = url => {
+    try { const u = new URL(url); return u.protocol === 'file:' && u.pathname.endsWith('/manifest.webmanifest') && !u.search && !u.hash; } catch { return false; }
+  };
+  const manifestMessages = new Set([
+    'Origin null is not allowed by Access-Control-Allow-Origin. Status code: 0',
+    'Failed to load resource: Origin null is not allowed by Access-Control-Allow-Origin. Status code: 0',
+  ]);
+  const watchErrors = p => {
+    let evidence = { url: p.url(), manifestFailed: false, otherFailed: false };
+    p.on('framenavigated', f => { if (f === p.mainFrame()) evidence = { url: f.url(), manifestFailed: false, otherFailed: false }; });
+    p.on('requestfailed', r => { if (isFileManifest(r.url())) evidence.manifestFailed = true; else evidence.otherFailed = true; });
+    p.on('pageerror', e => errors.push(p.url().replace('file://' + root + '/', '') + ': ' + e.message));
+    p.on('console', m => {
+      if (m.type() !== 'error') return;
+      const text = m.text(), url = m.location().url || '';
+      if (isFileManifest(url) && manifestMessages.has(text)) evidence.manifestFailed = true;
+      consoleErrors.push({ text, url, evidence });
+    });
+  };
+  const finishErrors = () => {
+    for (const { text, url, evidence } of consoleErrors) {
+      // WebKit은 file:// manifest만 CORS로 막는다. https에서는 없으며, 다른 요청·문구는 실패로 남긴다.
+      // 첫 문장은 위치가 비어 있을 수 있어 같은 문서의 실패 요청(또는 두 번째 문장의 manifest URL)로 확인한다.
+      const confirmed = isFileManifest(url) || ((!url || url === evidence.url) && evidence.manifestFailed && !evidence.otherFailed);
+      if (browserName === 'webkit' && manifestMessages.has(text) && confirmed) ignoredManifestErrors++;
+      else errors.push(text);
+    }
+  };
+  watchErrors(page);
   // 확인 창은 기록만 하고 [취소]로 닫는다(Playwright 기본 동작과 같음)
   page.on('dialog', d => { dialogs.push(d.message()); d.dismiss().catch(() => {}); });
   const check = (ok, msg) => { if (!ok) { failures.push(msg); console.log('실패:', msg); } };
@@ -20,12 +65,43 @@ const root = path.resolve(__dirname, '..');
   const finishCheck = async name => {
     await page.waitForSelector('#overlay:not([hidden]) #ar-retry', { timeout: 90000 });
     const title = await page.textContent('#overlay h2');
+    const gameId = name === 'glucose-resistance' ? 'glucose' : name;
+    const plays = () => page.evaluate(({ k, id }) => JSON.parse(localStorage.getItem(k))?.games[id]?.plays || [], { k: STORE, id: gameId });
+    const before = await plays(), target = before.length - 1;
+    const hasFlow = ['basepang', 'circulation'].includes(gameId);
+    if (hasFlow) {
+      const other = await ctx.newPage();
+      if (reducedMotion) await mediaReady.get(other);
+      watchErrors(other);
+      await other.goto('file://' + path.join(root, 'index.html'));
+      await other.evaluate(id => window.Arcade.record(id, { stars: 0, score: 0, detail: {} }), gameId);
+      await other.close();
+    }
     // 인출 문항이 여러 개면(염기쌍 팡의 흐름 문항 등) 하나에 답해야 다음 문항·설명해 보기가 나온다
     for (let i = 0; i < 4; i++) { const opt = await page.$('#overlay .quiz-opts .btn:not([disabled]), #overlay .flow-opts .btn:not([disabled])'); if (!opt) break; await opt.click(); await page.waitForTimeout(150); }
-    const t = await page.$('#ar-refl'); if (t) await t.fill(`${name} 성찰 테스트`);
+    const t = await page.$('#ar-refl');
+    if (hasFlow) {
+      const saved = await plays();
+      check(typeof saved[target]?.quizCorrect === 'boolean' && typeof saved[target]?.flowQuizCorrect === 'boolean' &&
+        saved[target + 1]?.quizCorrect === undefined && saved[target + 1]?.flowQuizCorrect === undefined,
+        `${name}: 다른 탭의 다음 판에 흐름 문항이 섞임`);
+    }
+    if (t) {
+      await t.fill(`${name} 성찰 테스트`);
+      await page.waitForTimeout(500);
+      const saved = await plays();
+      check(saved.length === before.length + Number(hasFlow) && saved[target]?.at === before[target]?.at && saved[target]?.reflection === `${name} 성찰 테스트` &&
+        (!hasFlow || !saved[target + 1]?.reflection), `${name}: 버튼 전 0.5초 서술 자동 저장 실패`);
+    }
     await page.screenshot({ path: `${out}/${name}-result.png` });
-    await page.click('#ar-hub');
+    // 버튼을 거치지 않은 실제 이동에서 300ms를 기다리지 않고 마지막 입력을 보존한다.
+    if (name === 'mendel') {
+      await page.fill('#ar-refl', 'mendel 이탈 직전 답');
+      await go('index.html');
+      check((await plays())[target]?.reflection === 'mendel 이탈 직전 답', '멘델: 버튼 없이 페이지 이동한 뒤 마지막 답 유실');
+    } else await page.click('#ar-hub');
     console.log(`${name}: 결과 "${title}" · 가로 넘침 ${await overflow()}`);
+    return target;
   };
 
   // 허브: 학번만 적고 시작한다. 이름은 기록이 쌓인 뒤 끝에서 채운다(빈 칸 채우기는 확인 창 없이).
@@ -57,10 +133,22 @@ const root = path.resolve(__dirname, '..');
   // 가계도 지뢰찾기: 해결기가 찾은 확실한 보인자만 표시
   await go('games/pedigree/index.html');
   await page.click('#ar-start');
+  await page.evaluate(() => {
+    const original = window.setTimeout;
+    window.__pedigreeToastDelays = [];
+    window.setTimeout = (fn, ms, ...args) => {
+      if (String(fn).includes("classList.remove('on')")) window.__pedigreeToastDelays.push(ms);
+      return original(fn, ms, ...args);
+    };
+  });
   for (let lv = 0; lv < 4; lv++) {
     const must = await page.evaluate(i => window.Pedigree.solve(window.Pedigree.LEVELS[i]).must, lv);
     for (const id of must) await page.click(`.person[data-id="${id}"]`);
-    if (lv === 3) await page.click('.person[data-id="k3"]').catch(() => {}); // 발현자 클릭 → 안내만
+    if (lv === 3) {
+      await page.click('.person[data-id="k3"]'); // 발현자 클릭 → 안내만
+      const timing = await page.evaluate(() => ({ text: document.getElementById('toast').textContent, ms: window.__pedigreeToastDelays.at(-1) }));
+      check(timing.ms === Math.min(6000, Math.max(2200, Array.from(timing.text).length * 70)), '가계도 토스트 공통 시간 규칙 불일치');
+    }
     if (lv === 2) { await page.click('.person[data-id="h1"]'); } // 남성 오표시(일부러) → 지뢰
     if (lv === 2) await page.screenshot({ path: `${out}/pedigree-marked.png` });
     await page.click('#judge');
@@ -242,6 +330,19 @@ const root = path.resolve(__dirname, '..');
       }
     };
     new MutationObserver(inspect).observe($('board'), { childList: true });
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      // 걸음 사이 대기가 없으면 MutationObserver가 중간 칸을 놓친다.
+      // 판·경로·HUD가 모두 갱신된 시점에 같은 검사를 하여 18칸 단언을 유지한다.
+      const textContent = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+      Object.defineProperty($('status'), 'textContent', {
+        get() { return textContent.get.call(this); },
+        set(value) {
+          textContent.set.call(this, value);
+          // 입력 패널 해설은 drawCtrl 뒤의 기존 관찰자가 검사한다.
+          if (window.__circ.view().type === 'die') inspect();
+        },
+      });
+    }
     new MutationObserver(() => {
       inspect();
       const t = $('toast');
@@ -280,6 +381,8 @@ const root = path.resolve(__dirname, '..');
   let intentionalWrong = false, wrongFeedbackSeen = false, reasonWrong = false, reasonFeedbackSeen = false, fillWrong = false, fillFeedbackSeen = false, wrongKind, frozenCircScore, darkNames = 0, darkSeen = false, boundarySeen = 0, circEnded = false, organKeySeen = false;
   const fittedPhases = new Set();
   let co2Shot = false;
+  let expectedToast = '', exchangeSeen = false;
+  const settledCapillaries = new Set();
   for (let guard = 0; guard < 300; guard++) {
     await page.waitForFunction(() => {
       const p = window.__circ.pending(), ctrl = document.getElementById('ctrl');
@@ -287,6 +390,29 @@ const root = path.resolve(__dirname, '..');
     });
     const p = await page.evaluate(() => window.__circ.pending());
     if (p.type === 'end') { circEnded = true; break; }
+    if (!p.type.startsWith('final')) {
+      // 토큰과 활성 입력으로 재생 완료를 기다렸으므로 fast·실제 속도 모두 검사할 수 있다.
+      const settled = await page.evaluate(() => {
+        const C = window.Circulation, s = window.__circ.state(), p = C.pending(s), h = C.hud(s);
+        const sq = C.SQUARES.find(q => q.id === s.square), blood = C.BLOOD[sq.bloodOut || sq.blood];
+        const key = p.slot || sq.structure || (sq.id === 'lung' ? '폐의 모세 혈관' : '온몸의 모세 혈관');
+        const chips = [...document.querySelectorAll('#route .current')];
+        const status = h.mode === 'fill' ? '보충 문항' : `지금 혈액: ${blood.label} · 이산화 탄소 ${blood.co2 === 3 ? '많음' : '적음'} · ${sq.circuit === 'pulmonary' ? '폐순환' : '온몸순환'}`;
+        const mode = h.mode === 'practice' ? `${h.lap}/3바퀴` : { fill: '보충', ready: '연습 끝' }[h.mode];
+        return {
+          square: s.square, capillary: sq.kind === 'capillary',
+          drop: document.getElementById('drop')?.dataset.square === s.square,
+          blood: document.querySelector('#drop path')?.getAttribute('fill') === blood.color && document.querySelectorAll('#drop circle').length === blood.co2,
+          board: p.squares ? document.querySelectorAll('.square.current').length === 0 : document.querySelector('.square.current')?.dataset.square === s.square,
+          route: chips.length === 1 && chips[0].textContent === (C.STRUCTURES[key] ? (s.labels[key] ? C.STRUCTURES[key].name : '□') : key),
+          hud: document.getElementById('mode').textContent === mode && document.getElementById('score').textContent === `${h.score}점` && document.getElementById('status').textContent === status,
+          toastOn: document.getElementById('toast').classList.contains('on'), toast: document.getElementById('toast').textContent,
+        };
+      });
+      check(settled.drop && settled.blood && settled.board && settled.route && settled.hud && !settled.toastOn && settled.toast === expectedToast,
+        `순환 재생 뒤 최종 판·방울·경로 칩·HUD·토스트 불일치: ${JSON.stringify(settled)} / 기대 토스트: ${expectedToast}`);
+      if (settled.capillary) settledCapillaries.add(settled.square);
+    }
     const answer = await page.evaluate(() => window.__circ.correct());
     if (['die', 'reason', 'organ', 'fillName', 'fillReason'].includes(p.type) && !fittedPhases.has(p.type)) {
       fittedPhases.add(p.type); await circulationFits(660);
@@ -365,6 +491,17 @@ const root = path.resolve(__dirname, '..');
       key = p.options.slice().sort((a, b) => Number(a.blank) - Number(b.blank) || b.steps - a.steps)[0].key;
     } else if (p.type === 'organ') key = p.options[0].key;
     else if (p.options.length) key = answer;
+    if (p.type === 'die') {
+      // 순수 규칙이 낼 교환·바퀴 종료 안내와 실제 재생 뒤 남은 토스트를 대조한다.
+      const events = await page.evaluate(pick => {
+        const C = window.Circulation, s = window.__circ.state(), p = C.pending(s);
+        return C.act(s, { type: p.type, token: p.token, pick, seconds: 0 }).events.filter(e => ['exchange', 'lapEnd'].includes(e.type));
+      }, key);
+      for (const e of events) {
+        expectedToast = e.type === 'exchange' && !exchangeSeen ? e.note : e.text;
+        if (e.type === 'exchange') exchangeSeen = true;
+      }
+    }
     if (p.type === 'continue') {
       const fb = await page.textContent('#ctrl .feedback');
       check(await page.isVisible('#ctrl .feedback') && (await page.textContent('#ctrl')).includes('계속'), '순환 연습 오답의 해설·계속 버튼이 없다');
@@ -400,6 +537,7 @@ const root = path.resolve(__dirname, '..');
     if (p.type === 'finalName') darkNames++;
   }
   check(circEnded && darkSeen && intentionalWrong && wrongFeedbackSeen && reasonWrong && reasonFeedbackSeen && fillWrong && fillFeedbackSeen && boundarySeen === 2, '순환 플레이·오답 해설 확인·경계 두 문항을 끝내지 못했다');
+  check(['lung', 'brain', 'kidney', 'leg'].every(id => settledCapillaries.has(id)), '순환 폐·세 기관의 교환 뒤 최종 상태 검사 공백');
   check(fittedPhases.has('fillName') && organKeySeen, '순환 보충 문항 또는 두 번째 바퀴 기관 숫자 키 검사가 실행되지 않았다');
   const viewLog = await page.evaluate(() => window.__circViewLog);
   console.log('순환 화면 관찰:', JSON.stringify(viewLog));
@@ -420,8 +558,8 @@ const root = path.resolve(__dirname, '..');
   check(circResult.practice.length === 12 && circResult.practice.some(x => !x.ok) && circResult.untimed === 0, '순환 연습 기록 또는 경과 초 기록 실패');
   check(circResult.hidden, '순환 결과 카드 뒤에서 판·칩·패널이 보인다');
   await page.screenshot({ path: `${out}/circulation-result-before-quiz.png` });
-  await finishCheck('circulation');
-  const circSaved = await page.evaluate(k => JSON.parse(localStorage.getItem(k)).games.circulation.plays.at(-1), STORE);
+  const circTarget = await finishCheck('circulation');
+  const circSaved = await page.evaluate(({ k, i }) => JSON.parse(localStorage.getItem(k)).games.circulation.plays[i], { k: STORE, i: circTarget });
   check(typeof circSaved.quizCorrect === 'boolean' && typeof circSaved.flowQuizCorrect === 'boolean' && circSaved.reflection === 'circulation 성찰 테스트',
     '순환 인출 문항·이어서 떠올리기·설명해 보기 기록 실패');
 
@@ -474,7 +612,70 @@ const root = path.resolve(__dirname, '..');
     `탐사대 요약 줄이 '${questHead}…' 형식이 아니다. 화면: ${questLine(summary)} / 복사: ${questLine(copied)}`);
   console.log('허브 기록 요약:\n' + summary);
   console.log('허브 별 표시:', await page.locator('.cab .stars').allTextContents());
+
+  // 별도 가상 기기에서 재시도·다른 탭·삭제 경로를 확인한다(기존 플레이 기록은 보존).
+  const saveCtx = await createContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const resultPage = await saveCtx.newPage(), hubPage = await saveCtx.newPage();
+  if (reducedMotion) await Promise.all([mediaReady.get(resultPage), mediaReady.get(hubPage)]);
+  watchErrors(resultPage); watchErrors(hubPage);
+  await resultPage.goto('file://' + path.join(root, 'games/mendel/index.html'));
+  await resultPage.click('#ar-start'); await resultPage.click('#t-end');
+  const resultPlays = () => resultPage.evaluate(k => JSON.parse(localStorage.getItem(k))?.games.mendel?.plays || [], STORE);
+  await resultPage.evaluate(() => { window.__oldReflection = document.getElementById('ar-refl'); });
+  await hubPage.goto('file://' + path.join(root, 'index.html'));
+  // 다른 탭의 뒤 판이 추가되어도 열린 결과는 원래 판만 고쳐야 한다.
+  await hubPage.evaluate(() => window.Arcade.record('mendel', { stars: 0, score: 0, detail: {} }));
+  await resultPage.fill('#ar-refl', '첫 판 답');
+  await resultPage.waitForTimeout(500);
+  let savedPlays = await resultPlays();
+  check(savedPlays.length === 2 && savedPlays[0].reflection === '첫 판 답' && !savedPlays[1].reflection, '다른 탭의 다음 판에 서술 답이 섞임');
+  await resultPage.fill('#ar-refl', '   '); await resultPage.waitForTimeout(500);
+  check((await resultPlays())[0]?.reflection === '', '미니게임 공백 답이 이전 답을 지우지 않음');
+  await resultPage.fill('#ar-refl', '숨김 직전 답');
+  await resultPage.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    delete document.visibilityState;
+  });
+  check((await resultPlays())[0]?.reflection === '숨김 직전 답', '미니게임 hidden 이벤트 즉시 저장 실패');
+  await resultPage.fill('#ar-refl', 'pagehide 직전 답');
+  await resultPage.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  check((await resultPlays())[0]?.reflection === 'pagehide 직전 답', '미니게임 pagehide 즉시 저장 실패');
+  // 링크 이동만 막아 클릭 뒤에도 같은 카드의 입력·재시도 저장이 살아 있는지 확인한다.
+  await resultPage.evaluate(() => document.getElementById('ar-hub').addEventListener('click', e => e.preventDefault(), { once: true }));
+  await resultPage.fill('#ar-refl', '오락실 클릭 직전 답'); await resultPage.click('#ar-hub');
+  check((await resultPlays())[0]?.reflection === '오락실 클릭 직전 답', '오락실로 클릭 즉시 저장 실패');
+  await resultPage.fill('#ar-refl', '오락실 클릭 뒤 답'); await resultPage.waitForTimeout(500);
+  check((await resultPlays())[0]?.reflection === '오락실 클릭 뒤 답', '오락실로 클릭 뒤 입력 저장 실패');
+  await resultPage.evaluate(() => {
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+  });
+  await resultPage.fill('#ar-refl', '복원 뒤 답'); await resultPage.waitForTimeout(500);
+  check((await resultPlays())[0]?.reflection === '복원 뒤 답', 'pageshow persisted 뒤 입력 저장 실패');
+  await resultPage.fill('#ar-refl', '재시도 전 답'); await resultPage.click('#ar-retry');
+  await resultPage.click('#t-end');
+  await resultPage.evaluate(() => {
+    window.__oldReflection.value = '닫힌 카드 오염';
+    window.__oldReflection.dispatchEvent(new Event('input'));
+  });
+  await resultPage.fill('#ar-refl', '다음 판 답'); await resultPage.waitForTimeout(500);
+  savedPlays = await resultPlays();
+  check(savedPlays.length === 3 && savedPlays[0].reflection === '재시도 전 답' && !savedPlays[1].reflection && savedPlays[2].reflection === '다음 판 답', '다시 하기 뒤 이전 타이머·리스너가 판 기록을 오염시킴');
+  // 같은 답으로 여러 이벤트를 보내도 기록은 추가되지 않는다.
+  await resultPage.evaluate(() => { document.getElementById('ar-refl').dispatchEvent(new Event('compositionend')); window.dispatchEvent(new Event('pagehide')); window.dispatchEvent(new Event('pagehide')); });
+  check((await resultPlays()).length === 3, '같은 답 반복 저장으로 판이 늘어남');
+  hubPage.on('dialog', d => d.accept());
+  await hubPage.click('#clear');
+  await resultPage.fill('#ar-refl', '삭제 뒤 입력'); await resultPage.waitForTimeout(500);
+  check(await hubPage.evaluate(k => localStorage.getItem(k) === null, STORE), '허브 삭제 뒤 입력 저장이 기록을 되살림');
+  await resultPage.fill('#ar-refl', '삭제 뒤 이탈');
+  await resultPage.goto('file://' + path.join(root, 'index.html'));
+  check(await hubPage.evaluate(k => localStorage.getItem(k) === null, STORE), '허브 삭제 뒤 이탈 저장이 기록을 되살림');
+  await saveCtx.close();
+  finishErrors();
   console.log('errors:', errors.length ? errors : 'none');
+  console.log(`무시한 오류: webkit file:// manifest ${ignoredManifestErrors}건`);
   console.log('failures:', failures.length ? failures : 'none');
   if (errors.length || failures.length) process.exitCode = 1;
   await browser.close();

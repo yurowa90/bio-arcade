@@ -164,4 +164,34 @@ chk('소화 전수: 입 침·위 위액·쓸개즙을 모두 제때 쓴 수열�
 chk('소화 전수: salivaMouth·gastricStomach = 입 침·위 위액이 효과를 낸 수열', dWins.every(s => s.salivaMouth === usedAt(s, 'saliva', 'mouth') && s.gastricStomach === usedAt(s, 'gastric', 'stomach')));
 console.log(`소화 전수: 수열 ${dFinals.length}개, 승리 ${dWins.length}개, 별 분포(흡수 정답 가정) ${starDist(dWins)}`);
 
+// 결과 추가와 서술 갱신은 같은 저장 형식에서 서로 독립이다.
+const { appendBattleRecord, patchBattleReflection } = require('../games/quest/js/main.js');
+const savedResults = { records: [], badges: {} };
+const firstResult = appendBattleRecord(savedResults, { gym: 'photo', win: true, stars: 3 });
+chk('결과 직후 대결 기록 1개·최고 배지 저장', savedResults.records.length === 1 && savedResults.badges.photo === 3 && savedResults.records[0].reflection === '');
+chk('서술 갱신은 공백 제거·대결 추가 없음', patchBattleReflection(savedResults, firstResult, '  테스트 답  ') && savedResults.records.length === 1 && savedResults.records[0].reflection === '테스트 답');
+chk('같은 답 반복 갱신은 쓰기 생략', !patchBattleReflection(savedResults, firstResult, '테스트 답') && savedResults.records.length === 1);
+// 같은 밀리초의 두 판도 번호로 구별하며, 이전 미래 시각에 새 시각을 맞추지 않는다.
+const NativeDate = Date, nowAt = '2026-10-05T00:00:00.000Z';
+global.Date = class extends NativeDate { constructor(...args) { super(...(args.length ? args : [nowAt])); } static now() { return NativeDate.parse(nowAt); } };
+const secondResult = appendBattleRecord(savedResults, { gym: 'photo', win: true, stars: 1 });
+const sameTimeResults = { records: [], badges: {} };
+const sameFirst = appendBattleRecord(sameTimeResults, { gym: 'photo', win: true, stars: 3 });
+const sameSecond = appendBattleRecord(sameTimeResults, { gym: 'photo', win: true, stars: 1 });
+const futureResults = { records: [{ at: '2030-01-01T00:00:00.000Z', gym: 'photo' }], badges: {} };
+const currentResult = appendBattleRecord(futureResults, { gym: 'photo', win: true, stars: 2 });
+global.Date = NativeDate;
+chk('새 판 시각은 현재 기기 시각·미래 기록에 묶이지 않음', currentResult.at === nowAt);
+chk('탐사대 제출 기록은 at 키가 맨 앞', Object.keys(futureResults.records[1])[0] === 'at');
+patchBattleReflection(sameTimeResults, sameFirst, '같은 시각 첫 판');
+chk('같은 시각도 판 번호로 구별·최고 배지 유지', sameFirst.at === sameSecond.at && sameFirst.index !== sameSecond.index && sameTimeResults.records[0].reflection === '같은 시각 첫 판' && sameTimeResults.records[1].reflection === '' && savedResults.badges.photo === 3);
+patchBattleReflection(savedResults, firstResult, '첫 판 수정');
+chk('새 판 뒤 이전 판 갱신은 대상 판만 수정', savedResults.records[0].reflection === '첫 판 수정' && savedResults.records[1].reflection === '');
+chk('탐사대 빈 답은 D-051 ④에 따라 이전 답을 지움', patchBattleReflection(savedResults, firstResult, '   ') && savedResults.records[0].reflection === '');
+chk('삭제된 저장에는 대상 판 갱신 없음', !patchBattleReflection(null, firstResult, '되살림 금지'));
+const replacedResults = { records: [{ ...savedResults.records[1], at: '2030-01-01T00:00:00.000Z' }], badges: {} };
+chk('지운 뒤 같은 판 번호라도 시각이 다르면 갱신 없음', !patchBattleReflection(replacedResults, firstResult, '오염 금지') && replacedResults.records[0].reflection === '');
+appendBattleRecord(savedResults, { gym: 'digest', win: false, stars: 0 });
+chk('패배 기록도 남고 패배로 배지를 만들지 않음', savedResults.records.length === 3 && !savedResults.badges.digest);
+
 process.exit(fail ? 1 : 0);

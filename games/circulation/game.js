@@ -200,7 +200,7 @@
     draw();
     if (C.pending(state).type === 'continue' && feedback.ok) await input(undefined);
   }
-  function addFlowQuiz() {
+  function addFlowQuiz(patchPlay) {
     const overlay = $('overlay'), card = overlay.querySelector('.card'), refl = overlay.querySelector('.refl');
     refl.remove();
     const area = document.createElement('div'); area.className = 'flow-quiz';
@@ -213,20 +213,20 @@
       if (!ok) b.classList.add('wrong');
       const fb = area.querySelector('.flow-fb'); fb.hidden = false;
       fb.textContent = (ok ? '정답! ' : '아쉬워요. ') + '좌심실은 온몸으로 혈액을 내보내는 방이다. 온몸까지 혈액을 보내려면 강하게 수축해야 해서 근육 벽이 가장 두껍다. 심방은 바로 이어진 심실로 혈액을 보내므로 벽이 얇다.';
-      A.patchLast('circulation', { flowQuizCorrect: ok }); card.insertBefore(refl, card.querySelector('.row'));
+      patchPlay({ flowQuizCorrect: ok }); card.insertBefore(refl, card.querySelector('.row'));
     });
     refl.querySelector('textarea').placeholder = '발표 원고처럼 네다섯 문장으로 써 보세요.';
   }
   function finish(result) {
     playing = false; document.body.classList.add('finished'); drawHud(); drawCtrl();
-    A.finish($('overlay'), {
+    const patchPlay = A.finish($('overlay'), {
       id: 'circulation', ...result,
       quiz: { q: '폐정맥에 흐르는 혈액은?', options: ['산소가 많은 혈액', '산소가 적은 혈액'], answer: 0,
         explain: '폐정맥에는 산소가 많은 혈액이 흐른다. 「정맥」은 심장으로 들어오는 혈액이 흐르는 혈관이라는 뜻이고, 혈액 속 산소의 양과는 상관없다.' },
       reflection: '우심방의 혈액이 몸을 한 바퀴 돌아 다시 우심방으로 오기까지를 발표하듯 순서대로 쓰세요. 지나는 심장의 방과 혈관, 산소를 받는 곳과 내주는 곳을 넣고, 어디까지가 폐순환이고 어디부터가 온몸순환인지 밝히세요.',
       onRetry: start,
     });
-    addFlowQuiz();
+    addFlowQuiz(patchPlay);
   }
   function start() {
     state = C.newGame(Math.floor(Math.random() * 2 ** 32));

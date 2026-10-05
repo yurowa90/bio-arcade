@@ -77,7 +77,7 @@
     }
     const s1 = STARS[1].filter(v => rec.levelScores[1] >= v).length, s2 = st;
     const stars = Math.min(s1, s2);
-    A.finish($('overlay'), {
+    const patchPlay = A.finish($('overlay'), {
       id: 'basepang', stars, score: rec.levelScores[1] + rec.levelScores[2], detail: rec,
       lines: [`복제 ${rec.levelScores[1]}점 · 전사 ${rec.levelScores[2]}점 (두 단계 중 낮은 별이 최종 별)`,
         `짝 지은 수: A=T ${rec.bonds.AT} · G≡C ${rec.bonds.GC} · DNA–RNA ${rec.bonds.DNA_RNA}. 헛손질 ${rec.invalid.total}번`,
@@ -87,7 +87,7 @@
       reflection: 'DNA가 복제될 때와 유전자의 정보가 RNA로 전사될 때 게임 속 “짝 규칙”이 어떻게 쓰이는지 설명하세요. 이어서 그 RNA의 정보로 단백질이 만들어지는 과정을 설명하세요.',
       onRetry: () => { rec.levelScores = {}; Object.assign(rec.invalid, { total: 0, dnaDnaInTx: 0, sameBase: 0, purinePurine: 0 }); Object.assign(rec.bonds, { AT: 0, GC: 0, DNA_RNA: 0 }); start(1); },
     });
-    addFlowQuiz($('overlay'));
+    addFlowQuiz($('overlay'), patchPlay);
   }
 
   // 10통과1-03-06: 게임은 전사(DNA → RNA)까지만 다루므로, 번역(RNA → 단백질)을 묻는 인출 문항을 하나 더 붙인다.
@@ -100,12 +100,12 @@
     q: '전사로 만든 RNA 가운데 유전자의 정보를 담은 RNA는 리보솜으로 간다. 리보솜에서 이 RNA의 정보에 따라 만들어지는 것은?', options: ['단백질', 'DNA'], answer: 0,
     explain: '리보솜에서 이 RNA의 염기 서열에 따라 단백질이 만들어진다. 이 과정을 번역이라고 한다. 유전자의 정보는 DNA → RNA(전사) → 단백질(번역) 순서로 전달된다.',
   };
-  function addFlowQuiz(ov) {
+  function addFlowQuiz(ov, patchPlay) {
     const first = ov.querySelector('.quiz'), card = ov.querySelector('.card'); if (!card) return;
     // '설명해 보기' 문항에 '단백질'이 들어 있어 같은 화면에 두면 이 문항의 답이 미리 드러난다.
     // 그래서 답을 고르기 전에는 떼어 두었다가 고른 뒤 이 문항 아래에 다시 붙인다.
     // 숨기지 않고 떼는 까닭: 공통 CSS(.refl display:block)가 hidden 속성을 덮어쓰고,
-    // 공통 코드의 성찰 저장(keepRefl)은 누를 때 #ar-refl을 찾으므로 다시 붙이면 그대로 저장된다.
+    // 공통 코드의 성찰 저장(keepRefl)은 같은 textarea를 참조하므로 다시 붙이면 그대로 저장된다.
     const refl = card.querySelector('.refl');
     const box = document.createElement('div'); box.className = 'quiz flow-quiz';
     const opts = FLOW_QUIZ.options.map((o, i) => ({ o, i })).sort(() => Math.random() - 0.5);
@@ -122,7 +122,7 @@
       const fb = box.querySelector('.flow-fb'); fb.hidden = false;
       fb.textContent = (ok ? '정답! ' : '아쉬워요. ') + FLOW_QUIZ.explain;
       if (refl && !refl.isConnected) box.after(refl);
-      A.patchLast('basepang', { flowQuizCorrect: ok });
+      patchPlay({ flowQuizCorrect: ok });
     });
   }
   function start(lv) { level = lv; grid = B.newBoard(lv); moves = MOVES; score = 0; sel = null; busy = false; legend(); render(); }

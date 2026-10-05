@@ -47,6 +47,8 @@
    *   keyup은 끊지 않는다(누르고 있던 키가 눌린 채로 남지 않게). */
   const modals = new Set();   // Arcade가 시작·결과 카드에 쓴 overlay
   const inerted = new Map();  // overlay → 이 코드가 inert를 단 요소들
+  const reflections = new WeakMap();
+  function stopReflection(overlay) { const stop = reflections.get(overlay); if (stop) { reflections.delete(overlay); stop(); } }
   function setBackdrop(overlay, on) {
     const marked = inerted.get(overlay) || [];
     if (!on) { marked.forEach(el => el.removeAttribute('inert')); inerted.delete(overlay); return; }
@@ -67,7 +69,7 @@
     }
     overlay.hidden = false; setBackdrop(overlay, true);
   }
-  function hideModal(overlay) { overlay.hidden = true; setBackdrop(overlay, false); }
+  function hideModal(overlay) { stopReflection(overlay); overlay.hidden = true; setBackdrop(overlay, false); }
   if (typeof document !== 'undefined' && typeof root.addEventListener === 'function') {
     root.addEventListener('keydown', e => {
       for (const o of modals) if (!o.hidden && o.isConnected) { e.stopImmediatePropagation(); return; }
@@ -129,6 +131,7 @@
 
     // 시작 안내 카드
     intro(overlay, { id, rules, onStart }) {
+      stopReflection(overlay);
       const g = Arcade.game(id);
       showModal(overlay);
       overlay.innerHTML = `<div class="card" role="dialog" aria-modal="true">
@@ -146,7 +149,18 @@
     /* 결과 화면: 별 → 인출 문항(2지) → 설명해 보기 → 다시/오락실
      * quiz: { q, options:[...], answer, explain }  reflection: 문항 문자열 */
     finish(overlay, { id, stars, score, lines, detail, quiz, reflection, onRetry }) {
-      Arcade.record(id, { stars, score, detail });
+      stopReflection(overlay);
+      const recorded = Arcade.record(id, { stars, score, detail });
+      const playIndex = recorded.plays.length - 1, playAt = recorded.plays[playIndex].at;
+      let active = true;
+      const patchPlay = patch => {
+        if (!active) return;
+        const d = load(), play = d.games[id]?.plays[playIndex];
+        // 마지막 판을 찾지 않는다. 지웠거나 다른 판으로 바뀌었으면 쓰지 않는다.
+        if (!play || play.at !== playAt) { active = false; return; }
+        if (Object.entries(patch).every(([k, v]) => play[k] === v)) return;
+        Object.assign(play, patch); save(d);
+      };
       showModal(overlay);
       const opts = quiz ? quiz.options.map((o, i) => ({ o, i })).sort(() => Math.random() - 0.5) : [];
       overlay.innerHTML = `<div class="card" role="dialog" aria-modal="true">
@@ -164,13 +178,36 @@
         if (!ok) b.classList.add('wrong');
         const fb = overlay.querySelector('.quiz-fb'); fb.hidden = false;
         fb.textContent = (ok ? '정답! ' : '아쉬워요. ') + quiz.explain;
-        Arcade.patchLast(id, { quizCorrect: ok });
+        patchPlay({ quizCorrect: ok });
       });
-      const keepRefl = () => { const t = overlay.querySelector('#ar-refl'); if (t && t.value.trim()) Arcade.patchLast(id, { reflection: t.value.trim() }); };
+      // 흐름 문항이 label을 잠시 떼었다 붙여도 같은 textarea와 리스너를 쓴다.
+      const textarea = overlay.querySelector('#ar-refl'), card = overlay.querySelector('.card');
+      let timer;
+      const keepRefl = () => { clearTimeout(timer); const answer = textarea?.value.trim(); if (answer !== undefined) patchPlay({ reflection: answer }); };
+      const input = () => { clearTimeout(timer); timer = setTimeout(keepRefl, 300); };
+      const hidden = () => { if (document.visibilityState === 'hidden') keepRefl(); };
+      const deleted = e => { if ((e.key === KEY || e.key === null) && e.newValue === null) active = false; };
+      textarea?.addEventListener('input', input);
+      textarea?.addEventListener('compositionend', input);
+      root.addEventListener('pagehide', keepRefl);
+      root.addEventListener('storage', deleted);
+      document.addEventListener('visibilitychange', hidden);
+      const observer = new MutationObserver(() => { if (overlay.hidden || !overlay.contains(card) || !overlay.isConnected) stopReflection(overlay); });
+      observer.observe(overlay, { attributes: true, attributeFilter: ['hidden'], childList: true, subtree: true });
+      reflections.set(overlay, () => {
+        keepRefl(); active = false; clearTimeout(timer); observer.disconnect();
+        textarea?.removeEventListener('input', input);
+        textarea?.removeEventListener('compositionend', input);
+        root.removeEventListener('pagehide', keepRefl);
+        root.removeEventListener('storage', deleted);
+        document.removeEventListener('visibilitychange', hidden);
+      });
       overlay.querySelector('#ar-retry').onclick = () => { keepRefl(); hideModal(overlay); onRetry(); };
+      // 뒤로 가기로 결과 카드가 복원되어도 같은 판의 입력 저장을 계속한다.
       overlay.querySelector('#ar-hub').onclick = keepRefl;
       // 포커스를 카드로 옮긴다. 버튼이 아니므로 게임 중 누르던 Space·Enter가 '다시 하기'를 누르지 않는다.
-      const card = overlay.querySelector('.card'); card.tabIndex = -1; card.focus({ preventScroll: true });
+      card.tabIndex = -1; card.focus({ preventScroll: true });
+      return patchPlay;
     },
   };
 
