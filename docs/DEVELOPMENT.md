@@ -56,7 +56,7 @@ node -e "global.window=global; const S=require('./shared/standards.js'); const A
 - 그 밖: `A.GAMES`, `A.game(id)`, `A.data()`, `A.student()`, `A.setStudent()`, `A.record()`, `A.patchLast()`, `A.best()`, `A.questBadges()`, `A.hasRecords()`, `A.clearRecords()`, `A.standards()`, `A.standardsHTML()`, `A.stars()`.
 - 결과 카드를 꾸밀 때는 공통 클릭 처리(`.quiz-opts .btn`)에 걸리지 않게 클래스를 따로 쓴다. 혈당은 `addModePicker`, 염기쌍 팡은 `addFlowQuiz`(`.flow-quiz`, `.flow-opts`)를 쓴다.
 - 모달: intro·finish가 뜨면 overlay의 형제 요소에 `inert`를 달고, 캡처 단계 keydown을 끊는다. 게임이 같은 overlay의 `hidden`을 직접 바꿔도 MutationObserver가 맞춘다.
-- 토스트: 공용 함수가 없다. 게임마다 `#toast`와 자체 `toast()`가 있고, 표시 시간은 모든 미니게임이 같은 규칙으로 글자당 약 70ms(최소 2.2초, 최대 6초)다. 가계도도 D-051부터 같다. 탐사대에는 토스트가 없고 대화창을 쓴다.
+- 토스트: 공용 함수가 없다. 게임마다 `#toast`와 자체 `toast()`가 있고, 표시 시간은 모든 미니게임이 같은 규칙으로 글자당 약 70ms(최소 2.2초, 최대 6초)다. 가계도도 D-053부터 같다. 탐사대에는 토스트가 없고 대화창을 쓴다.
 
 ## 6. 테스트 훅
 
@@ -96,7 +96,7 @@ WebKit(아이폰 Safari와 같은 계열의 엔진)으로도 돌릴 수 있다. 
 | `node tests/quest-logic.js` | 1초 미만 | `FAIL` 0, 종료 코드 0 |
 | `node tests/circulation-logic.js` | 약 1분 | `FAIL` 0, 종료 코드 0. 별 전수 분포와 32,000판 시뮬레이션 값을 함께 출력한다 |
 | `node tests/glucose-logic.js` | 수 초 | 종료 코드 0. 혈당 별 기준(54 미만 상한)과 전략별 분포 |
-| `PW=… node tests/ux-common-e2e.js`·`ux-arcade-e2e.js`·`ux-mendel-pedigree-e2e.js <저장소 밖 폴더>` | 각 수 초 | `errors: none`, `failures: none`, 종료 코드 0. 플레이 테스트 반영(D-052) 화면 검사 |
+| `PW=… node tests/ux-common-e2e.js`·`ux-arcade-e2e.js`·`ux-mendel-pedigree-e2e.js <저장소 밖 폴더>` | 각 수 초 | `errors: none`, `failures: none`, 종료 코드 0. 플레이 테스트 반영(D-054) 화면 검사 |
 | `node tests/quest-tune-photo.js` | 1초 미만 | 보고만 한다. 광합성 규칙을 바꿀 때 별 분포를 본다 |
 | `PW=~/.cache/bio-arcade-tools/node_modules/playwright node tests/arcade-e2e.js <저장소 밖 폴더>` | 약 2분 | `errors: none`, `failures: none`, 종료 코드 0 |
 | `PW=~/.cache/bio-arcade-tools/node_modules/playwright node tests/quest-e2e.js <저장소 밖 폴더>` | 약 15초 | `FAIL` 없음, `errors: none`, 종료 코드 0 |

@@ -2,7 +2,7 @@
 // hub-1·mendel-6·basepang-4·run-6·glucose-5: 시작 카드 안 복귀 링크로 허브 이동, 기록 불변.
 // circulation-6(검증 B CI-5): preventScroll 포커스로 390×664에서도 오마주·제목이 보임.
 // 공통 터치 높이(검증 B CI-6): 시작 뒤 헤더 링크 44px 이상, 가로 넘침·링크 가림 없음.
-// hub-2·hub-4(D-052 Q7): 버튼 아래 상태 영역, 복사 성공·실패, 복사·저장 뒤 제출 안내.
+// hub-2·hub-4(D-054 Q7): 버튼 아래 상태 영역, 복사 성공·실패, 복사·저장 뒤 제출 안내.
 // hub-3: 탐사대는 배지 N/M, 미니게임은 최고 별, 기록 없음과 별 0 구분(계산 규칙 유지).
 // mendel-8: 공통 결과 버튼 줄을 sticky로 고정. 처음·중간·끝에서 탭 가능하고 서술 칸도 접근 가능.
 const playwright = require(process.env.PW || 'playwright');

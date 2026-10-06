@@ -49,7 +49,7 @@ node tests/glucose-logic.js        # 혈당 지키기 별 기준. 종료 코드 
 ```bash
 PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/quest-e2e.js /tmp/bio-arcade-e2e/quest     # 약 15초
 PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/arcade-e2e.js /tmp/bio-arcade-e2e/arcade   # 약 2분
-for s in ux-common ux-arcade ux-mendel-pedigree; do PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/$s-e2e.js /tmp/bio-arcade-e2e/$s; done   # 플레이 테스트 반영 화면 검사(D-052)
+for s in ux-common ux-arcade ux-mendel-pedigree; do PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/$s-e2e.js /tmp/bio-arcade-e2e/$s; done   # 플레이 테스트 반영 화면 검사(D-054)
 ```
 
 통과 기준: 종료 코드 0, `errors: none`, `failures: none`(arcade), `FAIL` 줄 없음(quest). 자동 플레이 결과가 "다시 도전!"인 것은 정상이다.

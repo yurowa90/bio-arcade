@@ -90,7 +90,7 @@ fs.mkdirSync(out, { recursive: true });
       const days = await page.textContent('#days');
       await page.click('#t-test');
       check((await page.textContent('#overlay h2')) === '유전자형 추론' && await page.textContent('#days') === days, `${prefix} mendel-1 추론은 하루를 쓰지 않음`);
-      // mendel-5 / D-052 Q6: 첫 추론에서 RRYY 오답을 고르면 실제 부모 생식세포·자손을 함께 설명한다.
+      // mendel-5 / D-054 Q6: 첫 추론에서 RRYY 오답을 고르면 실제 부모 생식세포·자손을 함께 설명한다.
       await page.click('[data-g="RRYY"]');
       const why = await page.textContent('#overlay .quiz-fb');
       check(why.includes('아쉽다') && why.includes('부모 RRYY는 RY 생식세포만, rryy는 ry 생식세포만 만든다.') && why.includes('자손은 모두 RrYy가 된다.'), `${prefix} mendel-5 부모 RY·ry와 자손 RrYy 오답 해설`);
@@ -171,7 +171,7 @@ fs.mkdirSync(out, { recursive: true });
       });
       check(reference.present && JSON.stringify(reference.ids) === JSON.stringify(reference.expected) && reference.noAnswers && reference.alongside && reference.affected, `${prefix} pedigree-2 표시·정답 없는 4단계 축소본과 원래 형질 유지`);
       await page.fill('#ar-refl', '가족의 형질을 근거로 판단했다.'); await page.waitForTimeout(500);
-      check(await page.evaluate(() => window.Arcade.data().games.pedigree.plays.at(-1).reflection === '가족의 형질을 근거로 판단했다.'), `${prefix} D-051 축소본 추가 뒤 서술 답 자동 저장 유지`);
+      check(await page.evaluate(() => window.Arcade.data().games.pedigree.plays.at(-1).reflection === '가족의 형질을 근거로 판단했다.'), `${prefix} D-053 축소본 추가 뒤 서술 답 자동 저장 유지`);
       await page.screenshot({ path: path.join(out, `pedigree-${height}-reflection.png`) });
       check(await noOverflow(), `${prefix} 가계도 결과 카드 가로 넘침 없음`);
       await page.click('#ar-retry');

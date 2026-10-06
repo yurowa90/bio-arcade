@@ -187,7 +187,7 @@ patchBattleReflection(sameTimeResults, sameFirst, '같은 시각 첫 판');
 chk('같은 시각도 판 번호로 구별·최고 배지 유지', sameFirst.at === sameSecond.at && sameFirst.index !== sameSecond.index && sameTimeResults.records[0].reflection === '같은 시각 첫 판' && sameTimeResults.records[1].reflection === '' && savedResults.badges.photo === 3);
 patchBattleReflection(savedResults, firstResult, '첫 판 수정');
 chk('새 판 뒤 이전 판 갱신은 대상 판만 수정', savedResults.records[0].reflection === '첫 판 수정' && savedResults.records[1].reflection === '');
-chk('탐사대 빈 답은 D-051 ④에 따라 이전 답을 지움', patchBattleReflection(savedResults, firstResult, '   ') && savedResults.records[0].reflection === '');
+chk('탐사대 빈 답은 D-053 ④에 따라 이전 답을 지움', patchBattleReflection(savedResults, firstResult, '   ') && savedResults.records[0].reflection === '');
 chk('삭제된 저장에는 대상 판 갱신 없음', !patchBattleReflection(null, firstResult, '되살림 금지'));
 const replacedResults = { records: [{ ...savedResults.records[1], at: '2030-01-01T00:00:00.000Z' }], badges: {} };
 chk('지운 뒤 같은 판 번호라도 시각이 다르면 갱신 없음', !patchBattleReflection(replacedResults, firstResult, '오염 금지') && replacedResults.records[0].reflection === '');
