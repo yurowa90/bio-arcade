@@ -141,9 +141,11 @@
         <ul class="rules">${rules.map(r => `<li>${r}</li>`).join('')}</ul>
         ${Arcade.standardsHTML(g.standards, g.target)}
         <p class="best">최고 기록 ${Arcade.stars(Arcade.best(id))}</p>
-        <button class="btn primary big" id="ar-start">시작</button></div>`;
+        <button class="btn primary big" id="ar-start">시작</button>
+        <a class="btn big" id="ar-intro-hub" href="../../index.html">← 오락실</a></div>`;
       overlay.querySelector('#ar-start').onclick = () => { hideModal(overlay); onStart(); };
-      overlay.querySelector('#ar-start').focus();
+      overlay.scrollTop = 0;
+      overlay.querySelector('#ar-start').focus({ preventScroll: true });
     },
 
     /* 결과 화면: 별 → 인출 문항(2지) → 설명해 보기 → 다시/오락실
@@ -171,7 +173,7 @@
           <div class="quiz-opts">${opts.map(({ o, i }) => `<button class="btn" data-i="${i}">${o}</button>`).join('')}</div>
           <p class="quiz-fb" hidden></p></div>` : ''}
         ${reflection ? `<label class="refl"><b>설명해 보기</b> — ${reflection}<textarea id="ar-refl" placeholder="두세 문장으로 써 보세요."></textarea></label>` : ''}
-        <div class="row"><button class="btn" id="ar-retry">다시 하기</button><a class="btn primary" id="ar-hub" href="../../index.html">오락실로</a></div></div>`;
+        <div class="row card-actions"><button class="btn" id="ar-retry">다시 하기</button><a class="btn primary" id="ar-hub" href="../../index.html">오락실로</a></div></div>`;
       if (quiz) overlay.querySelectorAll('.quiz-opts .btn').forEach(b => b.onclick = () => {
         const ok = +b.dataset.i === quiz.answer;
         overlay.querySelectorAll('.quiz-opts .btn').forEach(x => { x.disabled = true; if (+x.dataset.i === quiz.answer) x.classList.add('right'); });

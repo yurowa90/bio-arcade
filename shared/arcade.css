@@ -17,7 +17,7 @@ button, a.btn { font: inherit; cursor: pointer; }
   width: 100%; max-width: 480px; display: flex; align-items: center; gap: 10px;
   padding: max(8px, env(safe-area-inset-top)) 12px 8px; color: #fff;
 }
-.bar a { color: #fff; text-decoration: none; font-weight: 800; font-size: 15px; background: rgba(255, 255, 255, .12); padding: 5px 10px; border-radius: 8px; }
+.bar a { display: inline-flex; align-items: center; min-height: 44px; flex-shrink: 0; color: #fff; text-decoration: none; font-weight: 800; font-size: 15px; background: rgba(255, 255, 255, .12); padding: 5px 10px; border-radius: 8px; }
 .bar b { flex: 1; font-size: 16px; }
 .bar .hud { display: flex; gap: 8px; font-size: 13px; }
 .bar .hud span { background: rgba(255, 255, 255, .14); padding: 3px 8px; border-radius: 999px; }
@@ -26,7 +26,7 @@ canvas.game { width: 100%; display: block; border-radius: 14px; background: #fff
 
 .overlay { position: fixed; inset: 0; background: rgba(12, 8, 24, .72); display: grid; place-items: center; padding: 14px; z-index: 20; overflow: auto; }
 .overlay[hidden] { display: none; }
-.card { background: var(--panel); border-radius: 18px; padding: 18px 16px; width: 100%; max-width: 440px; max-height: 92vh; overflow: auto; box-shadow: 0 6px 0 rgba(0, 0, 0, .35); word-break: keep-all; line-height: 1.5; }
+.card { background: var(--panel); border-radius: 18px; padding: 18px 16px; width: 100%; max-width: 440px; max-height: min(92vh, calc(100vh - 28px)); max-height: min(92dvh, calc(100dvh - 28px)); overflow: auto; box-shadow: 0 6px 0 rgba(0, 0, 0, .35); word-break: keep-all; line-height: 1.5; }
 .card:focus { outline: none; } /* 결과 카드는 포커스만 받아 둔다(arcade.js finish) */
 .card h2 { margin: 2px 0 6px; font-size: 24px; }
 .card p { margin: 6px 0; font-size: 15px; }
@@ -43,6 +43,8 @@ canvas.game { width: 100%; display: block; border-radius: 14px; background: #fff
 .btn:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 .row { display: flex; gap: 8px; margin-top: 12px; }
 .row .btn { flex: 1; }
+/* 짧은 화면에서도 결과 카드의 두 버튼을 온전히 보인다. */
+.card-actions { position: sticky; bottom: 0; z-index: 1; padding-top: 10px; background: var(--panel); }
 .stars { color: var(--gold); letter-spacing: 3px; }
 .stars .off { color: #d9d0bb; }
 .big-stars { font-size: 34px; text-align: center; margin: 4px 0 !important; }
