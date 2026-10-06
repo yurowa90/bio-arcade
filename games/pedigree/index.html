@@ -16,6 +16,10 @@
     .field { background: #fff; border: 3px solid; border-color: #7b7b7b #fff #fff #7b7b7b; }
     .field svg { width: 100%; display: block; }
     .field .person { cursor: pointer; }
+    .field .person:focus-visible .touch-target { stroke: #6b4fa0; stroke-width: 3; stroke-dasharray: 3 2; }
+    .pedigree-reference { margin: 8px 0; padding: 8px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+    .pedigree-reference figcaption { font-size: 13px; margin-bottom: 4px; }
+    .pedigree-reference svg { display: block; width: 100%; max-width: 320px; margin: auto; }
     .lvl { color: #fff; margin: 8px 2px 4px; font-size: 14px; }
     .lvl b { color: #f2c14e; }
     .legend { color: #d9d1f2; font-size: 12px; margin: 6px 2px; line-height: 1.5; }
@@ -35,8 +39,8 @@
       <div class="field" id="field"></div>
     </div>
     <p class="legend">□ 남자 ○ 여자 · 검게 칠함 = 형질 발현 · 눌러서 표시: <b>◐ 보인자</b> → <b>? 모름</b> → 표시 없음<br>표시 가능한 사람은 <b>“반드시” 보인자인 사람</b>뿐이다. 보인자일 수도 있고 아닐 수도 있는 사람에게 표시하면 지뢰를 밟은 것!</p>
-    <button class="btn primary big judge" id="judge">판정하기</button>
     <div id="result"></div>
+    <button class="btn primary big judge" id="judge">판정하기</button>
     <div class="toast" id="toast"></div>
   </main>
   <div class="overlay" id="overlay" hidden></div>

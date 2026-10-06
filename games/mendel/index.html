@@ -10,26 +10,28 @@
   <style>
     body { background: #24361f; }
     .garden { background: #8b6b43; border-radius: 16px; padding: 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; box-shadow: inset 0 -6px 0 rgba(0, 0, 0, .2); }
-    .pot { aspect-ratio: 1; border-radius: 12px; background: #6b4f2e; border: 3px solid transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; font-size: 11px; font-weight: 800; position: relative; padding: 2px; }
+    .pot { aspect-ratio: 1; border-radius: 12px; background: #6b4f2e; border: 3px solid transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 800; position: relative; padding: 2px; }
     .pot.sel { border-color: #f2c14e; background: #7d5d36; }
     .pot.empty { opacity: .45; }
     .pot svg { width: 58%; height: auto; }
-    .pot .tag { position: absolute; top: 3px; left: 4px; font-size: 10px; opacity: .85; }
+    .pot .tag { position: absolute; top: 3px; left: 4px; font-size: 12px; opacity: .85; }
     .pot .gt { background: rgba(0, 0, 0, .35); border-radius: 6px; padding: 0 4px; margin-top: 2px; }
     .tools { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 10px 0; }
     .tools .btn { font-size: 14px; padding: 9px 6px; }
+    .tools .btn small { display: block; font-size: 12px; margin-top: 3px; }
     .info { background: var(--panel); border-radius: 14px; padding: 10px; font-size: 13px; line-height: 1.5; }
     .info h3 { margin: 0 0 4px; font-size: 14px; }
     .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin: 6px 0; }
     .cards.g9 { grid-template-columns: repeat(5, 1fr); }
-    .cardx { border: 2px dashed #cfc3a8; border-radius: 8px; text-align: center; padding: 4px 2px; font-size: 10px; color: #a79c84; min-height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .cardx { border: 2px dashed #cfc3a8; border-radius: 8px; text-align: center; padding: 4px 2px; font-size: 12px; color: #a79c84; min-height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
     .cardx.got { border-style: solid; border-color: #6aa84f; color: var(--ink); background: #f2f8ec; }
     .cardx svg { width: 26px; height: 26px; }
     .note-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
     .note-table th, .note-table td { border-bottom: 1px solid var(--line); padding: 3px 4px; text-align: center; }
-    .offspring { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin: 8px 0; }
-    .seed { aspect-ratio: 1; border-radius: 8px; border: 2px solid #ddd3bd; background: #fff; display: grid; place-items: center; }
+    .offspring { display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); gap: 4px; margin: 8px 0; }
+    .seed { aspect-ratio: 1; min-width: 44px; min-height: 44px; padding: 0; border-radius: 8px; border: 2px solid #ddd3bd; background: #fff; display: grid; place-items: center; position: relative; }
     .seed.keep { border-color: #e2574c; background: #fde9e6; }
+    .seed.keep::after { content: '✓'; position: absolute; top: 0; right: 1px; color: #8c241e; background: #fff; border-radius: 4px; font-size: 16px; font-weight: 800; line-height: 1; }
     .seed svg { width: 80%; }
     .days { font-weight: 800; }
   </style>
@@ -41,7 +43,7 @@
     <div class="tools">
       <button class="btn" id="t-cross">교배 (화분 2개 선택)</button>
       <button class="btn" id="t-self">자가 수분 (1개)</button>
-      <button class="btn" id="t-test">검정 교배로 유전자형 알아내기</button>
+      <button class="btn" id="t-test">유전자형 알아내기</button>
       <button class="btn" id="t-drop">화분 비우기</button>
     </div>
     <div class="info" id="info"></div>

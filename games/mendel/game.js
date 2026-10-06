@@ -32,11 +32,17 @@
       const i = +b.dataset.i; if (!S.pots[i]) return;
       S.sel = S.sel.includes(i) ? S.sel.filter(x => x !== i) : [...S.sel, i].slice(-2);
       render();
+      $('garden').querySelector(`[data-i="${i}"]`).focus({ preventScroll: true });
       const p = S.pots[i];
       if (S.sel.includes(i)) info(`${G.PHENO_NAME[G.phenoKey(p)]} 완두 — 유전자형 ${p.known ? G.genotype(p) : '모름'}${p.from ? ` (부모: ${p.from})` : ''}`);
     });
     $('days').textContent = S.days;
     $('cardcount').textContent = `${S.geno.size}/9`;
+    const selected = S.sel.length === 1 && S.pots[S.sel[0]];
+    const method = selected && !selected.known
+      ? (G.phenoKey(selected) === 'ry' || (selected.infer && !selected.infer.failed) ? '추론 (하루 안 씀)' : '검정 교배 (하루 소요)')
+      : '화분 1개 선택';
+    $('t-test').innerHTML = `유전자형 알아내기<small>${selected && selected.known ? '이미 확인한 완두' : method}</small>`;
   }
   function cardsHTML() {
     const pk = ['RY', 'Ry', 'rY', 'ry'];
@@ -49,7 +55,7 @@
   }
   function notesHTML() {
     if (!S.notes.length) return '';
-    return `<h3>실험 노트 (관찰 수 / 기대 비율)</h3><table class="note-table"><tr><th>교배</th><th>둥·황</th><th>둥·녹</th><th>주·황</th><th>주·녹</th></tr>
+    return `<h3>실험 노트 (관찰 개수 / 기대 개수, 16개 중)</h3><table class="note-table"><tr><th>교배</th><th>둥·황</th><th>둥·녹</th><th>주·황</th><th>주·녹</th></tr>
       ${S.notes.slice(-4).reverse().map(n => { const e = noteExpected(n); return `<tr><td>${noteLabel(n)}</td>${['RY', 'Ry', 'rY', 'ry'].map(k => `<td>${n.tally[k]}<br><span style="color:#888">${e ? (e[k] * 16).toFixed(1) : '?'}</span></td>`).join('')}</tr>`; }).join('')}</table>
       <p class="note">회색 숫자는 16개 중 이론상 기대되는 개수. 부모의 유전자형을 알아야 계산할 수 있어서, 모르는 동안은 ?로 둔다. 개수가 적으면 우연 때문에 기대와 조금씩 다를 수 있다.</p>`;
   }
@@ -100,9 +106,12 @@
     const newPheno = collectPheno(tally);
     const inf = inferable(a, b);
     spendDay();
-    showOffspring(kids, tally, newPheno, `${label(a)}${kind === 'self' ? ' 자가 수분' : ` × ${label(b)}`}`, inf);
+    const gametes = p => [...new Set(p.shape.flatMap(s => p.color.map(c => s + c)))].join(', ');
+    const sameParents = G.genotype(a) === G.genotype(b);
+    const why = inf ? `부모 ${G.genotype(a)}는 ${gametes(a)} 생식세포만${sameParents ? '' : `, ${G.genotype(b)}는 ${gametes(b)} 생식세포만`} 만든다. 두 생식세포가 만나면 자손은 모두 ${inf}가 된다.` : '';
+    showOffspring(kids, tally, newPheno, `${label(a)}${kind === 'self' ? ' 자가 수분' : ` × ${label(b)}`}`, inf, why);
   }
-  function showOffspring(kids, tally, newPheno, title, inf) {
+  function showOffspring(kids, tally, newPheno, title, inf, why) {
     const free = S.pots.filter(p => !p).length;
     const keep = new Set();
     const ov = openOverlay(`<div class="card"><h2>씨앗 16개 수확!</h2><p>${title}</p>
@@ -119,7 +128,7 @@
     });
     // 같은 교배에서 심은 완두는 추론 문항과 정답이 같으므로 추론 상태를 함께 쓴다.
     // 하나라도 추론을 틀리면 정답이 공개되므로, 이 교배의 완두는 모두 그 판 동안 검정 교배로만 확인한다.
-    const inferState = inf ? { failed: false } : null;
+    const inferState = inf ? { failed: false, why } : null;
     $('plant').onclick = () => {
       for (const i of keep) {
         const slot = S.pots.findIndex(p => !p);
@@ -191,7 +200,7 @@
     if (G.phenoKey(p) === 'ry') return askGenotype(p, 'infer', '<p class="note">주름지고 녹색인 형질은 둘 다 열성이다. 열성 형질이 겉으로 드러나려면 열성 대립유전자만 가져야 한다.</p>',
       { why: '주름진 모양과 녹색은 둘 다 열성 형질이다. 열성 형질은 열성 대립유전자만 가질 때 나타나므로 rr, yy다.' });
     if (p.infer && !p.infer.failed) return askGenotype(p, 'infer', `<p class="note">부모(${p.from})의 유전자형을 모두 알고 있다. 부모가 만들 수 있는 생식세포를 떠올려 보자.</p>`,
-      { why: '부모가 만들 수 있는 생식세포의 조합이 한 가지뿐이면 자손의 유전자형도 하나로 정해진다.' });
+      { why: p.infer.why });
     // 추론을 틀린 교배의 완두: 처음 누르면 안내만 하고(하루를 쓰지 않음), 다시 누르면 검정 교배를 한다
     if (p.infer && !p.warned) {
       p.warned = true;
