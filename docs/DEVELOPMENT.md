@@ -95,6 +95,8 @@ WebKit(아이폰 Safari와 같은 계열의 엔진)으로도 돌릴 수 있다. 
 |---|---|---|
 | `node tests/quest-logic.js` | 1초 미만 | `FAIL` 0, 종료 코드 0 |
 | `node tests/circulation-logic.js` | 약 1분 | `FAIL` 0, 종료 코드 0. 별 전수 분포와 32,000판 시뮬레이션 값을 함께 출력한다 |
+| `node tests/glucose-logic.js` | 수 초 | 종료 코드 0. 혈당 별 기준(54 미만 상한)과 전략별 분포 |
+| `PW=… node tests/ux-common-e2e.js`·`ux-arcade-e2e.js`·`ux-mendel-pedigree-e2e.js <저장소 밖 폴더>` | 각 수 초 | `errors: none`, `failures: none`, 종료 코드 0. 플레이 테스트 반영(D-052) 화면 검사 |
 | `node tests/quest-tune-photo.js` | 1초 미만 | 보고만 한다. 광합성 규칙을 바꿀 때 별 분포를 본다 |
 | `PW=~/.cache/bio-arcade-tools/node_modules/playwright node tests/arcade-e2e.js <저장소 밖 폴더>` | 약 2분 | `errors: none`, `failures: none`, 종료 코드 0 |
 | `PW=~/.cache/bio-arcade-tools/node_modules/playwright node tests/quest-e2e.js <저장소 밖 폴더>` | 약 15초 | `FAIL` 없음, `errors: none`, 종료 코드 0 |

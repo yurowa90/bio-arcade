@@ -21,7 +21,7 @@ model: sonnet
 1. 준비: Node 버전(24.21.0), `git status -sb`. 추적되지 않은 파일(`git status --porcelain --untracked-files=all`의 `??`)을 따로 적어 둔다.
 2. 문법: `git ls-files '*.js'`와 추적되지 않은 `.js`에 `node --check`.
 3. `node tests/quest-logic.js`.
-4. `tests/circulation-logic.js`가 있으면 `node tests/circulation-logic.js`. 없으면 '해당 없음'.
+4. `node tests/circulation-logic.js`와 `node tests/glucose-logic.js`(각각 종료 코드 0).
 5. 성취기준 대조: `docs/DEVELOPMENT.md` 3절 명령. 두 배열이 비어야 통과.
 6. `sw.js` 목록: `docs/DEVELOPMENT.md` 7절 명령의 출력과 `sw.js`의 `const FILES = [` ~ `];` 사이를 `diff`로 비교한다. 추적되지 않은 새 파일은 7절 명령에 나오지 않으므로 따로 적는다.
 7. `quest-e2e`, 그다음 `arcade-e2e`(명령은 SKILL.md 5단계).

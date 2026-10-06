@@ -30,7 +30,8 @@ for f in $(git ls-files '*.js'); do node --check "$f" || echo "FAIL $f"; done
 ```bash
 node tests/quest-logic.js          # 탐사대. FAIL 0이어야 한다
 node tests/quest-tune-photo.js     # 광합성 규칙을 바꿨다면 별 분포를 확인한다
-[ -f tests/circulation-logic.js ] && node tests/circulation-logic.js   # 혈액 순환 일주(파일이 생긴 뒤). 종료 코드 0
+node tests/circulation-logic.js    # 혈액 순환 일주. 종료 코드 0
+node tests/glucose-logic.js        # 혈당 지키기 별 기준. 종료 코드 0
 ```
 
 ## 3. 성취기준 대조 (shared/arcade.js의 GAMES나 shared/standards.js를 바꿨을 때)
@@ -48,6 +49,7 @@ node tests/quest-tune-photo.js     # 광합성 규칙을 바꿨다면 별 분포
 ```bash
 PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/quest-e2e.js /tmp/bio-arcade-e2e/quest     # 약 15초
 PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/arcade-e2e.js /tmp/bio-arcade-e2e/arcade   # 약 2분
+for s in ux-common ux-arcade ux-mendel-pedigree; do PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/$s-e2e.js /tmp/bio-arcade-e2e/$s; done   # 플레이 테스트 반영 화면 검사(D-052)
 ```
 
 통과 기준: 종료 코드 0, `errors: none`, `failures: none`(arcade), `FAIL` 줄 없음(quest). 자동 플레이 결과가 "다시 도전!"인 것은 정상이다.

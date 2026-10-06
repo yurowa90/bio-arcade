@@ -6,13 +6,13 @@
 ## 상태 스냅샷
 
 - 게임 7종(생명 탐사대, 멘델의 텃밭, 가계도 지뢰찾기, 염기쌍 팡, 에너지 런, 혈액 순환 일주, 혈당 지키기)과 허브가 동작한다.
-- 학생용 주소: https://bio-arcade-f5u1.netlify.app (Netlify, 2026-10-05 커밋 aa78a28 기준 배포, 캐시 bio-arcade-v3. 배포 뒤 모든 페이지 200, https 전환, 오프라인에서 허브·탐사대·혈액 순환 일주 열림, 계정 이름 0건 확인). 학생용은 아직 aa78a28 기준이고, 이후 변경(D-051 구현, 커밋 4615492)은 배포 전이다. 다시 배포하는 절차는 `/deploy` 스킬(사용자 확인 뒤).
-- 마지막 전체 검증(2026-10-06, D-051 구현 뒤, 커밋 4615492): 문법 검사 22개 통과, `quest-logic` 86 PASS, `circulation-logic` 50 PASS, `arcade-e2e`·`quest-e2e` 8조합(Chromium·WebKit × 동작 줄이기 끔·켬) 모두 errors·failures none, 실제 Chromium bfcache 검사 2건 통과, 브라우저 화면 변이 32/32 검출(저장소 밖 복사본). WebKit 실행에서는 file:// manifest 오류만 걸러 건수를 출력한다.
+- 학생용 주소: https://bio-arcade-f5u1.netlify.app (Netlify, 2026-10-05 커밋 aa78a28 기준 배포, 캐시 bio-arcade-v3. 배포 뒤 모든 페이지 200, https 전환, 오프라인에서 허브·탐사대·혈액 순환 일주 열림, 계정 이름 0건 확인). 학생용은 아직 aa78a28 기준이고, 이후 변경(D-051·D-052)은 배포 전이다. 다시 배포하는 절차는 `/deploy` 스킬(사용자 확인 뒤).
+- 마지막 전체 검증(2026-10-06, D-052 반영 뒤): 문법 검사 26개, `quest-logic` 86, `circulation-logic` 50, `glucose-logic` 통과, 성취기준 대조·`sw.js` 목록 일치, E2E 5종(arcade·quest·ux-common·ux-arcade·ux-mendel-pedigree) × Chromium·WebKit × 동작 줄이기 끔·켬 20조합 모두 errors·failures none. 염기쌍 팡 판은 360×640~412×780 다섯 크기에서 마지막 줄까지 화면 안, 칸 44px 이상.
 - 교차 검토 지적 65건(확정 53, 의견 갈림 12) 가운데 확정 지적은 모두 고쳤고, 의견 갈림 지적은 고치거나 결정으로 정리했다(`docs/DECISIONS.md`).
 
 ## 다음 할 일
 
-- **T7 (착수 전) 플레이 테스트 개선(D-052).** `docs/review-2026-10-06-playtest.md`의 확인된 medium 15건과 교사 판단 9건(Q1~Q9)을 권장안대로 반영한다. 수정은 Codex(Sol·Astra) → Opus 검토(`/gpt-delegate`). Q1은 별 기준을 바꾸므로, 반응 조절 전략의 별 3이 유지되는지 시뮬레이션으로 확인한 뒤 확정한다. 끝나면 `/arcade-verify`, 커밋, Netlify 재배포(교사 확인 뒤).
+- **T7 (배포만 남음) 플레이 테스트 개선(D-052).** 확인된 medium 15건과 교사 판단 9건을 반영했다(Sol·Astra 구현 → Opus 검토에서 염기쌍 배치 회귀 등 지적 → Sol 수정). 혈당 별 상한(54 미만 누적 0.1초 이상이면 별 최대 1) 확정. 남은 것: 교사 확인 뒤 `/deploy`로 Netlify 재배포.
 - **T2 실기기 확인.** 아이폰 Safari와 안드로이드 Chrome에서 허브 확인 창, PWA 설치·오프라인 실행, 입력칸 자동 확대를 본다. 교사가 시간이 날 때 한다(2026-10-03 보류). 혈액 순환 일주의 작은 화면(아이폰 SE·mini Safari, 구형 안드로이드)에서 판 글자 크기와 주사위 글리프 표시, 홈 화면 실행 상태의 innerHeight도 본다(D-049).
 
 ## 교사 판단이 필요한 미결 사항

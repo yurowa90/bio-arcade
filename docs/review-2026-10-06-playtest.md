@@ -220,15 +220,8 @@
 
 반박은 아니지만 GPT의 판단이 정정된 곳이 둘 있다. 하나는 glucose-1의 수치다. GPT는 '매초 0.45초 누름 → 95%·별 3개'를 들었으나 위상 10가지에서 모두 76~84%·별 2개로 재현되지 않았다(별 3개는 주기 3~4초일 때 92~94%). 0.5초 교대 → 84%·별 2개·54 미만 4.8초는 GPT 설명과 일치했다. 맹목 리듬이 별 2개 이상을 받는 것은 누름 비율 0.45~0.55일 때뿐이다(격자 66개 중 13개). 다른 하나는 quest-2다. GPT가 '불확실'로 둔 것이 실행해 보니 매번 재현되는 확실한 결함이었다. 검토자 A는 GPT의 사실 관계(코드 줄·측정값·캡처)가 대체로 정확했고 심각도를 전반적으로 높게 잡았다고 평했다.
 
-## 6. 자료 위치 (저장소 밖, 재현용)
+## 6. 자료 위치 (저장소 밖)
 
-모두 `/private/tmp/claude-501/playtest/` 아래에 있다. 임시 폴더라 시스템 정리로 사라질 수 있으니 보존하려면 다른 곳으로 옮겨 둔다.
+플레이 테스트의 영상·캡처·분석 원본(`/private/tmp/claude-501/playtest/` 아래의 실행 기록, GPT-6-Astra 분석 원본, 검토자 확인 결과, 가상 학생 스크립트)은 2026-10-06 세션을 다시 시작할 때 지워졌다. 영상 8개는 대화에서 교사에게 보냈다. 이 문서의 지적 ID(`quest-2` 같은 꼴)는 지워진 분석 원본의 번호이고, 원본이 없는 지금은 이 문서가 그 번호의 유일한 기록이다.
 
-- `runs/overview.md`: 게임 8개 × 엔진 2의 시간·탭 수·별·점수·자동 관찰 건수.
-- `runs/videos-index.md`: 게임별 영상(webm) 경로와 캡처 폴더. 영상은 `runs/chromium-01/<게임>/video/`, `runs/webkit-01/<게임>/video/`에 있고, 첫 실행이 실패해 다시 돌린 것은 `runs/rerun-chromium-basepang`·`rerun-chromium-run`·`rerun-chromium-hub`·`rerun-webkit-hub`를 쓴다. 폴더마다 `frames/`(캡처 PNG), `timeline.json`(시간순 기록), `summary.json`(결과·자동 관찰)이 있다.
-- `findings-all.md`: GPT-6-Astra 분석 원본(게임별 지적 59건, 이 문서의 지적 ID 기준). 게임별 JSON은 `gpt/findings-<게임>.json`, 분석 지시서는 `gpt/analyze-<게임>.txt`.
-- `verified-A.md`: 검토자 A의 확인 결과(허브·탐사대·멘델·가계도). 재현 스크립트와 결과는 `verify-A/verify.js`·`verify-out.json`·`quest2-664.png`·`quest2-844.png`.
-- `verified-B.md`: 검토자 B의 확인 결과(염기쌍·에너지 런·혈당·순환). 시뮬레이션은 `verify-B/basepang-chain-sim.js`·`run-toast-sim.js`·`glucose-sim.js`(`glucose-sim2.js`·`glucose-sim3.js`).
-- `scripts/`: 가상 학생 스크립트와 `run-all.sh`. 실행법과 게임별 전략(어디서 일부러 틀렸는지)은 `README-playtest.md`에 있다. 스크립트 수정 3건과 재실행 사유는 `runs/relay-fixes.md`다.
-
-`verified-B.md`의 지적 번호는 GPT JSON 파일의 순서라 `findings-all.md`와 다르다. 이 문서는 `findings-all.md`의 번호를 쓴다. 염기쌍 BP-3·4·5·6·7·8은 basepang-7·3·8·4·5·6, 에너지 런 RN-5·6·7·8은 run-8·5·6·7, 혈당 GL-2·3·4는 glucose-3·4·2, 순환 CI-5·6·7은 circulation-6·7·5다. 나머지는 번호가 같다.
+남은 것은 수정 단계의 작업 폴더 `/private/tmp/claude-501/playtest/fix/`(수정 뒤 E2E 출력 `e2e2/`, Codex 수정 기록 `gpt/`, 검토 중 재현 스크립트·캡처 `review/`, `review-prompt.txt`)뿐이다. 임시 폴더라 이것도 시스템 정리로 사라질 수 있다.
