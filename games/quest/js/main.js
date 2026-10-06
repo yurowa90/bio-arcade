@@ -180,6 +180,7 @@
     $('panel-title').textContent = title;
     $('panel-close').hidden = !closable;
     $('panel').hidden = false;
+    $('screen').classList.add('panel-open');
     panelOnClose = onClose || null;
     mode = 'panel';
     $('panel-body').scrollTop = 0;
@@ -188,6 +189,7 @@
   function closePanel() {
     endBattleReflection();
     $('panel').hidden = true;
+    $('screen').classList.remove('panel-open');
     mode = 'walk';
     const f = panelOnClose; panelOnClose = null;
     if (f) f();
@@ -443,7 +445,7 @@
     if (rec.done) {
       body.innerHTML = `<p>${josa(sp.name, '을/를')} 다시 만났다! (${rec.seen}번째)</p>${speciesCardHTML(sp, true)}${partnerLine(sp)}
         <div class="row-btns"><button class="btn primary" id="enc-ok">계속 탐사</button></div>`;
-      $('enc-ok').onclick = closePanel; $('enc-ok').focus();
+      $('enc-ok').onclick = closePanel; $('enc-ok').focus({ preventScroll: true }); body.scrollTop = 0;
       return;
     }
     const QS = observationQuestions(sp);
@@ -475,7 +477,7 @@
         body.innerHTML = `${ok ? `<p class="feedback ok">관찰 성공! <b>${josa(sp.name, '이/가')}</b> 도감에 등록되었다.</p>` : `<p class="feedback bad">아쉽다! 정답은 “${correctLabel}”. 다음에 다시 만나면 관찰을 완성할 수 있다.</p>`}
           ${speciesCardHTML(sp, true)}${partnerLine(sp)}
           <div class="row-btns"><button class="btn primary" id="enc-ok">계속 탐사</button></div>`;
-        $('enc-ok').onclick = closePanel; $('enc-ok').focus();
+        $('enc-ok').onclick = closePanel; $('enc-ok').focus({ preventScroll: true }); body.scrollTop = 0;
       }));
     };
     showQuestion(0, `<p>풀숲에서 무언가가 움직인다… <b>${josa(sp.name, '이/가')}</b> 나타났다!</p>`);
@@ -492,7 +494,7 @@
       <div class="dex-grid">${SPECIES.map(s => {
         const r = S.dex[s.id];
         const cls = !r ? 'unknown' : r.done ? 'done' : 'seen';
-        return `<button class="dex-cell ${cls}" data-id="${s.id}">${badgeHTML(s, false, !r)}${r ? s.name : '???'}<br><span class="muted">${s.habitat === 'forest' ? '숲' : '습지'} · ${s.time === 'night' ? '밤' : s.time === 'day' ? '낮' : '낮·밤'}</span></button>`;
+        return `<button class="dex-cell ${cls}" data-id="${s.id}">${badgeHTML(s, false, !r)}${r ? s.name : '???'}${r ? `<br><span class="dex-state">${r.done ? '✓ 관찰 완료' : '발견'}</span>` : ''}<br><span class="muted">${s.habitat === 'forest' ? '숲' : '습지'} · ${s.time === 'night' ? '밤' : s.time === 'day' ? '낮' : '낮·밤'}</span></button>`;
       }).join('')}</div>
       <p class="muted">회색 칸은 아직 만나지 못한 생물이다. 서식지와 활동 시간이 힌트다.</p>`;
     body.querySelectorAll('.dex-cell').forEach(c => c.addEventListener('click', () => {
@@ -560,14 +562,14 @@
   }
 
   /* ---------------- 1 체육관: 광합성 ---------------- */
-  async function gymPhoto() {
+  async function gymPhoto(skipRules = false) {
     const done = doneList();
     const hasProducer = done.some(s => s.role === '생산자');
     if (done.length < 4 || !hasProducer) {
       await say('관장 초록', ['광합성 체육관에 온 걸 환영해.', `하지만 아직 이르구나. 생물 4종 이상, 그중 생산자 1종 이상을 관찰해 오렴. (지금 ${done.length}종${hasProducer ? '' : ', 생산자 없음'})`]);
       return;
     }
-    await say('관장 초록', [
+    if (!skipRules) await say('관장 초록', [
       '나는 광합성 체육관 관장 초록. 식물은 빛에너지를 이용해 물과 이산화 탄소로 녹말을 만들지.',
       '규칙은 하나야. 광합성량은 빛·물·이산화 탄소 세 요인 가운데 “가장 모자란 요인”이 정해. 이것을 제한 요인이라고 해.',
       '그리고 식물은 밤낮없이 호흡을 해서 매 턴 녹말 1을 쓰지.',
@@ -601,9 +603,7 @@
         ${Object.keys(st.fx).map(k => `<span class="chip enemy">${NAME[k]} ${st.fx[k]}턴</span>`).join('')}
         ${upcoming && !st.done ? `<span class="chip enemy">다음 턴: 관장이 ${upcoming.name}!</span>` : ''}</div>
         <p class="muted">광합성량 = min(빛, 이산화 탄소, 물) · 녹말 변화 = 광합성량 − 1(호흡)<br>막대: 지난 턴 계산에 쓴 세 요인의 값(모두 0~${F}). 물은 저장량 가운데 한 턴에 최대 ${F}까지 쓴다.</p>
-        ${meter('빛', L ? L.light : 0, F, lim.includes('light'))}
-        ${meter('이산화 탄소', L ? L.co2 : 0, F, lim.includes('co2'))}
-        ${meter('물', L ? L.water : 0, F, lim.includes('water'))}
+        ${L ? meter('빛', L.light, F, lim.includes('light')) + meter('이산화 탄소', L.co2, F, lim.includes('co2')) + meter('물', L.water, F, lim.includes('water')) : '<p class="muted factor-pending">세 요인의 값은 아직 계산 전이다. 첫 턴의 행동을 골라 보자.</p>'}
         ${L && !lim.length ? `<p class="muted">지난 턴은 세 요인이 모두 충분해 광합성량이 최대(${F})였다.</p>` : ''}
         ${meter('녹말', st.starch, 14, false, B.PHOTO.stars, `${st.starch} (승리 ${B.PHOTO.goal} · 별 3개 ${B.PHOTO.stars[2]})`)}
         ${st.done ? '' : `<div class="actions"><button class="btn" data-a="${B.PHOTO.toggle.id}" aria-pressed="${st.stomata}">기공 ${st.stomata ? '닫기' : '열기'} (턴 안 씀)</button>${B.PHOTO.actions.map(a => `<button class="btn" data-a="${a.id}">${a.label}</button>`).join('')}</div>`}
@@ -615,7 +615,10 @@
         st.lastLog.forEach(l => logs.push({ t: l.t === 'me' ? '' : l.t, text: l.text }));
         const h = st.turn !== turn && hints[st.turn]; // 기공 전환은 턴을 쓰지 않으므로 힌트도 턴이 넘어갈 때만
         if (h && partner && !st.done) logs.push({ t: 'hint', text: `${partner.name}: ${h}` });
-        if (st.done) finish(); else draw();
+        if (st.done) finish(); else {
+          draw();
+          body.querySelector(`[data-a="${b.dataset.a}"]`)?.focus({ preventScroll: true });
+        }
       }));
     }
     if (hints[1] && partner) logs.push({ t: 'hint', text: `${partner.name}: ${hints[1]}` });
@@ -633,13 +636,13 @@
       const box = document.createElement('div');
       box.innerHTML = `<div class="feedback ${st.win ? 'ok' : 'bad'}"><b>${st.win ? '승리!' : '패배…'}</b> 녹말 ${st.starch} ${starsHTML(stars)}
         <p>${msg}</p></div>
-        <p><b>설명해 보기</b> — 이번 대결에서 녹말 생산을 가장 크게 막은 제한 요인은 무엇이었나요? 밤에 기공을 닫는 것이 식물에게 유리한 까닭도 함께 쓰세요.</p>
+        <p><b>설명해 보기</b> — 이번 대결에서 광합성이 멈춘 턴 하나를 골라, 어떤 요인이 모자랐는지 설명하세요. 밤에 기공을 닫는 것이 식물에게 유리한 까닭도 함께 쓰세요.</p>
         <textarea id="refl" placeholder="두세 문장으로 써 보세요."></textarea>
         <div class="row-btns"><button class="btn primary" id="p-done">${st.win ? '배지 받기' : '저장하고 나가기'}</button><button class="btn" id="p-retry">다시 도전</button></div>`;
       body.prepend(box);
       body.scrollTop = 0;
       const save = saveBattleResult({ gym: 'photo', win: st.win, stars, starch: st.starch, history: st.history });
-      $('p-retry').onclick = () => { save(); closePanel(); gymPhoto(); };
+      $('p-retry').onclick = () => { save(); closePanel(); gymPhoto(true); };
       $('p-done').onclick = async () => {
         save(); closePanel();
         if (st.win) await say('관장 초록', ['훌륭해! 새잎 배지를 줄게.', '기억해. 광합성 속도는 가장 모자란 요인이 정해. 그리고 식물도 늘 호흡을 한단다.', '다음은 습지길 동쪽의 소화 체육관이야.']);
@@ -648,9 +651,9 @@
   }
 
   /* ---------------- 2 체육관: 소화 ---------------- */
-  async function gymDigest() {
+  async function gymDigest(skipRules = false) {
     if (!S.badges.photo) { await say('관장 모아', ['소화 체육관이다.', '광합성 체육관의 새잎 배지를 가져오면 상대해 주지.']); return; }
-    await say('관장 모아', [
+    if (!skipRules) await say('관장 모아', [
       '나는 소화 체육관 관장 모아! 오늘의 식단은 밥(녹말)·불고기(단백질)·버터(지방)다.',
       '음식은 입 → 위 → 소장을 차례로 지나간다. 장소마다 쓸 수 있는 소화액이 달라.',
       '소화 효소는 정해진 영양소에만 작용한다. 맞지 않으면 효과 없음!',
@@ -677,7 +680,10 @@
       body.querySelectorAll('[data-m]').forEach(b => b.addEventListener('click', () => {
         st = B.digestStep(st, b.dataset.m);
         st.lastLog.forEach(l => logs.push({ t: l.t === 'me' || l.t === 'info' ? '' : l.t, text: l.text }));
-        if (st.phase === 'fail') finish(null); else draw();
+        if (st.phase === 'fail') finish(null); else {
+          draw();
+          (body.querySelector(`[data-m="${b.dataset.m}"]`) || body.querySelector('[data-m], [data-k]'))?.focus({ preventScroll: true });
+        }
       }));
     }
     function drawAbsorb() {
@@ -724,7 +730,7 @@
         <div class="row-btns"><button class="btn primary" id="d-done">${win ? '배지 받기' : '저장하고 나가기'}</button><button class="btn" id="d-retry">다시 도전</button></div>`;
       body.scrollTop = 0; // 흡수 화면에서 내려간 채로 두면 별과 결과 안내가 화면 위로 가려진다
       const save = saveBattleResult({ gym: 'digest', win, stars, wrong: st.wrong, salivaMouth: st.salivaMouth, gastricStomach: st.gastricStomach, emulsified: st.emulsified, absorb: absorbRes, history: st.history });
-      $('d-retry').onclick = () => { save(); closePanel(); gymDigest(); };
+      $('d-retry').onclick = () => { save(); closePanel(); gymDigest(true); };
       $('d-done').onclick = async () => {
         save(); closePanel();
         if (win) await say('관장 모아', ['좋은 소화였다! 융털 배지를 받아라.', '흡수된 영양소는 이제 혈액을 타고 온몸의 세포로 간다. 그 이야기는 다음 체육관(순환·호흡·배설)에서 이어진다!', '(다음 체육관은 준비 중입니다.)']);
@@ -784,7 +790,7 @@
   const KEYMAP = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' };
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
-    if (KEYMAP[e.key]) { held.add(KEYMAP[e.key]); e.preventDefault(); }
+    if (KEYMAP[e.key] && mode === 'walk') { held.add(KEYMAP[e.key]); e.preventDefault(); }
     else if (['z', 'Z', 'Enter', ' '].includes(e.key)) {
       if (mode === 'dialog' || mode === 'walk') {
         e.preventDefault(); // 기본 동작(포커스된 버튼 클릭)은 막고 아래에서 한 번만 처리한다

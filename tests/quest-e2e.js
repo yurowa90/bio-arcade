@@ -4,8 +4,10 @@ const browserName = process.env.E2E_BROWSER || 'chromium';
 const reducedMotion = process.env.E2E_REDUCED_MOTION === '1';
 if (!['chromium', 'webkit'].includes(browserName)) throw new Error(`지원하지 않는 E2E_BROWSER: ${browserName}`);
 const path = require('path');
+const fs = require('fs');
 (async () => {
   const out = process.argv[2] || '.';
+  fs.mkdirSync(out, { recursive: true });
   console.log(`엔진: ${browserName} · 동작 줄이기: ${reducedMotion ? '켬' : '끔'}`);
   const browser = await playwright[browserName].launch();
   const mediaReady = new WeakMap();
@@ -55,7 +57,8 @@ const path = require('path');
   };
   watchErrors(page);
   // 확인 항목: 실패하면 FAIL을 찍고 종료 코드를 1로 둔다
-  const check = (name, cond, extra = '') => { if (!cond) process.exitCode = 1; console.log(`${cond ? 'OK  ' : 'FAIL'} ${name}${extra ? ' — ' + extra : ''}`); };
+  const failures = [];
+  const check = (name, cond, extra = '') => { if (!cond) { failures.push(name); process.exitCode = 1; } console.log(`${cond ? 'OK  ' : 'FAIL'} ${name}${extra ? ' — ' + extra : ''}`); };
   const questSave = () => page.evaluate(() => JSON.parse(localStorage.getItem('bioQuest.v1')));
   await page.goto('file://' + path.resolve(__dirname, '../games/quest/index.html'));
   await page.screenshot({ path: `${out}/01-title.png` });
@@ -96,6 +99,8 @@ const path = require('path');
   // 인트로는 키보드만으로 진행한다: Enter로 대사를 넘기고, 선택지에서 Tab → Enter로 두 번째 파트너를 고른다
   for (let i = 0; i < 40 && !(await page.$('#dialog-choices button')); i++) { await page.keyboard.press('Enter'); await page.waitForTimeout(40); }
   await page.screenshot({ path: `${out}/02-partner.png` });
+  // quest-6: 파트너 선택도 최소 44px 터치 높이를 확보한다.
+  check('quest-6 파트너 선택 높이 44px 이상', await page.$$eval('#dialog-choices button', bs => bs.length > 0 && bs.every(b => b.getBoundingClientRect().height >= 44)));
   await page.keyboard.press('Tab');
   await page.keyboard.press('Enter');
   await page.waitForTimeout(100);
@@ -150,12 +155,20 @@ const path = require('path');
   const oyWrong = await page.textContent('#panel-body');
   const oyRec = await page.evaluate(() => ({ ...window.__bq.S.dex.oyster }));
   check('느타리 2단계 오답: 정답(분해자)을 알려 주고 관찰 미완성', oyWrong.includes('아쉽다') && oyWrong.includes('정답은 “분해자') && !oyRec.done && oyRec.wrong === 1 && oyRec.tries === 2, JSON.stringify(oyRec));
+  // quest-2: 계속 탐사에 초점이 있어도 오답 해설 전체가 본문 맨 위에 보인다.
+  const feedbackVisible = () => page.evaluate(() => {
+    const body = document.getElementById('panel-body'), fb = body.querySelector('.feedback');
+    const b = body.getBoundingClientRect(), f = fb.getBoundingClientRect();
+    return body.scrollTop === 0 && f.top >= b.top && f.bottom <= b.bottom && document.activeElement.id === 'enc-ok';
+  });
+  check('quest-2 오답 직후 해설이 가려지지 않음', await feedbackVisible());
   await page.click('#enc-ok');
   await meetOyster();
   await page.waitForTimeout(60);
   await page.click('.choice-list .btn[data-v="균류"]');
   await page.click('.choice-list .btn[data-v="분해자"]');
   check('느타리: 무리·역할을 모두 맞히면 관찰 성공', (await page.textContent('#panel-body')).includes('관찰 성공') && (await page.evaluate(() => window.__bq.S.dex.oyster.done)));
+  check('quest-2 정답 직후 성공 안내가 가려지지 않음', await feedbackVisible());
   // 생물 전체: 실제 함수가 내는 질문 종류와 정답 분포(질문 종류만 보고 답을 짐작할 수 없어야 한다)
   const nSpecies = await page.evaluate(() => window.GameData.SPECIES.length);
   const qAll = await page.evaluate(() => window.GameData.SPECIES.flatMap(sp => window.__bq.observationQuestions(sp).map((Q, i) => ({ name: sp.name, kind: sp.kind, ask: [].concat(sp.ask)[i], first: i === 0, key: Q.key, answer: Q.answer, ok: Q.options.some(o => o.v === Q.answer), hint: Q.hint }))));
@@ -208,9 +221,17 @@ const path = require('path');
   await drain();
   console.log('photo battle open:', await mode());
   check('photo battle open', (await mode()) === 'panel' && !!(await page.$('[data-a]')));
+  // quest-3: 지난 턴이 없는 첫 화면은 세 요인 0 막대 대신 계산 전 안내를 보인다.
+  check('quest-3 첫 턴은 계산 전 안내와 녹말 막대만 표시', (await page.textContent('.factor-pending')).includes('아직 계산 전') && await page.locator('.meter').count() === 1);
+  // quest-7: 패널 방향키는 기본 스크롤을 막지 않고, 행동으로 갱신해도 같은 버튼에 초점을 둔다.
+  check('quest-7 패널에서는 방향키 기본 동작을 막지 않음', await page.evaluate(() => {
+    const e = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
+    document.dispatchEvent(e); return !e.defaultPrevented;
+  }));
   // 기공(stomata)은 턴을 쓰지 않는다: 1턴 전에 열고, 7턴(밤)에 닫았다가 8턴에 다시 연다
   for (const [i, a] of 'stomata water water leaf water leaf water stomata leaf stomata water leaf water'.split(' ').entries()) {
     await page.click(`[data-a="${a}"]`);
+    if (i === 0) check('quest-7 기공 전환 뒤 같은 행동 버튼에 초점 유지', await page.evaluate(() => document.activeElement.dataset.a === 'stomata'));
     if (i === 7) await page.screenshot({ path: `${out}/06-photo-battle.png` });
   }
   const photoRes = await page.$eval('#panel-body .feedback', el => el.textContent.replace(/\s+/g, ' ').trim());
@@ -218,6 +239,7 @@ const path = require('path');
   const photoStars = await page.$eval('#panel-body .feedback .stars', el => 3 - el.querySelectorAll('.off').length);
   const starchLabel = await page.$$eval('#panel-body .meter', ms => ms.map(m => m.querySelector('.meter-label').textContent.replace(/\s+/g, ' ').trim()).find(t => t.startsWith('녹말')));
   check('광합성 결과: 밤에 닫으면 별 3 + 칭찬', photoStars === 3 && photoRes.includes('밤에 기공을 닫아'), `별 ${photoStars} · ${photoRes}`);
+  check('quest-5 D-052 Q5 서술 범위를 멈춘 턴 하나로 좁힘', (await page.textContent('#panel-body')).includes('광합성이 멈춘 턴 하나를 골라') && !(await page.textContent('#panel-body')).includes('가장 크게 막은'));
   check('녹말 막대 숫자 = 결과 녹말', starchLabel.includes((photoRes.match(/녹말 (\d+)/) || [])[1] + ' '), starchLabel);
   let stored = await questSave();
   check('광합성 버튼 전 결과 기록 1개·별 3 배지가 저장됨', stored.records.filter(r => r.gym === 'photo').length === 1 && stored.badges.photo === 3);
@@ -301,6 +323,9 @@ const path = require('path');
   await page.waitForTimeout(200);
   await page.screenshot({ path: `${out}/10-night.png` });
   await page.click('#btn-b'); await page.click('#m-dex');
+  // quest-8: 발견과 관찰 완료는 테두리 색 외에 글자·기호로도 구별한다.
+  check('quest-8 도감 완료는 ✓ 관찰 완료로 표시', (await page.textContent('.dex-cell.done .dex-state')).includes('✓ 관찰 완료'));
+  check('quest-6 패널 닫기 높이 44px 이상', await page.$eval('#panel-close', b => b.getBoundingClientRect().height >= 44));
   await page.screenshot({ path: `${out}/11-dex.png` });
   await page.click('#panel-close');
   await page.click('#btn-b'); await page.click('#m-rec');
@@ -390,9 +415,61 @@ const path = require('path');
   await resultPage.goto(hubURL);
   check('허브 삭제 뒤 탐사대 버튼·일반 저장·이탈은 복구하지 않음', await hubPage.evaluate(() => localStorage.getItem('bioQuest.v1') === null));
   await saveCtx.close();
+
+  // quest-1·2·4·6: 긴/짧은 화면 모두 오답·정답 피드백, 남는 높이, 즉시 재도전을 검사한다.
+  const uxCtx = await createContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const ux = await uxCtx.newPage();
+  if (reducedMotion) await mediaReady.get(ux);
+  watchErrors(ux);
+  await ux.goto(questURL);
+  await ux.evaluate(s => localStorage.setItem('bioQuest.v1', JSON.stringify(s)), { ...seed, records: [], introDone: true });
+  await ux.reload(); await ux.click('#btn-continue');
+  const panelHeights = [];
+  for (const height of [844, 664]) {
+    await ux.setViewportSize({ width: 390, height });
+    const mapHeight = await ux.$eval('#screen', el => el.getBoundingClientRect().height);
+    for (const answer of ['소비자', '분해자']) {
+      await ux.evaluate(() => { delete window.__bq.S.dex.oyster; window.__bq.encounter('forest', window.GameData.SPECIES.find(s => s.id === 'oyster')); });
+      check(`quest-6 ${height}px 관찰 그만두기 높이 44px 이상`, await ux.$eval('#enc-run', el => el.getBoundingClientRect().height >= 44));
+      await ux.click('[data-v="균류"]'); await ux.click(`[data-v="${answer}"]`);
+      const geometry = await ux.evaluate(() => {
+        const body = document.getElementById('panel-body'), f = body.querySelector('.feedback').getBoundingClientRect(), b = body.getBoundingClientRect(), s = document.getElementById('screen').getBoundingClientRect();
+        return { top: body.scrollTop, visible: f.top >= b.top && f.bottom <= b.bottom, screen: s.height, bottom: s.bottom, focus: document.activeElement.id };
+      });
+      check(`quest-2 ${height}px ${answer === '소비자' ? '오답' : '정답'} 직후 해설 전체 표시`, geometry.top === 0 && geometry.visible && geometry.focus === 'enc-ok', JSON.stringify(geometry));
+      if (answer === '소비자') panelHeights.push(geometry.screen);
+      check(`quest-1 ${height}px 패널을 열면 남는 높이를 활용`, geometry.screen > mapHeight + 100 && geometry.bottom <= height);
+      await ux.screenshot({ path: `${out}/ux-${height}-${answer === '소비자' ? 'wrong' : 'right'}.png` });
+      await ux.click('#enc-ok');
+      check(`quest-1 ${height}px 닫으면 지도 비율 복원`, Math.abs(await ux.$eval('#screen', el => el.getBoundingClientRect().height) - mapHeight) < 1);
+    }
+  }
+  check('quest-1 패널 높이가 화면 높이에 따라 증가', panelHeights[0] - panelHeights[1] >= 170);
+  // 대사가 끝나야 풀리는 Promise를 evaluate의 반환값으로 넘기지 않는다.
+  const drainGymDialog = async () => {
+    await ux.evaluate(() => { document.activeElement.blur(); });
+    for (let i = 0; i < 40 && await ux.evaluate(() => window.__bq.mode === 'dialog'); i++) {
+      await ux.keyboard.press('Enter'); await ux.waitForTimeout(30);
+    }
+    await ux.waitForFunction(() => window.__bq.mode === 'panel' && document.getElementById('dialog').hidden);
+  };
+  await ux.evaluate(() => { window.__bq.gymPhoto(); });
+  await drainGymDialog();
+  for (let i = 0; i < 10; i++) await ux.click('[data-a="water"]');
+  await ux.click('#p-retry');
+  check('quest-4 광합성 다시 도전은 규칙 대사 없이 첫 턴', await ux.evaluate(() => window.__bq.mode === 'panel' && document.getElementById('dialog').hidden && !!document.querySelector('.factor-pending') && document.querySelector('.battle-top').textContent.includes('턴 1/10')));
+  // 소화도 결과의 다시 도전 버튼에서 규칙 반복을 생략한다.
+  await ux.evaluate(() => { window.__bq.S.badges.photo = 3; window.__bq.gymDigest(); });
+  await drainGymDialog();
+  for (const m of ['saliva', 'chew', 'gastric', 'mix', 'bile', 'pancreas', 'intestinal']) await ux.click(`[data-m="${m}"]`);
+  for (const [k, v] of [['starch', 'capillary'], ['protein', 'capillary'], ['fat', 'lacteal']]) await ux.click(`[data-k="${k}"][data-v="${v}"]`);
+  await ux.click('#ab-go'); await ux.click('#d-retry');
+  check('quest-4 소화 다시 도전은 규칙 대사 없이 입에서 시작', await ux.evaluate(() => window.__bq.mode === 'panel' && document.getElementById('dialog').hidden && document.querySelector('.tract .on')?.textContent === '입'));
+  await uxCtx.close();
   finishErrors();
   console.log('errors:', errors.length ? errors : 'none');
   console.log(`무시한 오류: webkit file:// manifest ${ignoredManifestErrors}건`);
+  console.log('failures:', failures.length ? failures : 'none');
   if (errors.length) process.exitCode = 1;
   await browser.close();
 })();
