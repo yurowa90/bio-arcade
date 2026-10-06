@@ -5,6 +5,9 @@
  */
 (function (root) {
   const DAY = 45; // 45초 = 하루(06시~24시)
+  // D-052 Q1: 54 미만을 누적 0.1초 이상 겪으면 별은 최대 1개다.
+  // 한 프레임(화면에서 최대 0.05초)의 수치 흔들림은 제외하되, 짧은 반복 진입은 합산한다.
+  const SEVERE_LIMIT = 0.1;
   const EVENTS = [
     { t: 4, type: 'meal', name: '아침 식사', amount: 70 },
     { t: 16, type: 'meal', name: '점심 식사', amount: 95 },
@@ -37,8 +40,13 @@
     s.peak = Math.max(s.peak, s.g); s.low = Math.min(s.low, s.g);
     return s;
   }
-  function stars(s) { const p = s.tir / DAY; return p >= 0.9 ? 3 : p >= 0.75 ? 2 : p >= 0.6 ? 1 : 0; }
-  const api = { DAY, EVENTS, init, step, stars, mealRate };
+  // 1/60초 등을 더할 때 생기는 부동소수점 오차만 허용한다. 저장용 반올림 값은 쓰지 않는다.
+  function severeCapped(s) { return s.severe >= SEVERE_LIMIT - 1e-9; }
+  function stars(s) {
+    const p = s.tir / DAY, earned = p >= 0.9 ? 3 : p >= 0.75 ? 2 : p >= 0.6 ? 1 : 0;
+    return severeCapped(s) ? Math.min(earned, 1) : earned;
+  }
+  const api = { DAY, EVENTS, SEVERE_LIMIT, init, step, stars, severeCapped, mealRate };
   root.GlucoseModel = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

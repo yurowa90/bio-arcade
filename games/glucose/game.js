@@ -5,8 +5,19 @@
   const cv = $('cv'), ctx = cv.getContext('2d');
   const W = cv.width, H = cv.height;
   let s, hold = false, running = false, mode = 'normal', last = 0, holdTime = 0;
-  const G_MIN = 30, G_MAX = 320, NOW_X = W * 0.42, PX_PER_S = 26;
-  const gy = g => H - 40 - (g - G_MIN) / (G_MAX - G_MIN) * (H - 110);
+  const G_MIN = 30, G_MAX = 350, NOW_X = W * 0.42, PX_PER_S = 26;
+  const gy = g => H - 40 - (g - G_MIN) / (G_MAX - G_MIN) * (H - 150);
+  const starRule = `목표 범위(70~180)에 머문 시간 60·75·90% 이상이면 별 1·2·3개. 단, 혈당이 54 미만에 머문 시간이 합쳐서 ${M.SEVERE_LIMIT}초 이상인 판은 별이 1개까지다.`;
+  function nextStarHint(stars) {
+    if (stars === 3) return '별 3개를 받았다. 다음 판에도 혈당 변화를 살펴 조절해 보자.';
+    if (stars === 0) return `다음 별: 목표 범위에 머문 시간을 60% 이상으로 늘려 보자. 별 2개부터는 54 미만에 머문 시간도 합쳐서 ${M.SEVERE_LIMIT}초 미만이어야 한다.`;
+    if (M.severeCapped(s) && s.tir / M.DAY >= 0.75) {
+      const uncappedStars = s.tir / M.DAY >= 0.9 ? 3 : 2;
+      return `이번 판은 별 1개 상한이 적용됐다. 목표 범위에 머문 시간을 유지하고, 54 미만에 머문 시간을 합쳐서 ${M.SEVERE_LIMIT}초 미만으로 줄이면 별 ${uncappedStars}개를 받을 수 있다.`;
+    }
+    const target = stars === 1 ? 75 : 90;
+    return `다음 별 ${stars + 1}개: ${M.severeCapped(s) ? '이번 판은 별 1개 상한이 적용됐다. 다음 판에는 ' : ''}목표 범위에 머문 시간을 ${target}% 이상으로 유지하고, 54 미만에 머문 시간은 합쳐서 ${M.SEVERE_LIMIT}초 미만으로 줄여 보자.`;
+  }
 
   function unlocked() { return A.best('glucose') >= 2; }
   // 모드 고르기: 게임 밖에서는 시작·결과 카드가 화면 전체를 덮으므로 고르는 버튼을 카드 안에 넣는다.
@@ -38,13 +49,13 @@
     ctx.fillStyle = 'rgba(106, 168, 79, .18)'; ctx.fillRect(0, gy(180), W, gy(70) - gy(180));
     ctx.fillStyle = 'rgba(224, 102, 102, .15)'; ctx.fillRect(0, gy(54), W, gy(G_MIN) - gy(54));
     ctx.fillStyle = 'rgba(241, 194, 50, .12)'; ctx.fillRect(0, gy(G_MAX), W, gy(250) - gy(G_MAX));
-    ctx.font = '13px sans-serif'; ctx.fillStyle = '#4a6b3a'; ctx.textAlign = 'left';
+    ctx.font = '16px sans-serif'; ctx.fillStyle = '#4a6b3a'; ctx.textAlign = 'left';
     ctx.fillText('목표 범위 70~180', 8, gy(180) + 16);
-    ctx.fillStyle = '#b43a3a'; ctx.fillText('저혈당 위험(54 미만)', 8, gy(54) + 16);
+    ctx.fillStyle = '#b43a3a'; ctx.fillText('저혈당 위험(54 미만)', 8, H - 16);
     ctx.fillStyle = '#9a7400'; ctx.fillText('고혈당(250 초과)', 8, gy(G_MAX) + 16);
     // 눈금
     ctx.strokeStyle = '#dbe6f0'; ctx.lineWidth = 1; ctx.fillStyle = '#7890a8'; ctx.textAlign = 'right';
-    for (const v of [54, 70, 100, 140, 180, 250]) { ctx.beginPath(); ctx.moveTo(0, gy(v)); ctx.lineTo(W, gy(v)); ctx.stroke(); ctx.fillText(v, W - 6, gy(v) - 3); }
+    for (const v of [54, 70, 100, 140, 180, 250, 350]) { ctx.beginPath(); ctx.moveTo(0, gy(v)); ctx.lineTo(W, gy(v)); ctx.stroke(); ctx.fillText(v, W - 6, gy(v) - 3); }
     // 지금 선
     ctx.strokeStyle = '#9fb3c8'; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(NOW_X, 60); ctx.lineTo(NOW_X, H - 30); ctx.stroke(); ctx.setLineDash([]);
     // 다가오는 일정(식사·운동)
@@ -54,7 +65,7 @@
       const w = (e.type === 'meal' ? 5 : e.dur) * PX_PER_S;
       ctx.fillStyle = e.type === 'meal' ? 'rgba(241, 163, 60, .22)' : 'rgba(61, 133, 198, .18)';
       ctx.fillRect(x, 60, w, H - 90);
-      ctx.fillStyle = e.type === 'meal' ? '#b36b00' : '#1f5f99'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'left';
+      ctx.fillStyle = e.type === 'meal' ? '#b36b00' : '#1f5f99'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left';
       ctx.fillText((e.type === 'meal' ? '🍚 ' : '🏃 ') + e.name, x + 4, 78);
     }
     // 지나온 혈당
@@ -69,10 +80,10 @@
     ctx.fillStyle = '#e8eef4'; ctx.fillRect(10, 10, barW, 30); ctx.fillRect(20 + barW, 10, barW, 30);
     ctx.fillStyle = '#3d85c6'; ctx.fillRect(10, 10, barW * s.ins, 30);
     ctx.fillStyle = '#e69138'; ctx.fillRect(20 + barW, 10, barW * (1 - s.ins), 30);
-    ctx.fillStyle = '#10243a'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#10243a'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(`인슐린 ${hold ? '분비 중 ▲' : ''}`, 10 + barW / 2, 30);
     ctx.fillText(`글루카곤 ${hold ? '' : '분비 중 ▲'}`, 20 + barW * 1.5, 30);
-    if (mode === 'resistance') { ctx.fillStyle = '#7a4bb3'; ctx.font = 'bold 13px sans-serif'; ctx.fillText('인슐린 저항성: 세포가 인슐린에 덜 반응한다', W / 2, 56); }
+    if (mode === 'resistance') { ctx.fillStyle = '#7a4bb3'; ctx.font = 'bold 16px sans-serif'; ctx.fillText('인슐린 저항성: 세포가 인슐린에 덜 반응한다', W / 2, 58); }
   }
   function clockText(t) { const h = 6 + (t / M.DAY) * 18; const hh = Math.floor(h), mm = Math.floor((h - hh) * 60 / 10) * 10; return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`; }
   let warned = {};
@@ -106,12 +117,17 @@
       id: 'glucose', stars, score: tir,
       detail: { mode, tirPct: tir, hypoSec: +s.hypo.toFixed(1), severeSec: +s.severe.toFixed(1), hyperSec: +s.hyper.toFixed(1), peak: Math.round(s.peak), low: Math.round(s.low), holdSec: +holdTime.toFixed(1) },
       lines: [`하루 중 목표 범위(70~180 mg/dL)에 머문 시간 <b>${tir}%</b> · 최고 ${Math.round(s.peak)} · 최저 ${Math.round(s.low)}`,
+        `180 초과 ${s.hyper.toFixed(1)}초 · 70 미만 ${s.hypo.toFixed(1)}초 · 그중 54 미만 ${s.severe > 0 && !M.severeCapped(s) ? M.SEVERE_LIMIT + '초 미만' : s.severe.toFixed(1) + '초'}`,
+        starRule,
+        nextStarHint(stars),
+        s.hyper > 0 ? '혈당이 높아지면 조금 더 일찍 눌러 인슐린을 분비해 보자.' : '',
+        s.hypo > 0 ? '혈당이 낮아지면 조금 더 일찍 손을 떼어 글루카곤을 분비해 보자.' : '',
         s.severe > 0 ? '⚠ 저혈당 위험 구간에 들어갔다. 인슐린을 너무 오래 분비하면 혈당이 지나치게 떨어진다.' : '',
         mode === 'resistance' ? '인슐린 저항성에서는 같은 양의 인슐린으로 혈당이 덜 내려간다. 제2형 당뇨병의 핵심 특징이다(게임용 단순 모델).' : (!wasOpen && stars >= 2 ? '도전 모드 “인슐린 저항성”이 열렸다! 아래에서 골라 다시 해 보자.' : ''),
         '건강한 사람의 혈당은 대부분 70~140 mg/dL 안에 머문다. 70~180 mg/dL은 당뇨병 환자의 혈당 관리에서 쓰는 목표 범위다.'].filter(Boolean),
       quiz: { q: '혈당이 정상보다 높아지면 이자에서 분비가 늘어나는 호르몬은?', options: ['인슐린', '글루카곤'], answer: 0,
         explain: '인슐린은 세포가 포도당을 흡수하고 간이 포도당을 글리코젠으로 저장하게 해 혈당을 낮춘다. 글루카곤은 반대로 혈당을 높인다.' },
-      reflection: '게임에서 손가락을 누르고 떼는 행동은 몸속에서 무엇에 해당했나요? 혈당이 오르면 인슐린이, 내리면 글루카곤이 분비되는 과정을 “음성 피드백”이라는 말을 넣어 설명하세요.',
+      reflection: '해설을 참고해 정리해 보세요. 게임에서 손가락을 누르고 떼는 행동은 몸속에서 무엇에 해당했나요? 혈당이 오르면 인슐린이, 내리면 글루카곤이 분비되는 과정을 “음성 피드백”이라는 말을 넣어 설명하세요.',
       onRetry: start,
     });
     addModePicker($('overlay').querySelector('#ar-retry').parentNode);
@@ -133,7 +149,8 @@
       '45초 = 하루(06시~24시). 그래프는 내 혈당이다.',
       '<b>누르고 있으면 이자가 인슐린</b>을 분비해 혈당이 내려가고, <b>떼면 글루카곤</b>이 분비되어 혈당이 올라간다.',
       '호르몬은 1~2초 늦게 효과를 낸다. 오른쪽에서 다가오는 식사·운동을 미리 보고 대비하자!',
-      '목표 범위(70~180)에 머문 시간 60·75·90% 이상이면 별 1·2·3개. 기본 모드 별 2개면 “인슐린 저항성” 모드가 열린다.',
+      starRule,
+      '기본 모드 별 2개면 “인슐린 저항성” 모드가 열린다.',
     ],
     onStart: start,
   });

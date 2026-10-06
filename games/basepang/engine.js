@@ -62,6 +62,7 @@
       const pairs = findPairs(level, g);
       if (!pairs.length) break;
       chain++;
+      const before = clone(g); // 이 연쇄에서 실제로 짝을 이룬 판을 화면에 남긴다.
       let gained = 0;
       for (const p of pairs) {
         const a = g[p.y][p.x], b = g[p.y][p.x + 1];
@@ -72,7 +73,7 @@
       }
       gained *= chain; // 연쇄 보너스
       score += gained;
-      steps.push({ pairs, gained, chain });
+      steps.push({ pairs, gained, chain, grid: before });
       // 낙하
       for (let x = 0; x < W; x++) {
         const col = [];

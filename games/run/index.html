@@ -13,11 +13,13 @@
     .gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; background: var(--panel); border-radius: 14px; padding: 8px 10px; margin-top: 8px; font-size: 12px; font-weight: 700; }
     .gauge .bar2 { height: 10px; background: #eadfca; border-radius: 6px; overflow: hidden; margin-top: 2px; }
     .gauge .bar2 i { display: block; height: 100%; transition: width .15s; }
+    .gauges.resetting .bar2 i { transition: none; }
     .gauge.energy { grid-column: 1 / -1; }
     .gauge.energy .bar2 { height: 14px; }
     .eq { grid-column: 1 / -1; text-align: center; font-size: 13px; background: #f3ecdc; border-radius: 8px; padding: 4px; }
     .eq.off { color: #c0392b; }
     .zone { color: #fff; text-align: center; font-size: 14px; margin: 6px 0 0; }
+    .lesson { min-height: 4.2em; margin: 6px 0 0; padding: 6px 10px; border-radius: 10px; background: #fffaf0; font-size: 14px; line-height: 1.4; word-break: keep-all; }
   </style>
 </head>
 <body>
@@ -25,6 +27,7 @@
   <main id="stage">
     <canvas id="cv" class="game" width="480" height="360" aria-label="달리기 화면. 누르면 점프"></canvas>
     <p class="zone" id="zone"></p>
+    <p class="lesson" id="lesson" role="status"></p>
     <div class="gauges">
       <div class="gauge energy">세포의 에너지(ATP) <span id="e-v"></span><div class="bar2"><i id="e-b" style="background:#e2574c"></i></div></div>
       <div class="gauge">영양소(포도당·아미노산) <span id="n-v"></span><div class="bar2"><i id="n-b" style="background:#e0a412"></i></div></div>
@@ -33,7 +36,7 @@
       <div class="gauge">요소(노폐물) <span id="u-v"></span><div class="bar2"><i id="u-b" style="background:#8e7cc3"></i></div></div>
       <div class="eq" id="eq">포도당 + 산소 → 에너지 + 이산화 탄소 + 물</div>
     </div>
-    <div class="toast" id="toast"></div>
+    <div class="toast" id="toast" role="status"></div>
   </main>
   <div class="overlay" id="overlay" hidden></div>
   <script src="../../shared/standards.js"></script>

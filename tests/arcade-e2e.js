@@ -171,7 +171,8 @@ const root = path.resolve(__dirname, '..');
           if (B.findPairs(L, B.swap(g, { x, y }, b)).length) { window.__game.trySwap({ x, y }, b); return; }
         }
       });
-      await page.waitForTimeout(430);
+      // 연쇄마다 중간 판을 재생하므로(플레이 테스트 반영) 고정 대기 대신 터지는 연출이 끝날 때까지 기다린다.
+      await page.waitForFunction(() => !document.querySelector('#grid .pop'), null, { timeout: 120000 });
       if (lv === 1 && guard === 3) await page.screenshot({ path: `${out}/basepang.png` });
     }
     if (lv === 1) { await page.waitForSelector('#go2'); await page.click('#go2'); await page.screenshot({ path: `${out}/basepang-rna.png` }); }
