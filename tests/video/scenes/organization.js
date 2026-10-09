@@ -2,7 +2,7 @@
 
 const R = require('../../../games/organization/organization');
 
-// 화면의 패 이름을 교과 개념·공개 관계표와 대조한다. 덱 순서·숨은 상태·훅의 조작 함수는 읽거나 부르지 않는다.
+// 화면의 패 이름을 교과 개념·공개 관계표와 대조한다. 덱 순서·숨은 상태·훅은 읽거나 부르지 않는다.
 async function view(h) {
   const hand = await h.loc('#hand [data-tile]').evaluateAll(els => els.map(el => ({ id: el.dataset.tile, name: el.textContent })));
   const board = await h.loc('#board [data-set]').evaluateAll(els => els.map(el => ({
@@ -70,9 +70,54 @@ async function submit(h, action) {
 module.exports = {
   id: 'organization', title: '구성 단계 잇기', path: 'games/organization/index.html',
   async play(h) {
-    const coverage = { group: false, chain: false, attached: false, wrong: false, scope: false, draw: false };
+    const coverage = { practice: false, group: false, chain: false, attached: false, wrong: false, scope: false, draw: false };
     h.result.coverage = coverage;
     await h.step('규칙-읽기', () => h.intro());
+    const practiceSkipped = !(await h.loc('#coach').isVisible());
+    if (practiceSkipped) h.result.practice = '건너뜀: 기록이 있는 기기';
+    else {
+      let previous = null;
+      // 손패 수만큼만 살펴본다. 정답 목록·연습 진행 상태는 읽지 않고 화면의 내기 버튼을 본다.
+      const count = await h.loc('#hand .tile').count();
+      for (let i = 0; i < count && await h.loc('#play-line').isDisabled(); i++) {
+        const ok = await h.step(`함께-만드는-첫-줄-${i + 1}`, async () => {
+          await h.caption(previous ? '방금 고른 것을 이루는 패를 찾아보자.' : '질문에 나온 생물을 먼저 찾아보자.');
+          await h.read(h.loc('#coach-question'));
+          const question = await h.loc('#coach-question').textContent();
+          const hand = await h.loc('#hand .tile').evaluateAll(els => els.filter(el => el.getAttribute('aria-pressed') !== 'true').map(el => el.textContent));
+          const tiles = hand.map(name => R.TILES.find(t => t.name === name)).filter(Boolean);
+          const answer = previous ? tiles.find(t => (R.RELATIONS[t.id] || []).includes(previous.id)) :
+            tiles.find(t => question.includes(t.name));
+          h.expect(!!answer, '질문·손패 이름·공개 관계표로 다음 연습 패를 찾지 못했습니다.');
+          if (previous?.name === '고양이') {
+            await h.caption('위도 먹이를 소화하잖아?');
+            await h.tap(h.loc('#hand').getByText('위', { exact: true }));
+            h.expect(await h.loc('#feedback').getAttribute('data-kind') === 'error', '위 선택 뒤 연습 안내가 없습니다.');
+            await h.read(h.loc('#feedback')); await h.think(900);
+            await h.caption('위와 창자가 함께 하는 일 전체를 찾는구나.');
+            await h.read(h.loc('#coach-question'));
+          }
+          await h.tap(h.loc('#hand').getByText(answer.name, { exact: true }));
+          h.expect(await h.loc('#feedback').getAttribute('data-kind') === 'guide', '연습 정답을 골라도 다음 질문으로 넘어가지 않습니다.');
+          previous = answer;
+          await h.read(h.loc('#coach-question'));
+        });
+        if (!ok) break;
+      }
+      await h.step('함께-만든-줄과-새-손패', async () => {
+        h.expect(await h.loc('#play-line').isEnabled(), '연습 패를 모두 고르지 못했습니다.');
+        await h.caption('함께 고른 패를 줄로 놓아 보자.');
+        await h.read(h.loc('#coach-question')); await h.tap(h.loc('#play-line'));
+        h.expect(await h.loc('#board .stage-name').count() === 5 && await h.loc('#begin-main').isVisible(), '연습 줄을 내도 단계 이름과 새 손패 시작 버튼이 보이지 않습니다.');
+        await h.caption('낸 뒤에는 단계 이름이 보이네. 작은 것부터 이어졌다.');
+        await h.read(h.loc('#board .set')); await h.read(h.loc('#coach-question')); await h.think(1200);
+        await h.mark('연습-줄의-단계-이름');
+        await h.caption('이제 새 손패로 스스로 이어 보자.');
+        await h.tap(h.loc('#begin-main'));
+        h.expect(!(await h.loc('#coach').isVisible()) && await h.loc('#hand .tile').count() === 14, '연습 뒤 새 손패 본게임으로 넘어가지 못했습니다.');
+        coverage.practice = true; h.result.practice = '첫 줄 완성 뒤 새 손패로 시작';
+      });
+    }
     await h.step('손패-훑기', async () => {
       await h.caption('색 말고 이름을 보고 단계를 떠올리자.');
       const tiles = h.loc('#hand [data-tile]');
@@ -129,7 +174,7 @@ module.exports = {
     }
     h.result.optionalScope = coverage.scope ? '안내 관찰' : '건너뜀: 손패에 자연스럽게 가능한 범위 밖 조합이 없었음';
     h.result.optionalGroup = coverage.group ? '묶음 관찰' : '건너뜀: 사슬을 먼저 만들었거나 손패가 많지 않았음';
-    for (const key of ['chain', 'wrong']) if (!coverage[key]) {
+    for (const key of ['practice', 'chain', 'wrong']) if (!coverage[key] && !(key === 'practice' && practiceSkipped)) {
       await h.step(`누락-${key}`, async () => { throw new Error(`필수 놀이 장면 ${key}를 수행하지 못했습니다. 손패 배분 또는 앞 장면 실패를 확인하세요.`); });
     }
     await h.step('결과와-설명', async () => {
