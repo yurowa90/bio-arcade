@@ -84,7 +84,7 @@
   function startLevel() {
     judged = false; marks = {};
     sol = PD.solve(PD.LEVELS[li]);
-    $('result').innerHTML = ''; $('judge').textContent = '판정하기'; $('face').textContent = '🙂';
+    $('result').innerHTML = ''; $('judge').textContent = '판정하기'; $('face').disabled = false;
     $('timer').textContent = '000';
     t0 = Date.now(); clearInterval(timerId);
     timerId = setInterval(() => { $('timer').textContent = String(Math.min(999, Math.floor((Date.now() - t0) / 1000))).padStart(3, '0'); }, 500);
@@ -108,7 +108,7 @@
     total.correct += correct.length; total.wrong += wrong.length; total.missed += missed.length; total.must += sol.must.length;
     total.maleMarkedX += maleMarkedX; total.maybeMarked += maybeMarked;
     total.perLevel.push({ level: li + 1, correct: correct.length, wrong: wrong.length, missed: missed.length, maleMarkedX, maybeMarked, seconds: Math.round((Date.now() - t0) / 1000) });
-    $('face').textContent = wrong.length ? '😵' : missed.length ? '😐' : '😎';
+    $('face').disabled = true;
     const maxGen = Math.max(...L.people.map(q => q.gen));
     const baseName = p => {
       const M = p.sex === 'M';
@@ -169,6 +169,7 @@
     rules: [
       '가계도에서 <b>반드시 보인자인 사람</b>을 찾아 눌러 ◐ 표시한다. 왼쪽 위 숫자는 확실한 보인자 수에서 ◐ 표시한 수를 뺀 값이다. 표시가 맞았는지는 판정할 때 알 수 있다.',
       '보인자일 수도 있고 아닐 수도 있는 사람에게 표시하면 <b>지뢰</b>! 모르면 “?”로 남겨 두자.',
+      '「표시 지우기」는 판정 전에 이 단계의 표시를 모두 지운다. 판정한 뒤에는 꺼진다.',
       '1·2단계는 상염색체 열성 유전, 3·4단계는 X 염색체 열성 유전(적록 색맹)이다.',
       '정답은 가능한 유전자형 조합을 모두 따지는 해결기가 계산한다.',
     ],

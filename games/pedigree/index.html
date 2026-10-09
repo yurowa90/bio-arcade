@@ -12,7 +12,8 @@
     .board { background: #c0c0c0; border-radius: 6px; padding: 8px; border: 3px solid; border-color: #fff #7b7b7b #7b7b7b #fff; }
     .status { display: flex; justify-content: space-between; align-items: center; background: #c0c0c0; padding: 4px 6px 8px; }
     .lcd { background: #000; color: #f33; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 22px; font-weight: 800; padding: 2px 8px; border-radius: 3px; min-width: 64px; text-align: center; letter-spacing: 2px; }
-    .face { width: 46px; height: 46px; border-radius: 6px; border: 3px solid; border-color: #fff #7b7b7b #7b7b7b #fff; background: #c0c0c0; font-size: 24px; display: grid; place-items: center; }
+    .face { min-width: 88px; height: 46px; padding: 4px 8px; border-radius: 6px; border: 3px solid; border-color: #fff #7b7b7b #7b7b7b #fff; background: #c0c0c0; color: #222; font-size: 14px; font-weight: 700; display: grid; place-items: center; }
+    .face:disabled { background: #aaa; color: #555; border-color: #999; opacity: .65; cursor: default; }
     .field { background: #fff; border: 3px solid; border-color: #7b7b7b #fff #fff #7b7b7b; }
     .field svg { width: 100%; display: block; }
     .field .person { cursor: pointer; }
@@ -35,7 +36,7 @@
   <main id="stage">
     <p class="lvl" id="lvl"></p>
     <div class="board">
-      <div class="status"><span class="lcd" id="mines" title="확실한 보인자 수에서 ◐ 표시한 수를 뺀 값(맞았는지는 판정할 때 알 수 있다)">000</span><button class="face" id="face" aria-label="단계 다시 시작">🙂</button><span class="lcd" id="timer">000</span></div>
+      <div class="status"><span class="lcd" id="mines" title="확실한 보인자 수에서 ◐ 표시한 수를 뺀 값(맞았는지는 판정할 때 알 수 있다)">000</span><button class="face" id="face" title="표시 지우기" aria-label="표시 지우기">표시 지우기</button><span class="lcd" id="timer">000</span></div>
       <div class="field" id="field"></div>
     </div>
     <p class="legend">□ 남자 ○ 여자 · 검게 칠함 = 형질 발현 · 눌러서 표시: <b>◐ 보인자</b> → <b>? 모름</b> → 표시 없음<br>표시 가능한 사람은 <b>“반드시” 보인자인 사람</b>뿐이다. 보인자일 수도 있고 아닐 수도 있는 사람에게 표시하면 지뢰를 밟은 것!</p>
