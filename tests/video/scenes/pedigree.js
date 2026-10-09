@@ -22,6 +22,7 @@ module.exports = {
     });
     for (let level = 0; level < 4; level++) {
       await h.step(`${level + 1}단계-가족-추론`, async () => {
+        await h.caption(THOUGHTS[level]);
         await h.expect((await h.loc('#stagehud').textContent()).startsWith(`${level + 1}/`), '계획한 가계도 단계가 아닙니다.');
         await h.read(h.loc('#lvl')); await h.read(h.loc('#field'));
         await h.caption(THOUGHTS[level]); await h.think(2300);

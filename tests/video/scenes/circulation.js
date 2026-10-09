@@ -21,7 +21,7 @@ module.exports = {
   id: 'circulation', title: '혈액 순환 일주', path: 'games/circulation/index.html',
   async play(h) {
     const deadline = Date.now() + 180000;
-    let wrong = false, wrongRead = false, darkNames = 0, darkSeen = false;
+    let wrong = false, wrongRead = false, darkNames = 0;
     h.result.help = '별도 힌트 버튼 없음. 판 범례·교환 안내·완성 경로를 읽음.';
     await h.step('규칙-읽기', () => h.intro());
     await h.step('판의-방향과-범례', async () => {
@@ -49,7 +49,7 @@ module.exports = {
             await h.caption('산소가 많으니 이건 폐동맥 아닐까.');
             pick = v.buttons.find(b => b.text === '폐동맥'); wrong = true;
           } else {
-            if (turn < 8) await h.caption(`${name}을 지나면 어디로 이어질까.`);
+            await h.caption(`${name}을 지나면 어디로 이어질까.`);
             pick = v.buttons.find(b => b.text === name);
           }
           await h.think(450);
@@ -58,7 +58,7 @@ module.exports = {
           pick = v.buttons.find(b => /^심장(에서 나가는|으로 들어오는)/.test(b.text));
           await h.think(450);
         } else if (v.type === 'finalName') {
-          if (!darkSeen) { darkSeen = true; await h.caption('이제 판 없이 지나는 순서를 떠올려 보자.'); }
+          await h.caption('이제 판 없이 지나는 순서를 떠올려 보자.');
           pick = v.buttons.find(b => b.text === REMEMBERED_ROUTE[darkNames]);
           await h.think(650); darkNames++;
         } else if (v.type === 'finalBoundary') {
@@ -71,23 +71,25 @@ module.exports = {
             const count = s => Number(s.match(/\s([1-6])\s*→/)?.[1] || 0);
             return count(b.text) - count(a.text);
           })[0];
-          if (turn % 8 === 0) await h.caption('이번 주사위는 더 멀리 가는 걸 골라 보자.');
+          await h.caption('이번 주사위는 더 멀리 가는 걸 골라 보자.');
           await h.think(250);
         } else if (v.type === 'organ') {
           pick = v.buttons[0]; await h.caption(`${pick.text}의 모세 혈관도 지나 보자.`);
           await h.think(350);
         } else if (v.type === 'continue') {
-          await h.read(h.loc('#ctrl .feedback'));
           if (wrong && v.feedback?.includes('폐정맥')) {
             wrongRead = true; h.result.wrongFeedback = v.feedback;
             await h.caption('산소가 많아도 심장으로 들어가면 정맥이네.');
-          }
+          } else await h.caption('지나온 길과 물질의 교환을 확인하자.');
+          await h.read(h.loc('#ctrl .feedback'));
           pick = v.buttons[0];
         } else if (v.type === 'darkStart') {
           await h.caption('폐에서 산소를 받고 온몸 세포에 내주는구나.');
           await h.read(h.loc('#route')); await h.mark('완성된-경로');
           pick = v.buttons[0];
-        } else if (v.type === 'roll') pick = v.buttons[0];
+        } else if (v.type === 'roll') {
+          await h.caption('다음에는 어느 혈관으로 이어질까.'); pick = v.buttons[0];
+        }
         else throw new Error(`계획에 없는 조작 단계: ${v.type}`);
         await h.expect(!!pick, `화면 보기에서 ${v.type}의 선택을 찾지 못했습니다.`);
         await h.tap(h.loc(`#ctrl button[data-k="${pick.key}"]:not([disabled])`), { fast: true });

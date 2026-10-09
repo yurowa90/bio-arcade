@@ -104,7 +104,7 @@ class Human {
   loc(selector) { return this.game.locator(selector); }
   async goto(file) {
     if (typeof file !== 'string' || !file || path.isAbsolute(file) || file.includes('\\') || file.split('/').includes('..') || /^[a-z]+:/i.test(file)) throw new Error('게임 경로는 저장소 기준 상대 경로여야 합니다.');
-    await this.caption('');
+    await this.caption('게임 화면을 열어 보자.');
     await this.game.goto(new URL('/' + file, this.page.url()).href, { waitUntil: 'load' });
   }
   async think(ms) { await this.page.waitForTimeout(ms * this.config.pace); }
@@ -194,7 +194,8 @@ class Human {
   }
   fail(scene, error) { const entry = { t: this.elapsed(), scene, message: `FAIL: ${error.message || error}` }; this.failures.push(entry); console.error(`${this.id}: ${entry.message}`); }
   async step(scene, action) {
-    try { await this.caption(''); await action(); await this.mark(scene); return true; }
+    // 새 자막을 걸 때까지 앞 자막을 유지한다. 입력·이동 대기 중에도 빈 띠가 남지 않는다.
+    try { if (!this.captionText) await this.caption('화면을 살펴보고 이어서 해 보자.'); await action(); await this.mark(scene); return true; }
     catch (e) { if (this.pressed) await this.up().catch(() => {}); this.fail(scene, e); await this.caption('잠깐, 여기서 막혔다.').catch(() => {}); await this.mark(`FAIL-${scene}`).catch(e => this.fail('실패 사진', e)); return false; }
   }
   expect(condition, message) { if (!condition) throw new Error(message); }
@@ -204,7 +205,7 @@ class Human {
     await this.mark('소개');
     // 긴 규칙 카드는 실제로 아래까지 스크롤하며 읽는다.
     for (const rule of await this.loc('#overlay .rules > li').all()) { await rule.evaluate(el => el.scrollIntoView({ block: 'center' })); await this.read(rule); }
-    await this.caption('규칙을 읽었다. 한번 해 보자.'); await this.tap(this.loc('#ar-start')); await this.caption('');
+    await this.caption('규칙을 읽었다. 한번 해 보자.'); await this.tap(this.loc('#ar-start'));
     if (readGame) await this.read();
   }
   async finish(answer) {
@@ -235,7 +236,7 @@ class Human {
     }
     const hub = this.loc('#ar-hub');
     if (await hub.count() && await hub.isVisible()) {
-      await this.caption(''); await this.tap(hub); await this.loc('#cabinets').waitFor({ state: 'visible' });
+      await this.caption('오늘 한 게임을 정리하고 돌아가자.'); await this.tap(hub); await this.loc('#cabinets').waitFor({ state: 'visible' });
       await this.caption('다음엔 무엇을 해 볼까.'); await this.read(this.loc('#summary')); await this.mark('허브-복귀');
       this.result.returnedHub = true;
     }
