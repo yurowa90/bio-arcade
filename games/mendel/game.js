@@ -222,26 +222,37 @@
   };
   $('t-end').onclick = () => { if (!busy()) end(); };
 
+  function resultReflection() {
+    const counts = n => ['RY', 'Ry', 'rY', 'ry'].map(k => `${G.PHENO_NAME[k]} ${n.tally[k]}개`).join(' · ');
+    const f2 = S.notes.find(n => n.kind === 'self' && G.genotype(n.a) === 'RrYy');
+    if (f2) {
+      const same = f2.tally.RY === 9 && f2.tally.Ry === 3 && f2.tally.rY === 3 && f2.tally.ry === 1;
+      // 아직 확인하지 않은 어버이는 유전자형을 단정하지 않고, 관찰 결과와 RrYy의 기대 비율을 비교한다.
+      const experiment = f2.a.known || f2.a.infer ? 'RrYy 자가 수분' : noteLabel(f2);
+      return { kind: 'selfRrYy', prompt: `내 실험 노트의 ${experiment} 결과는 ${counts(f2)}예요(잡종 RrYy 자가 수분에서 16개 중 기대 개수는 차례대로 9, 3, 3, 1개). 네 가지 표현형이 약 9:3:3:1로 나오는 까닭을 분리의 법칙과 독립의 법칙으로 설명하세요. ${same ? '이번에는 기대와 같게 나왔지만, 씨앗 수가 적으면 기대와 다르게 나올 수 있는 까닭도 함께 쓰세요.' : '실제 개수가 기대와 다른 까닭도 함께 쓰세요.'}` };
+    }
+    const test = S.notes.find(n => n.kind === 'test');
+    if (test) return { kind: 'testCross', prompt: `내 실험 노트의 ${noteLabel(test)} 결과는 ${counts(test)}예요. 주름지고 녹색인 순종(rryy)과 검정 교배했을 때, 자손의 표현형 비율로 어버이의 유전자형을 알아낼 수 있는 까닭을 대립유전자가 전달되는 과정으로 설명하세요. 한 형질에서 우성과 열성 표현형이 약 1:1로 나오는 것은 무엇을 뜻할까요? 자손에서 열성 표현형이 하나도 나오지 않으면 어버이를 순종으로 판단할 수 있는 까닭과, 그 판단이 이론상 완전히 확실하지는 않은 까닭도 함께 쓰세요.` };
+    const cross = S.notes.at(-1);
+    if (cross) return { kind: 'otherCross', prompt: `내 실험 노트의 ${noteLabel(cross)} 결과는 ${counts(cross)}예요. 이번 교배에서 이런 표현형의 자손이 나온 까닭을 어버이의 대립유전자가 생식세포와 자손에게 전달되는 과정으로 설명하세요. 표현형이 같아도 유전자형이 다를 수 있는 까닭도 함께 쓰세요.` };
+    return { kind: 'noExperiment', prompt: '이번 판에서는 아직 교배하지 않았어요. 처음 받은 둥글고 황색인 순종(RRYY)과 주름지고 녹색인 순종(rryy)을 교배하면, 자손의 유전자형과 표현형은 어떨지 예상해 보세요. 어버이에게서 어떤 대립유전자를 받는지로 설명하세요.' };
+  }
   function end() {
     if (!S || S.over) return; // 한 판에 한 번만 기록한다
     S.over = true; lockStage(true);
     const g = S.geno.size, ph = S.pheno.size;
-    // 결과 화면이 실험 노트를 가리므로, 설명해 보기에 쓸 RrYy 자가 수분 기록을 문항에 함께 적는다
-    // 유전자형을 확인했거나 부모로부터 추론할 수 있는 완두의 기록만 쓴다(숨은 유전자형을 드러내지 않게)
-    const f2 = S.notes.find(n => n.kind === 'self' && (n.a.known || n.a.infer) && G.genotype(n.a) === 'RrYy');
-    const f2same = f2 && f2.tally.RY === 9 && f2.tally.Ry === 3 && f2.tally.rY === 3 && f2.tally.ry === 1;
+    const reflection = resultReflection();
     const stars = ph < 4 ? 0 : g >= 9 ? 3 : g >= 7 ? 2 : g >= 5 ? 1 : 0;
     A.finish($('overlay'), {
       id: 'mendel', stars, score: g * 10 + ph * 5,
       detail: { geno: [...S.geno], pheno: [...S.pheno], daysUsed: DAYS - S.days, tests: S.tests, wrongTests: S.wrongTests, inferred: S.inferred, wrongInfers: S.wrongInfers,
+        reflectionKind: reflection.kind, reflectionPrompt: reflection.prompt,
         notes: S.notes.map(n => ({ label: noteLabel(n), tally: n.tally, expected: G.expected(n.a, n.b) })) },
       lines: [`표현형 카드 ${ph}/4 · 유전자형 카드 ${g}/9`, `검정 교배 ${S.tests}번(오답 ${S.wrongTests}) · 추론 등록 ${S.inferred}번(오답 ${S.wrongInfers}) · ${DAYS - S.days}일 사용`,
         ph < 4 ? '표현형 네 가지를 모두 모아야 별을 받는다. 잡종 1대를 자가 수분해 보자!' : g < 9 ? '겉모습이 같아도 유전자형이 다를 수 있다. 검정 교배로 더 확인해 보자.' : '모든 카드를 모았다. 멘델도 감탄할 텃밭이다!'],
       quiz: { q: '둥글고 황색인 완두의 유전자형을 알아내려면 어떤 완두와 교배해야 할까?', options: ['주름지고 녹색인 순종(rryy)', '둥글고 황색인 순종(RRYY)'], answer: 0,
         explain: '열성 순종은 열성 대립유전자만 주므로, 자손의 겉모습에 상대 완두의 대립유전자가 그대로 드러난다(검정 교배).' },
-      reflection: f2
-        ? `내 실험 노트의 RrYy 자가 수분 결과는 ${['RY', 'Ry', 'rY', 'ry'].map(k => `${G.PHENO_NAME[k]} ${f2.tally[k]}개`).join(' · ')}예요(16개 중 기대 개수는 차례대로 9, 3, 3, 1개). 네 가지 표현형이 약 9:3:3:1로 나오는 까닭을 분리의 법칙과 독립의 법칙으로 설명하세요. ${f2same ? '이번에는 기대와 같게 나왔지만, 씨앗 수가 적으면 기대와 다르게 나올 수 있는 까닭도 함께 쓰세요.' : '실제 개수가 기대와 다른 까닭도 함께 쓰세요.'}`
-        : '잡종 1대(RrYy)를 자가 수분하면 네 가지 표현형이 약 9:3:3:1로 나와요. 그 까닭을 분리의 법칙과 독립의 법칙으로 설명하세요. 씨앗 수가 16개처럼 적으면 실제 개수가 이 비율과 다를 수 있는 까닭도 함께 쓰세요.',
+      reflection: reflection.prompt,
       onRetry: reset,
     });
   }
