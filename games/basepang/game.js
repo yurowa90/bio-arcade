@@ -64,7 +64,7 @@
     // 2단계에서 DNA끼리 상보적으로 놓았다면 1단계 짝 규칙을 그대로 쓴 것이다
     if (kinds.includes('dnaDna')) { rec.invalid.dnaDnaInTx++; return '전사 중이다! DNA끼리가 아니라 DNA 옆에 RNA 염기가 와야 한다.'; }
     const one = kinds.length && kinds.every(k => k === kinds[0]) ? kinds[0] : null;
-    if (one === 'same') { rec.invalid.sameBase++; return `${t.b}와 ${t.b}: 같은 염기끼리는 짝이 아니다. 애니팡과 다르다!`; }
+    if (one === 'same') { rec.invalid.sameBase++; return `${t.b}와 ${t.b}: 같은 염기끼리는 짝이 아니다. 상보적인 짝이어야 터진다!`; }
     if (one && one.startsWith('purine:')) { const n = one.slice(7); rec.invalid.purinePurine++; return `${t.b}와 ${n}는 둘 다 크기가 큰 염기(퓨린)라 짝을 이루지 않는다.`; }
     return level === 1 ? '짝이 생기지 않았다. A의 짝은 T, G의 짝은 C!' : '짝이 생기지 않았다. DNA A↔RNA U, T↔A, G↔C, C↔G!';
   }
