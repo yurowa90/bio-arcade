@@ -33,7 +33,9 @@
     #board .valve.open { stroke: #e0a412; stroke-width: 5px; }
     #dark { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 16px; border-radius: 12px; background: #171820; color: #eee; }
     #dark[hidden] { display: none; }
-    #trail { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }
+    #trail-label { flex: 0 0 auto; margin: 0; text-align: center; font-size: 14px; line-height: 20px; }
+    #trail-label small { display: block; font-size: 12px; }
+    #trail { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; min-height: 0; overflow-y: auto; }
     #dark-cursor { display: flex; align-items: center; gap: 6px; }
     .dark-chip { border: 1px solid #777; background: #35363d; color: #ddd; border-radius: 8px; padding: 6px; font-size: 16px; }
     .dark-chip.landmark { background: #464750; }
@@ -68,7 +70,8 @@
     <div id="map">
       <svg id="board" viewBox="0 0 360 470" role="group" aria-label="혈액 순환 판"></svg>
       <section id="dark" aria-label="불 꺼진 바퀴" hidden>
-        <div id="trail"><div id="dark-cursor">
+        <p id="trail-label"><b>내가 고른 경로</b><small>맞았는지는 바퀴 끝에서 알려 준다.</small></p>
+        <div id="trail" role="group" aria-labelledby="trail-label"><div id="dark-cursor">
         <svg class="dark-drop" viewBox="0 0 30 38" aria-label="혈액 한 방울"><path d="M15 1 C12 10 2 17 2 25 A13 12 0 0 0 28 25 C28 17 18 10 15 1" fill="#eee"/></svg>
         <div id="blank" aria-label="지금 묻는 빈칸">?</div>
         </div></div>
