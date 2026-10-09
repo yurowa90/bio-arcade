@@ -21,10 +21,11 @@
 index.html            허브(게임 칸, 학번·이름, 기록 요약·제출, 기록 지우기)
 shared/               미니게임 공통: arcade.js(window.Arcade, GAMES, 기록), arcade.css, standards.js(성취기준 발췌)
 games/<id>/           게임마다 index.html + game.js(화면). 규칙 모듈: basepang/engine.js, circulation/circulation.js,
-                      glucose/model.js, mendel/genetics.js, pedigree/pedigree.js. run(에너지 런)은 규칙이 game.js 안에 있다
+                      glucose/model.js, mendel/genetics.js, organization/organization.js, pedigree/pedigree.js. run(에너지 런)은 규칙이 game.js 안에 있다
 games/quest/          생명 탐사대 — 독립 앱. shared/를 읽지 않고 저장 키도 따로 쓴다
-tests/                quest-logic.js·circulation-logic.js·glucose-logic.js·quest-tune-photo.js(Node),
-                      arcade-e2e.js·quest-e2e.js·ux-common-e2e.js·ux-arcade-e2e.js·ux-mendel-pedigree-e2e.js(Playwright)
+tests/                quest-logic.js·circulation-logic.js·glucose-logic.js·organization-logic.js·quest-tune-photo.js(Node),
+                      arcade-e2e.js·quest-e2e.js·ux-common-e2e.js·ux-arcade-e2e.js·ux-mendel-pedigree-e2e.js(Playwright),
+                      video/(학생 플레이 영상 녹화, D-060)
 sw.js, manifest.webmanifest, icons/   PWA
 ```
 
@@ -38,10 +39,12 @@ for f in $(git ls-files '*.js'); do node --check "$f" || echo "FAIL $f"; done
 node tests/quest-logic.js                                   # 탐사대 규칙·전수 탐색 단언
 node tests/circulation-logic.js                             # 혈액 순환 일주 규칙·별 전수 분포·시뮬레이션(약 1분)
 node tests/glucose-logic.js                                 # 혈당 지키기 별 기준·전략별 분포
+node tests/organization-logic.js                            # 구성 단계 잇기 판정·별 조건(--acceptance는 전략별 시뮬레이션)
 PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/quest-e2e.js /tmp/bio-arcade-e2e/quest     # 약 15초
 PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/arcade-e2e.js /tmp/bio-arcade-e2e/arcade   # 약 3분
 for s in ux-common ux-arcade ux-mendel-pedigree; do PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/$s-e2e.js /tmp/bio-arcade-e2e/$s; done   # 플레이 테스트 반영 화면 검사, 각 수 초
 # 엔진·설정: E2E_BROWSER=webkit, E2E_REDUCED_MOTION=1 (docs/DEVELOPMENT.md 8절)
+PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/video/play.js "$HOME/.cache/bio-arcade-work/video/run"   # 학생 플레이 영상(게임당 1~3분, 저장소 밖 폴더)
 ```
 
 ## 지킬 것

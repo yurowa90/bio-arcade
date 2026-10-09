@@ -8,18 +8,19 @@
 |---|---|
 | `index.html` | 허브. `GAMES`로 게임 칸을 그리고 학번·이름, 기록 요약(요약 복사·JSON 저장·기록 지우기), 공용 기기 확인 창을 맡는다. https일 때만 `sw.js`를 등록한다. |
 | `manifest.webmanifest`, `icons/` | PWA 설정과 아이콘(180·192·512). |
-| `sw.js` | 서비스 워커. `CACHE='bio-arcade-v3'`, `FILES`(7절 명령으로 생성), 네트워크 우선 후 캐시 대체, 정상 응답만 캐시. |
+| `sw.js` | 서비스 워커. `CACHE='bio-arcade-v4'`, `FILES`(7절 명령으로 생성), 네트워크 우선 후 캐시 대체, 정상 응답만 캐시. |
 | `shared/arcade.js` | `window.Arcade`: `GAMES` 목록, 기록 저장, 시작·결과 카드, 모달 처리, 성취기준 표시, 탐사대 배지 읽기, 기록 지우기. |
 | `shared/arcade.css` | 미니게임 공통 스타일(세로 휴대폰 기준). |
-| `shared/standards.js` | `window.ARCADE_STANDARDS`: 2022 개정 성취기준 13개 코드, 성취수준 65개 발췌. |
+| `shared/standards.js` | `window.ARCADE_STANDARDS`: 2022 개정 성취기준 14개 코드, 성취수준 70개 발췌. |
 | `games/basepang/` | 염기쌍 팡. `engine.js`(`window.BasePang`, 판·짝 규칙·연쇄), `game.js`(화면·오개념 신호·흐름 문항). |
 | `games/circulation/` | 혈액 순환 일주. `circulation.js`(`window.Circulation`, 판·경로·혈액 상태, 연습 3바퀴와 불 꺼진 바퀴 상태 기계, 별·결과 문장·오개념 신호), `game.js`(SVG 판·이벤트 재생·불 꺼진 바퀴 패널). 설계는 `docs/design/circulation-board.md`. |
 | `games/glucose/` | 혈당 지키기. `model.js`(`window.GlucoseModel`, 45초=하루 모델·별), `game.js`(캔버스·모드 선택). |
 | `games/mendel/` | 멘델의 텃밭. `genetics.js`(`window.Genetics`), `game.js`(화분·교배·검정 교배·추론). |
+| `games/organization/` | 구성 단계 잇기. `organization.js`(`window.Organization`, 패·'이룬다' 관계표·줄 전체 제약·판정·별), `game.js`(손패·판·붙이기 화면, 놀이 중 단계 숫자 숨김). |
 | `games/pedigree/` | 가계도 지뢰찾기. `pedigree.js`(`window.Pedigree`, 단계 데이터·유전자형 조합 전수 해결기), `game.js`. |
 | `games/run/` | 에너지 런. `game.js` 하나(구간 `ZONES`, 아이템 묶음 `DECK`, 세포 전달). 규칙 모듈이 따로 없다. |
 | `games/quest/` | 생명 탐사대. **독립 앱**: `shared/`를 읽지 않는다. `js/data.js`(`window.GameData`: 생물 19종, 지도 4개, 체육관), `js/battles.js`(`window.Battles`: 광합성·소화 규칙), `js/main.js`(이동·대화·관찰·도감·체육관·저장), `css/style.css`. |
-| `tests/` | `quest-logic.js`·`circulation-logic.js`(Node 단언), `quest-tune-photo.js`(광합성 난이도 보고), `arcade-e2e.js`·`quest-e2e.js`(Playwright). |
+| `tests/` | `quest-logic.js`·`circulation-logic.js`·`glucose-logic.js`·`organization-logic.js`(Node 단언·시뮬레이션), `quest-tune-photo.js`(광합성 난이도 보고), `arcade-e2e.js`·`quest-e2e.js`·`ux-*-e2e.js`(Playwright), `video/`(학생처럼 끝까지 해 보는 플레이 영상 녹화, D-060). |
 | `docs/` | 진행 상황, 결정 기록, 이 문서, 당시 기록 2개(복구 기록서, 교차 검토 결과). |
 
 ## 2. 모듈 관례
@@ -62,6 +63,7 @@ node -e "global.window=global; const S=require('./shared/standards.js'); const A
 
 - `window.__game`(염기쌍 팡): `grid()`, `level()`, `moves()`, `trySwap(a, b)`.
 - `window.__circ`(혈액 순환 일주): `state()`, `pending()`, `correct()`(지금 입력의 정답 키, 테스트 전용), `fast(on)`(이벤트 재생 대기를 없앤다), `view()`(화면이 지금 그리는 문항. 재생 중에는 판이 직전 상태로 그려지므로 판·경로 칩 검사는 `pending()`이 아니라 이것과 비교한다). `window.__game`은 염기쌍 팡이 쓰므로 이름을 나눴다.
+- `window.__org`(구성 단계 잇기): `state()`(상태 사본), `completeLines()`, `start(seed, options)`(시드·턴 상한으로 새 판을 재현한다. 패를 넣거나 규칙을 건너뛰지 않는다), `draw()`.
 - `window.__bq`(탐사대): 상태 `S`, `mode`, `player`, `warp(map, x, y)`, `encounter(habitat, sp?)`, `observationQuestions(sp)`, `gymPhoto`, `gymDigest`, `openDex`.
 - E2E는 전역 모듈도 직접 쓴다(`window.Pedigree.solve`, `window.BasePang.findPairs`, `window.GameData.SPECIES`). 혈당·에너지 런·멘델은 DOM 선택자와 포인터로 조작한다.
 
@@ -96,6 +98,7 @@ WebKit(아이폰 Safari와 같은 계열의 엔진)으로도 돌릴 수 있다. 
 | `node tests/quest-logic.js` | 1초 미만 | `FAIL` 0, 종료 코드 0 |
 | `node tests/circulation-logic.js` | 약 1분 | `FAIL` 0, 종료 코드 0. 별 전수 분포와 32,000판 시뮬레이션 값을 함께 출력한다 |
 | `node tests/glucose-logic.js` | 수 초 | 종료 코드 0. 혈당 별 기준(54 미만 상한)과 전략별 분포 |
+| `node tests/organization-logic.js` (`--acceptance`) | 기본 약 36초, 인수 약 13초 | `FAIL` 0, 종료 코드 0. 출력의 '고의 변이 … FAIL' 줄(기본·인수 모두)은 변이를 잡았다는 뜻이다. 숫자 전략은 보고만 한다(D-058) |
 | `PW=… node tests/ux-common-e2e.js`·`ux-arcade-e2e.js`·`ux-mendel-pedigree-e2e.js <저장소 밖 폴더>` | 각 수 초 | `errors: none`, `failures: none`, 종료 코드 0. 플레이 테스트 반영(D-054) 화면 검사 |
 | `node tests/quest-tune-photo.js` | 1초 미만 | 보고만 한다. 광합성 규칙을 바꿀 때 별 분포를 본다 |
 | `PW=~/.cache/bio-arcade-tools/node_modules/playwright node tests/arcade-e2e.js <저장소 밖 폴더>` | 약 2분 | `errors: none`, `failures: none`, 종료 코드 0 |
@@ -113,6 +116,20 @@ PW=~/.cache/bio-arcade-tools/node_modules/playwright E2E_BROWSER=webkit E2E_REDU
 
 E2E는 서버 없이 `file://`로 페이지를 연다. 화면을 직접 보려면 저장소 루트에서 `python3 -m http.server 18923 --bind 127.0.0.1`을 띄운다(8765·8791은 이 맥의 다른 도구와 겹친 적이 있어 피한다). 서비스 워커는 https에서만 등록되므로 로컬 서버에서는 오프라인 캐시가 동작하지 않는다.
 
+### 플레이 영상(`tests/video/`, D-060)
+
+학생처럼 게임을 처음부터 결과 화면까지 해 보는 영상을 녹화한다. 교사가 영상을 보거나 다른 모델에 보여 학생 경험을 검토하고, 고친 뒤 같은 장면을 다시 찍어 비교한다.
+
+```bash
+PW=~/.cache/bio-arcade-tools/node_modules/playwright node tests/video/play.js <저장소 밖 절대 경로> [게임 id ...]
+```
+
+- 게임 id를 주지 않으면 `hub, quest, mendel, pedigree, basepang, run, glucose, circulation, organization`을 차례로 한다. 출력 폴더가 저장소 안이면 종료 코드 2로 끝난다.
+- 정적 서버를 빈 포트에 직접 띄운다. 무대 페이지(780×1864, 위쪽 자막 띠 + 게임 iframe 390×844를 2배로 확대)를 Playwright `recordVideo`로 찍어 `<순번>-<id>.webm`을 남긴다. 장면마다 무대 사진, 게임마다 `<id>-log.json`(장면 시간·실패·콘솔 오류·결과), 전체 `summary.json`이 함께 나온다. 엔진은 `E2E_BROWSER`, 대기 배수는 `VIDEO_PACE`(디버그 0.3), 자막은 `VIDEO_CAPTIONS=0`으로 끈다.
+- 장면은 `tests/video/scenes/<id>.js`에 `{ id, title, path, play(h) }`로 둔다. `h`는 `loc`(게임 iframe 안 선택자), `goto`, `think`, `read`, `tap`(`{ fast }`), `tapAt`, `down`·`up`, `key`, `type`, `caption`, `mark`, `step`, `expect`, `intro`, `finish`, `result`, `random`을 준다.
+- 장면은 화면에 보이는 정보로 결정하고 모든 조작을 탭·입력으로 한다. 테스트 훅은 `h.game.evaluate`로 읽기만 하고, 상태를 바꾸는 훅(`trySwap`, `warp`, `encounter`, `fast`, `start` 등)은 부르지 않는다. 게임 화면에 스크립트를 넣지 않는다(손가락·자막은 무대에만 있다).
+- 실시간 게임(에너지 런, 혈당)은 100~150ms 간격으로 상태를 읽고 사람 반응 지연을 둔 정책으로 한다. 게임마다 학생이 흔히 하는 실수를 1~2번 일부러 하고 안내를 읽는다.
+
 ## 9. 새 게임 추가
 
 허브 칸은 `GAMES`에서 자동으로 그려지므로 `index.html`은 고치지 않는다. 절차는 `/add-game` 스킬에도 있다.
@@ -126,6 +143,7 @@ E2E는 서버 없이 `file://`로 페이지를 연다. 화면을 직접 보려�
 7. `tests/arcade-e2e.js`의 에너지 런 블록 뒤에 플레이와 `finishCheck('<id>')`를 넣는다.
 8. `.claude/rules/minigames.md`의 `paths`에 `"games/<id>/**"`를 넣고, 결정 번호 줄에 새 게임의 D번호를 더한다.
 9. 8절의 검증을 모두 돌리고 스크린샷에서 가로 넘침과 화면을 눈으로 확인한다.
+10. `tests/video/scenes/<id>.js`에 플레이 영상 장면을 더하고(8절 '플레이 영상'), `common.js`의 `ORDER`에 id를 넣는다.
 
 생명 탐사대에 체육관을 열 때는 경로가 다르다. `data.js` `GYMS`의 `ready: true`, `battles.js`의 규칙과 내보내기, `main.js`의 체육관 함수와 문 연결, `shared/arcade.js` `GAMES`의 `quest.gyms`, `tests/quest-logic.js`와 `tests/quest-e2e.js`를 함께 고친다.
 
