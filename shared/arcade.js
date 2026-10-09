@@ -41,8 +41,58 @@
       standards: ['9과20-03'], target: 'D~B' },
   ];
 
-  function load() { try { return JSON.parse(localStorage.getItem(KEY)) || { student: {}, games: {} }; } catch { return { student: {}, games: {} }; } }
-  function save(d) { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch { /* 저장 불가 */ } }
+  const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+  const readLevel = play => Number.isInteger(play.level) && play.level >= 0 ? play.level : 0;
+  const validLevel = level => Number.isInteger(level) && level >= 0 && level <= 9;
+  function load() {
+    try {
+      const d = JSON.parse(localStorage.getItem(KEY));
+      if (!isObject(d)) return { student: {}, games: {} };
+      if (!isObject(d.student)) d.student = {};
+      if (!isObject(d.games)) d.games = {};
+      return d;
+    } catch { return { student: {}, games: {} }; }
+  }
+  function save(d) {
+    try { localStorage.setItem(KEY, JSON.stringify(d)); return { ok: true }; }
+    catch (e) {
+      const quota = e?.name === 'QuotaExceededError' || e?.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e?.code === 22 || e?.code === 1014;
+      return { ok: false, errorCode: quota ? 'quota' : e?.name === 'SecurityError' ? 'unavailable' : 'unknown' };
+    }
+  }
+  function createPlayId() {
+    if (typeof root.crypto?.getRandomValues !== 'function') return undefined;
+    const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let id = '';
+    // 252 미만만 사용해 36문자에 고르게 배분한다.
+    while (id.length < 12) {
+      const bytes = root.crypto.getRandomValues(new Uint8Array(12));
+      for (const byte of bytes) { if (byte < 252) id += alphabet[byte % 36]; if (id.length === 12) break; }
+    }
+    return id;
+  }
+  function recordPlay(id, play) {
+    const d = load();
+    const game = isObject(d.games[id]) ? d.games[id] : (d.games[id] = { best: 0, bestScore: 0, plays: [] });
+    if (!Array.isArray(game.plays)) game.plays = [];
+    const level = validLevel(play.level) ? play.level : 0;
+    const previousBest = Arcade.personalBest(id, level, play.cond)?.playScore ?? null;
+    const alreadyCleared = game.plays.some(p => readLevel(p) === level && p.cleared === true);
+    const entry = { at: new Date().toISOString() };
+    for (const [key, value] of Object.entries(play)) {
+      if (value !== undefined && key !== 'playId' && (key !== 'level' || validLevel(value))) entry[key] = value;
+    }
+    const playId = createPlayId();
+    if (playId !== undefined) entry.playId = playId;
+    const index = game.plays.length;
+    game.plays.push(entry);
+    if (level === 0) {
+      game.best = Math.max(Number.isFinite(game.best) ? game.best : 0, play.stars || 0);
+      game.bestScore = Math.max(Number.isFinite(game.bestScore) ? game.bestScore : 0, play.score || 0);
+    }
+    const saved = save(d);
+    return { game, index, play: entry, save: saved, previousBest, firstClear: entry.cleared === true && !alreadyCleared && saved.ok };
+  }
 
   /* 시작·결과 카드(overlay)가 떠 있는 동안 뒤쪽 게임 화면을 조작하지 못하게 한다.
    * - 뒤쪽 요소에 inert: 탭 이동·포커스·클릭이 닿지 않는다.
@@ -85,7 +135,11 @@
     game(id) { return GAMES.find(g => g.id === id); },
     data: load,
     student() { return load().student || {}; },
-    setStudent(st) { const d = load(); d.student = st; save(d); },
+    setStudent(st) { const d = load(); d.student = st; return save(d); },
+    canSave() {
+      try { localStorage.setItem(KEY + '.probe', '1'); localStorage.removeItem(KEY + '.probe'); return true; }
+      catch { return false; }
+    },
     // 이 기기에 게임 기록이 남아 있는가(탐사대 저장 포함)
     hasRecords() {
       if (Object.keys(load().games || {}).length) return true;
@@ -110,17 +164,79 @@
       }
       const g = load().games[id]; return g ? g.best : 0;
     },
-    record(id, play) {
-      const d = load();
-      const g = d.games[id] || (d.games[id] = { best: 0, bestScore: 0, plays: [] });
-      g.plays.push({ at: new Date().toISOString(), ...play });
-      g.best = Math.max(g.best, play.stars || 0);
-      g.bestScore = Math.max(g.bestScore, play.score || 0);
-      save(d);
-      return g;
-    },
+    record(id, play) { return recordPlay(id, play).game; },
     // 방금 저장한 판에 퀴즈 결과·성찰을 덧붙인다
-    patchLast(id, patch) { const d = load(); const g = d.games[id]; if (!g || !g.plays.length) return; Object.assign(g.plays[g.plays.length - 1], patch); save(d); },
+    patchLast(id, patch) {
+      const d = load(), plays = d.games[id]?.plays;
+      if (!Array.isArray(plays) || !plays.length) return { ok: false, errorCode: 'gone' };
+      Object.assign(plays[plays.length - 1], patch); return save(d);
+    },
+    plays(id, filter = {}) {
+      const plays = load().games[id]?.plays;
+      if (!Array.isArray(plays)) return [];
+      return plays.filter(p => (!('level' in filter) || readLevel(p) === filter.level) &&
+        (!('cond' in filter) || p.cond === filter.cond));
+    },
+    isUnlocked(id, level) {
+      if (!Number.isInteger(level) || level < 0) return false;
+      return level <= 1 || Arcade.plays(id, { level: level - 1 }).some(p => p.cleared === true);
+    },
+    personalBest(id, level = 0, cond) {
+      let best = null;
+      Arcade.plays(id).forEach((p, index) => {
+        if (readLevel(p) === level && p.cond === cond && p.eligible !== false && Number.isFinite(p.playScore) &&
+          (best === null || p.playScore > best.playScore)) best = { playScore: p.playScore, at: p.at, index };
+      });
+      return best;
+    },
+    progress(id) {
+      const plays = Arcade.plays(id), levels = {}, unlocked = new Set([0, 1]);
+      for (const p of plays) {
+        const level = readLevel(p);
+        const record = levels[level] || (levels[level] = { plays: 0, bestStars: 0, cleared: null });
+        record.plays++;
+        record.bestStars = Math.max(record.bestStars, Number.isFinite(p.stars) ? p.stars : 0);
+        if (p.cleared === true) {
+          if (record.cleared === null) record.cleared = p.at;
+          unlocked.add(level + 1);
+        }
+      }
+      return { total: plays.length, levels, unlocked: [...unlocked].sort((a, b) => a - b) };
+    },
+    scoreboard({ id, level = 0, cond } = {}) {
+      const best = id ? Arcade.personalBest(id, level, cond)?.playScore ?? null : null;
+      let score = 0, combo = 0, maxCombo = 0, beatBest = false;
+      const listeners = new Set();
+      const emit = event => {
+        for (const fn of [...listeners]) {
+          try { fn(event); } catch (e) { setTimeout(() => { throw e; }); }
+        }
+      };
+      const update = next => {
+        const delta = next - score;
+        if (delta === 0) return true;
+        score = next;
+        // 리스너가 점수를 다시 바꿔도 이번 변경의 최고 갱신은 한 번만 보낸다.
+        const exceeded = !beatBest && best !== null && score > best;
+        if (exceeded) beatBest = true;
+        const current = score;
+        emit({ type: 'score', score: current, delta });
+        if (exceeded) emit({ type: 'best', score: current, best });
+        return true;
+      };
+      return {
+        add(n) { return Number.isFinite(n) ? update(score + n) : false; },
+        set(n) { return Number.isFinite(n) ? update(n) : false; },
+        hit(n = 1) {
+          if (!Number.isFinite(n) || n <= 0) return false;
+          combo += n; maxCombo = Math.max(maxCombo, combo); emit({ type: 'combo', combo }); return true;
+        },
+        miss() { if (combo > 0) { const previous = combo; combo = 0; emit({ type: 'break', combo: previous }); } },
+        on(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+        state() { return { score, combo, maxCombo, best, beatBest }; },
+        result() { return { playScore: score, maxCombo }; },
+      };
+    },
 
     standards(codes) { const all = root.ARCADE_STANDARDS || []; return codes.map(c => all.find(s => s.code === c)).filter(Boolean); },
     standardsHTML(codes, target) {
@@ -154,30 +270,61 @@
 
     /* 결과 화면: 별 → 인출 문항(2지) → 설명해 보기 → 다시/오락실
      * quiz: { q, options:[...], answer, explain }  reflection: 문항 문자열 */
-    finish(overlay, { id, stars, score, lines, detail, quiz, reflection, onRetry }) {
+    finish(overlay, { id, stars, score, lines, detail, quiz, reflection, onRetry, level, cond, playScore, maxCombo, cleared, eligible }) {
       stopReflection(overlay);
-      const recorded = Arcade.record(id, { stars, score, detail });
-      const playIndex = recorded.plays.length - 1, playAt = recorded.plays[playIndex].at;
+      const fields = { stars, score, detail };
+      if (validLevel(level)) fields.level = level;
+      if (typeof cond === 'string' && cond.length >= 1 && cond.length <= 40) fields.cond = cond;
+      if (Number.isFinite(playScore)) fields.playScore = playScore;
+      if (Number.isFinite(maxCombo)) fields.maxCombo = maxCombo;
+      if (cleared === true) fields.cleared = true;
+      if (eligible === false) fields.eligible = false;
+      const recorded = recordPlay(id, fields);
+      const playIndex = recorded.index, playAt = recorded.play.at, playId = recorded.play.playId;
       let active = true;
-      const patchPlay = patch => {
-        if (!active) return;
-        const d = load(), play = d.games[id]?.plays[playIndex];
-        // 마지막 판을 찾지 않는다. 지웠거나 다른 판으로 바뀌었으면 쓰지 않는다.
-        if (!play || play.at !== playAt) { active = false; return; }
-        if (Object.entries(patch).every(([k, v]) => play[k] === v)) return;
-        Object.assign(play, patch); save(d);
+      const warn = result => {
+        if (!warning || !overlay.contains(card) || !overlay.isConnected || result.errorCode === 'gone') return;
+        if (result.ok) {
+          if (recorded.save.ok) { warning.hidden = true; warning.textContent = ''; }
+          return;
+        }
+        warning.hidden = false;
+        warning.textContent = recorded.save.ok
+          ? '답을 저장하지 못했다. 화면을 닫기 전에 답을 따로 적어 두세요.'
+          : '기록을 저장하지 못했다. 이 화면을 닫으면 이번 판 결과가 남지 않으니 선생님께 보여 주세요.';
       };
+      const patchPlay = patch => {
+        if (!active) return { ok: false, errorCode: 'gone' };
+        const d = load(), play = d.games[id]?.plays?.[playIndex];
+        // 마지막 판을 찾지 않는다. 지웠거나 다른 판으로 바뀌었으면 쓰지 않는다.
+        if (!play || play.at !== playAt || (playId !== undefined && play.playId !== playId)) {
+          active = false; return { ok: false, errorCode: 'gone' };
+        }
+        if (Object.entries(patch).every(([k, v]) => play[k] === v)) return { ok: true };
+        Object.assign(play, patch);
+        const result = save(d); warn(result); return result;
+      };
+      patchPlay.save = recorded.save;
+      patchPlay.playId = playId;
+      patchPlay.best = Number.isFinite(fields.playScore) ? {
+        previous: recorded.previousBest, current: fields.playScore,
+        isNew: recorded.save.ok && fields.eligible !== false && (recorded.previousBest === null || fields.playScore > recorded.previousBest),
+      } : null;
+      patchPlay.firstClear = recorded.firstClear;
       showModal(overlay);
       const opts = quiz ? quiz.options.map((o, i) => ({ o, i })).sort(() => Math.random() - 0.5) : [];
       overlay.innerHTML = `<div class="card" role="dialog" aria-modal="true">
         <h2>${stars > 0 ? '성공!' : '다시 도전!'}</h2>
         <p class="big-stars">${Arcade.stars(stars)}</p>
+        <p class="save-warn" role="alert" hidden></p>
         ${lines.map(l => `<p>${l}</p>`).join('')}
         ${quiz ? `<div class="quiz"><p><b>한 번 더 떠올리기</b> — ${quiz.q}</p>
           <div class="quiz-opts">${opts.map(({ o, i }) => `<button class="btn" data-i="${i}">${o}</button>`).join('')}</div>
           <p class="quiz-fb" hidden></p></div>` : ''}
         ${reflection ? `<label class="refl"><b>설명해 보기</b> — ${reflection}<textarea id="ar-refl" placeholder="두세 문장으로 써 보세요."></textarea></label>` : ''}
         <div class="row card-actions"><button class="btn" id="ar-retry">다시 하기</button><a class="btn primary" id="ar-hub" href="../../index.html">오락실로</a></div></div>`;
+      const card = overlay.querySelector('.card'), warning = card?.querySelector('.save-warn');
+      warn(recorded.save);
       if (quiz) overlay.querySelectorAll('.quiz-opts .btn').forEach(b => b.onclick = () => {
         const ok = +b.dataset.i === quiz.answer;
         overlay.querySelectorAll('.quiz-opts .btn').forEach(x => { x.disabled = true; if (+x.dataset.i === quiz.answer) x.classList.add('right'); });
@@ -187,7 +334,7 @@
         patchPlay({ quizCorrect: ok });
       });
       // 흐름 문항이 label을 잠시 떼었다 붙여도 같은 textarea와 리스너를 쓴다.
-      const textarea = overlay.querySelector('#ar-refl'), card = overlay.querySelector('.card');
+      const textarea = overlay.querySelector('#ar-refl');
       let timer;
       const keepRefl = () => { clearTimeout(timer); const answer = textarea?.value.trim(); if (answer !== undefined) patchPlay({ reflection: answer }); };
       const input = () => { clearTimeout(timer); timer = setTimeout(keepRefl, 300); };
@@ -201,12 +348,15 @@
       const observer = new MutationObserver(() => { if (overlay.hidden || !overlay.contains(card) || !overlay.isConnected) stopReflection(overlay); });
       observer.observe(overlay, { attributes: true, attributeFilter: ['hidden'], childList: true, subtree: true });
       reflections.set(overlay, () => {
-        keepRefl(); active = false; clearTimeout(timer); observer.disconnect();
-        textarea?.removeEventListener('input', input);
-        textarea?.removeEventListener('compositionend', input);
-        root.removeEventListener('pagehide', keepRefl);
-        root.removeEventListener('storage', deleted);
-        document.removeEventListener('visibilitychange', hidden);
+        try { keepRefl(); }
+        finally {
+          active = false; clearTimeout(timer); observer.disconnect();
+          textarea?.removeEventListener('input', input);
+          textarea?.removeEventListener('compositionend', input);
+          root.removeEventListener('pagehide', keepRefl);
+          root.removeEventListener('storage', deleted);
+          document.removeEventListener('visibilitychange', hidden);
+        }
       });
       overlay.querySelector('#ar-retry').onclick = () => { keepRefl(); hideModal(overlay); onRetry(); };
       // 뒤로 가기로 결과 카드가 복원되어도 같은 판의 입력 저장을 계속한다.

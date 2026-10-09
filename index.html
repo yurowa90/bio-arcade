@@ -86,7 +86,11 @@
           const q = A.questBadges();
           return q ? `배지 ${q.got}/${q.total}` : '아직 안 함';
         }
-        return A.data().games[g.id]?.plays?.length ? `최고 ${A.stars(A.best(g.id))}` : '아직 안 함';
+        const progress = A.progress(g.id);
+        const completed = Object.keys(progress.levels).map(Number).filter(level => level >= 1 && progress.levels[level].cleared !== null);
+        const challenge = completed.length ? `도전 ${Math.max(...completed)} 완료` : '';
+        if (progress.levels[0]) return `최고 ${A.stars(A.best(g.id))}${challenge ? ' · ' + challenge : ''}`;
+        return challenge || (progress.total ? '도전 해 봄' : '아직 안 함');
       };
       const drawCabinets = () => { box.innerHTML = A.GAMES.map(g => `<a class="cab" href="${g.path}">
         <div class="screen" style="background:${g.color}">${g.title[0]}</div>
@@ -162,13 +166,23 @@
           }
           const r = d.games[g.id]; if (!r) return;
           // 서술 답은 마지막 판만이 아니라 쓴 판 모두를 판 번호와 함께 싣는다
-          const refl = r.plays.map((p, i) => p.reflection ? ` / 설명(${i + 1}판): ${p.reflection}` : '').join('');
-          lines.push(`${head}: 최고 ★${r.best}, ${r.plays.length}판${refl}`);
+          const plays = A.plays(g.id), progress = A.progress(g.id);
+          const refl = plays.map((p, i) => p.reflection ? ` / 설명(${i + 1}판): ${p.reflection}` : '').join('');
+          const levels = Object.keys(progress.levels).map(Number).sort((a, b) => a - b);
+          if (!levels.some(level => level >= 1)) {
+            lines.push(`${head}: 최고 ★${r.best}, ${plays.length}판${refl}`);
+            return;
+          }
+          const counts = levels.map(level => `${level === 0 ? '기본 판' : '도전 ' + level} ${progress.levels[level].plays}`).join('·');
+          const completed = levels.filter(level => level >= 1 && progress.levels[level].cleared !== null);
+          const challenge = completed.length ? `, 도전 ${Math.max(...completed)} 완료` : '';
+          lines.push(`${head}: ${progress.levels[0] ? '최고 ★' + r.best : '기본 판 안 함'}, ${plays.length}판(${counts})${challenge}${refl}`);
         });
         return lines.join('\n');
       }
       function render() { $('summary').value = summary(); }
       render();
+      if (!A.canSave()) $('msg').textContent = '이 브라우저에서는 기록을 저장할 수 없다. 선생님께 알려 주세요.';
       $('copy').onclick = async () => { try { await navigator.clipboard.writeText(summary()); $('msg').textContent = '복사했습니다.'; } catch { $('msg').textContent = '복사하지 못했습니다. 글상자를 길게 눌러 복사하세요.'; } };
       $('dl').onclick = () => {
         $('msg').textContent = '';
