@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "arcade",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8765",
+        "--bind",
+        "0.0.0.0"
+      ],
+      "port": 8765
+    },
+    {
+      "name": "mockups",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "python3 -m http.server 8766 --bind 0.0.0.0 --directory \"$HOME/.cache/bio-arcade-work/preview\""
+      ],
+      "port": 8766
+    }
+  ]
+}
