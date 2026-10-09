@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>구성 단계 잇기</title>
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../../icons/icon-180.png">
+  <link rel="stylesheet" href="../../shared/arcade.css">
+  <style>
+    body { background: #254f57; height: 100vh; height: 100dvh; word-break: keep-all; overflow-wrap: anywhere; }
+    .bar { flex: 0 0 auto; gap: 8px; }
+    .bar b { font-size: 15px; }
+    .btn { min-height: 44px; }
+    #stage { min-height: 0; gap: 6px; overflow: hidden; }
+    .goal { flex: 0 0 auto; background: #fffaf0; border-radius: 12px; padding: 8px 10px; }
+    .goal p { margin: 0; font-size: 14px; font-weight: 800; line-height: 1.4; }
+    .hudline { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; }
+    .legend { margin-top: 4px; font-size: 12px; }
+    .animal-key { color: #a33333; font-weight: 800; }
+    .plant-key { color: #256039; font-weight: 800; }
+    .panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; border-radius: 12px; background: #fffaf0; padding: 6px; }
+    .panel[hidden] { display: none; }
+    .panel h2 { flex: 0 0 auto; font-size: 13px; margin: 0 0 4px; }
+    .board-panel { flex: 1 1 0; min-height: 85px; }
+    .hand-panel { flex: 1.3 1 0; min-height: 100px; }
+    #board, #hand { min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+    #board { flex: 1; }
+    #board:focus-visible, #hand:focus-visible { outline: 3px solid #e0a412; outline-offset: -3px; }
+    .empty-board { margin: 8px; font-size: 13px; line-height: 1.5; }
+    .set { display: block; width: 100%; margin-bottom: 6px; padding: 4px; border: 2px solid #cbbfa8; border-radius: 10px; text-align: center; }
+    .set.chosen { border-color: #254f57; background: #e9f1f2; }
+    .set-target { min-height: 44px; background: #fffaf0; font: inherit; font-size: 12px; font-weight: 800; color: #1f1d2b; cursor: pointer; }
+    .set-target[hidden] { display: none; }
+    .set-target[aria-pressed="true"] .set-heading { background: #254f57; color: #fff; }
+    .set-heading { display: block; border-radius: 4px; padding: 2px; background: #eee7d7; line-height: 1.4; }
+    .set-tiles { display: grid; grid-template-columns: repeat(var(--tile-count), minmax(0, 1fr)); gap: 4px; margin-top: 4px; align-items: stretch; }
+    .board-tile { min-width: 0; text-align: center; }
+    .board-tile .tile { display: block; }
+    .stage-name { display: block; font-size: 12px; font-weight: 800; margin-bottom: 3px; }
+    .tile { min-width: 0; min-height: 60px; border: 2px solid; border-radius: 8px; padding: 5px 3px; font: inherit; font-size: 12px; font-weight: 800; line-height: 1.35; overflow-wrap: anywhere; word-break: keep-all; }
+    .tile.animal { background: #fce7e5; border-color: #ac4040; color: #702020; }
+    .tile.plant { background: #e5f2e5; border-color: #39784b; color: #204e2b; }
+    #hand { display: grid; flex: 1; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; align-content: start; padding: 3px; }
+    #hand[hidden] { display: none; }
+    #hand .tile { cursor: pointer; position: relative; padding-right: 14px; }
+    #hand .tile[aria-pressed="true"] { outline: 3px solid #254f57; outline-offset: -1px; }
+    #hand .tile[aria-pressed="true"]::after { content: '✓'; position: absolute; top: 0; right: 2px; color: #1f1d2b; background: #fff; font-size: 14px; }
+    .tile:focus-visible, .set-target:focus-visible { outline: 3px solid #e0a412; outline-offset: -1px; }
+    #feedback { flex: 0 0 auto; margin: 0; padding: 6px 8px; min-height: 48px; max-height: 100px; overflow-y: auto; background: #fffaf0; border-radius: 8px; color: #1f1d2b; font-size: 13px; line-height: 1.4; -webkit-user-select: text; user-select: text; }
+    #feedback[data-kind="error"] { background: #fce7e5; }
+    #feedback[data-kind="scope"] { background: #e6eff7; }
+    .controls { flex: 0 0 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+    .controls[hidden] { display: none; }
+    .controls .btn { min-height: 44px; padding: 8px 4px; font-size: 14px; }
+    #selection { margin: 0; flex: 0 0 auto; color: #fff; font-size: 12px; line-height: 1.4; }
+    .keyboard-hint { display: none; }
+    .keyboard-hint[hidden] { display: none; }
+    .keyboard-used .keyboard-hint { display: inline; }
+    @media (hover: hover) and (pointer: fine) { .keyboard-hint { display: inline; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+  </style>
+</head>
+<body>
+  <header class="bar"><a href="../../index.html">← 오락실</a><b>구성 단계 잇기</b></header>
+  <main id="stage">
+    <section class="goal" aria-label="목표와 남은 기회">
+      <p id="goal">동물과 식물의 완전한 줄(세포부터 개체까지)을 만드세요</p>
+      <div class="hudline"><span>남은 턴 <b id="turns">20</b></span><span>이번 턴 남은 시도 <b id="attempts">3</b></span><span id="completed">동물 미완성 · 식물 미완성</span></div>
+      <div class="legend"><span class="animal-key">동물: 붉은색</span> · <span class="plant-key">식물: 초록색</span> · 패에는 숫자가 없다</div>
+    </section>
+    <section class="panel board-panel"><h2>판 — 붙일 줄·묶음을 눌러 고르세요</h2><div id="board" tabindex="0" role="region" aria-label="내놓은 줄과 묶음"></div></section>
+    <section class="panel hand-panel"><h2>손패 <span id="hand-count">14</span>장 — 위아래로 밀어 모두 보기</h2><div id="hand" tabindex="0" role="region" aria-label="고를 손패"></div></section>
+    <p id="selection">패를 고른 뒤 할 일을 누르세요.</p>
+    <p id="feedback" role="status" aria-live="polite" aria-atomic="true">줄은 앞 패가 뒤 패를 이루는 관계로 잇는다.</p>
+    <div class="controls">
+      <button class="btn" id="play-line">줄로 내기</button><button class="btn" id="play-group">묶음으로 내기</button>
+      <button class="btn" id="attach">붙이기</button><button class="btn primary" id="draw">한 장 뽑기</button>
+    </div>
+  </main>
+  <div class="overlay" id="overlay" hidden></div>
+  <script src="../../shared/standards.js"></script>
+  <script src="../../shared/arcade.js"></script>
+  <script src="organization.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

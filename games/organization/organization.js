@@ -1,4 +1,4 @@
-/* 구성 단계 루미큐브 — 순수 규칙. DOM·저장소·시계를 쓰지 않는다.
+/* 구성 단계 잇기 — 순수 규칙. DOM·저장소·시계를 쓰지 않는다.
  * newGame(seed, { turnLimit? }) → 상태. seed는 32비트 부호 없는 정수(0 포함).
  * 패 종류는 TILES의 id, 실제 패는 DECK의 '종류:0|1'. tile(id)로 표시 정보를 얻는다.
  * validateLine/validateGroup은 종류 id와 실제 패 id를 받으며 상태를 바꾸지 않는다.
@@ -20,7 +20,7 @@
  * → lineConflict → outOfScope. 순서 선택은 신호로 기록하지 않는다.
  * 묶음 판정: 동물 기관/조직계 혼동 → 단계 섞임(숫자 혼동 포함) → 이름 중복.
  * 판정 실패는 한 제출에 한 번 센다. 앞 두 번은 재시도, 세 번째는 한 장 뽑고 턴 전환.
- * 장수 부족·단계 누락·범위 밖도 판정 실패지만 오개념 집계와는 구별한다.
+ * 단계 누락은 시도를 센다. 장수 부족·범위 밖은 시도를 깎지 않는다(D-059).
  * 토큰·형식·손패 ID 오류는 시도를 세지 않는다. 현재 token의 요청은
  * 성공 여부와 관계없이 revision을 올려 중복 제출을 막는다. 미리보기는 판정 함수만 부른다.
  * 상태는 읽기 전용으로 취급한다. 결과는 종료 때 result로 얻는다(진행 중에는 null).
@@ -60,18 +60,18 @@
   });
   const OUT_OF_SCOPE = freeze({ epithelium: ['heart', 'brain'], muscle: ['brain'], nerve: ['heart', 'stomach'] });
   const LINE_CONSTRAINTS = freeze([
-    { id: 'palisadeInLeaf', triggers: ['palisadeCell', 'palisade'], stage: 'organ', allowed: ['leaf'], message: '울타리 조직 세포나 울타리 조직이 든 줄의 기관은 잎이어야 합니다.' },
-    { id: 'cardiacInHeart', triggers: ['cardiacCell'], stage: 'organ', allowed: ['heart'], message: '심장 근육 세포가 든 줄의 기관은 심장이어야 합니다.' }
+    { id: 'palisadeInLeaf', triggers: ['palisadeCell', 'palisade'], stage: 'organ', allowed: ['leaf'], message: '울타리 조직은 잎에 있다. 울타리 조직 세포나 울타리 조직이 든 줄의 기관은 잎이어야 한다.' },
+    { id: 'cardiacInHeart', triggers: ['cardiacCell'], stage: 'organ', allowed: ['heart'], message: '심장 근육은 심장에만 있다. 심장 근육 세포가 든 줄의 기관은 심장이어야 한다.' }
   ]);
   const SIGNALS = freeze(['systemInPlant', 'tissueSystemInAnimal', 'kingdomMix', 'relationError', 'lineConflict', 'duplicateGroup', 'numberGroup']);
   const MESSAGES = freeze({
-    systemInPlant: '식물의 구성 단계에는 기관계가 없습니다.', tissueSystemInAnimal: '조직계는 식물의 구성 단계입니다. 동물의 기관과 같은 단계가 아닙니다.',
-    kingdomMix: '한 줄에는 동물과 식물 패를 섞을 수 없습니다.', stageGap: '줄은 중간 단계를 빠뜨리거나 같은 단계를 겹치지 않고 이어야 합니다.',
-    relationError: '앞 패가 뒤 패를 이루는 관계가 아닙니다.', outOfScope: '이 게임에서 다루지 않는 연결입니다.',
-    duplicateGroup: '묶음에는 서로 다른 이름의 패를 놓으세요.', numberGroup: '숫자가 아니라 구성 단계 이름이 같은 패를 묶으세요.',
-    stageGroup: '묶음은 같은 구성 단계의 패로 만드세요.', tooShort: '줄과 묶음은 3장 이상이어야 합니다.',
-    invalidTile: '패를 확인해 주세요.', invalidAction: '놓을 패와 위치를 확인해 주세요.', notInHand: '손패에 있는 패만 놓을 수 있습니다.',
-    stale: '이미 처리한 입력입니다.', ended: '이미 끝난 판입니다.', deckEmpty: '뽑을 패가 없습니다. 손패로 줄이나 묶음을 만들어 보세요.'
+    systemInPlant: '식물의 구성 단계에는 기관계가 없다.', tissueSystemInAnimal: '조직계는 식물의 구성 단계다. 동물의 기관과 같은 단계가 아니다.',
+    kingdomMix: '한 줄에는 동물과 식물 패를 섞을 수 없다.', stageGap: '줄은 중간 단계를 빠뜨리거나 같은 단계를 겹치지 않고 이어야 한다.',
+    relationError: '앞 패가 뒤 패를 이루는 관계가 아니다.', outOfScope: '실제로도 이어지지만 이 게임에서는 다루지 않는 연결',
+    duplicateGroup: '묶음에는 서로 다른 이름의 패를 놓으세요.', numberGroup: '기관계와 기관은 다른 단계다. 같은 구성 단계의 패를 묶으세요.',
+    stageGroup: '묶음은 같은 구성 단계의 패로 만드세요.', tooShort: '줄과 묶음은 3장 이상이어야 한다.',
+    invalidTile: '패를 확인하세요.', invalidAction: '놓을 패와 위치를 확인하세요.', notInHand: '손패에 있는 패만 놓을 수 있다.',
+    stale: '이미 처리한 입력이다.', ended: '이미 끝난 판이다.', deckEmpty: '뽑을 패가 없다. 손패로 줄이나 묶음을 만들어 보세요.'
   });
   // D-057: 완전한 줄을 노리는 학생 기준 20턴, 한 턴의 판정 실패는 3번까지.
   // 별·점수·패 배분은 D-056 그대로다. 난도와 찍기 결과는 tests의 --acceptance로 확인한다.
@@ -95,11 +95,11 @@
     if (pairs.some(([a, b]) => b.number !== a.number + 1)) return reject('stageGap');
     const outside = pairs.filter(([a, b]) => !(RELATIONS[a.id] || []).includes(b.id));
     const falsePair = outside.find(([a, b]) => !(OUT_OF_SCOPE[a.id] || []).includes(b.id));
-    if (falsePair) return reject('relationError', { pair: falsePair.map(t => t.id) });
+    if (falsePair) return reject('relationError', { pair: falsePair.map(t => t.id), message: MESSAGES.relationError + ' ' + falsePair.map(t => t.name).join(' → ') });
     for (const rule of LINE_CONSTRAINTS) {
       if (ts.some(t => rule.triggers.includes(t.id)) && ts.some(t => t.stage === rule.stage && !rule.allowed.includes(t.id))) return reject('lineConflict', { constraint: rule.id, message: rule.message });
     }
-    if (outside.length) return reject('outOfScope', { pair: outside[0].map(t => t.id) });
+    if (outside.length) return reject('outOfScope', { pair: outside[0].map(t => t.id), message: MESSAGES.outOfScope + ': ' + outside[0].map(t => t.name).join(' → ') });
     return { ok: true, reason: null, misconception: false, kind: 'line', kingdom: ts[0].kingdom, complete: ts.length === 5, partial: ts.length < 5 };
   }
   function validateGroup(ids) {
@@ -127,7 +127,7 @@
   const copy = value => JSON.parse(JSON.stringify(value));
   function finishTurn(s) {
     s.turns++;
-    // 마지막 허용 턴에도 두 계를 완성하면 목표 달성이 우선한다.
+    // 마지막 허용 턴에도 동물과 식물을 완성하면 목표 달성이 우선한다.
     const full = completed(s);
     if (full.animal && full.plant) { s.phase = 'won'; s.endReason = 'completeLines'; }
     else if (s.turns >= s.turnLimit) { s.phase = 'lost'; s.endReason = 'turnLimit'; }
@@ -151,8 +151,8 @@
         if (failed.attemptsRemaining === 0) {
           if (failed.deck.length) { failed.hand.push(failed.deck.shift()); failed.draws++; autoDrawn = true; }
           finishTurn(failed); turnAdvanced = true;
-          message += ' 이번 턴에 틀린 시도가 3번입니다. ' + (autoDrawn ? '패를 한 장 뽑았습니다. ' : '뽑을 패가 없습니다. ')
-            + (failed.phase === 'playing' ? '다음 턴으로 넘어갑니다.' : '정해진 턴을 모두 썼습니다.');
+          message += ' 이번 턴에 틀린 시도가 3번이다. ' + (autoDrawn ? '패를 한 장 뽑았다.' : '뽑을 패가 없다.')
+            + (failed.phase === 'playing' ? ' 다음 턴으로 넘어간다.' : '');
         }
       }
       return { state: failed, accepted: false, ignored: false, reason: judgment.reason, judgment, message, failedMoveIndex,
@@ -178,7 +178,7 @@
         }
         if (set.kind === 'line') ids.sort((a, b) => tile(a).number - tile(b).number);
         const judgment = set.kind === 'line' ? validateLine(ids) : validateGroup(ids);
-        if (!judgment.ok) return failure(judgment, true);
+        if (!judgment.ok) return failure(judgment, !['outOfScope', 'tooShort'].includes(judgment.reason));
         if (move.type === 'place') { s.board.push(set); s.nextSetId++; }
         set.tiles = ids;
         s.hand = s.hand.filter(id => !move.tiles.includes(id));
@@ -222,19 +222,20 @@
   }
   function resultLines(state) {
     const full = completed(state), count = stars(state);
-    return [state.phase === 'won' ? state.turns + '턴에 동물과 식물의 완전한 줄을 만들었습니다.' : state.phase === 'playing' ? '아직 진행 중입니다.' : '정해진 턴을 모두 썼습니다.' + ' 손패가 ' + state.hand.length + '장 남았습니다.',
+    return [state.phase === 'won' ? state.turns + '턴에 동물과 식물의 완전한 줄을 만들었다.' : state.phase === 'playing' ? '아직 진행 중이다.' : '정해진 턴을 모두 썼다.',
       '완전한 줄: 동물 ' + full.animal + '개, 식물 ' + full.plant + '개.',
-      count === 3 ? '동물에는 기관계가, 식물에는 조직계가 들어간 완전한 줄을 각각 만들었습니다.' : count === 2 ? '완전한 줄을 만들었습니다. 다음에는 동물과 식물의 완전한 줄을 각각 만들어 보세요.' : '별 2개는 완전한 줄 하나 이상, 별 3개는 동물과 식물의 완전한 줄이 각각 있어야 합니다. 별 1개는 동물과 식물에서 각각 4장 이상의 부분 사슬을 만들면 받습니다.',
-      '별과 점수는 성취수준이 아닙니다. 구성 단계의 차이를 설명해 보세요.'];
+      count === 3 ? '동물에는 기관계가, 식물에는 조직계가 들어간 완전한 줄을 각각 만들었다.' : count === 2 ? '완전한 줄을 만들었다. 다음에는 동물과 식물의 완전한 줄을 각각 만들어 보세요.' : '별 2개는 완전한 줄 하나 이상, 별 3개는 동물과 식물의 완전한 줄이 각각 있어야 한다. 별 1개는 동물과 식물에서 각각 4장 이상의 부분 사슬을 만들면 받는다.',
+      '부분 사슬은 세포부터 개체까지 다 잇지 못한 3~4장 줄이다.',
+      '별과 점수는 성취수준이 아니다. 구성 단계의 차이를 설명해 보세요.'];
   }
   function result(state) {
     if (state.phase === 'playing') return null;
-    return { id: 'rummikub', stars: stars(state), score: score(state), detail: detail(state), lines: resultLines(state),
-      quiz: { q: '식물의 구성 단계에는 있고 동물에는 없는 단계는?', options: ['조직계', '기관계'], answer: 0, explain: '식물에는 조직계가 있고, 동물에는 기관계가 있습니다.' },
+    return { id: 'organization', stars: stars(state), score: score(state), detail: detail(state), lines: resultLines(state),
+      quiz: { q: '식물의 구성 단계에는 있고 동물에는 없는 단계는?', options: ['조직계', '기관계'], answer: 0, explain: '식물에는 조직계가 있고, 동물에는 기관계가 있다. 식물의 기관(잎·줄기)은 세 조직계를 모두 가진다. 이 게임의 관계표는 대표 연결만 담았다.' },
       reflection: '사람과 해바라기의 구성 단계를 세포부터 개체까지 각각 쓰고, 두 생물에서 다른 단계를 예를 들어 비교하세요.' };
   }
   const api = { STAGES, ORDERS, TILES, DECK, RELATIONS, OUT_OF_SCOPE, LINE_CONSTRAINTS, SIGNALS, MESSAGES, RULES,
     tile, rng, validateLine, validateGroup, newGame, act, completed, stars, score, detail, resultLines, result };
-  root.Rummikub = api;
+  root.Organization = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1,5 +1,5 @@
 // 오프라인 실행용 서비스 워커: 네트워크 우선, 끊기면 캐시로 실행한다.
-const CACHE = 'bio-arcade-v3'; // v3: 새 게임 혈액 순환 일주를 추가한다
+const CACHE = 'bio-arcade-v4'; // v4: 구성 단계 잇기 화면·규칙을 오프라인 캐시에 추가한다
 const FILES = [
   './',
   'games/basepang/engine.js',
@@ -14,6 +14,9 @@ const FILES = [
   'games/mendel/game.js',
   'games/mendel/genetics.js',
   'games/mendel/index.html',
+  'games/organization/game.js',
+  'games/organization/index.html',
+  'games/organization/organization.js',
   'games/pedigree/game.js',
   'games/pedigree/index.html',
   'games/pedigree/pedigree.js',

@@ -1,12 +1,12 @@
 // 독립 정답표·전수 탐색·실제 상태 전이 시뮬레이션·메모리 안 고의 변이 검사.
-// 실행: fnm exec --using=.node-version node tests/rummikub-logic.js
+// 실행: fnm exec --using=.node-version node tests/organization-logic.js
 // D-057 난도 인수 기준: 같은 명령 끝에 --acceptance. 완전한 줄을 노리는 학생을 기준으로 삼는다.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { spawnSync } = require('node:child_process');
-const modulePath = path.join(__dirname, '../games/rummikub/rummikub.js');
+const modulePath = path.join(__dirname, '../games/organization/organization.js');
 const source = fs.readFileSync(modulePath, 'utf8');
 const mutant = process.argv.find(x => x.startsWith('--mutant='))?.split('=')[1];
 // Opus mutate.js의 12개 결함 모델. 바뀐 D-056 계약 두 개는 새 규칙의 역변이로 갱신한다.
@@ -37,14 +37,16 @@ const mutations = {
   skipUnsignaledFailure: ['if (attemptCounted) {', 'if (attemptCounted && judgment.misconception) {'],
   noAttemptReset: ["s.phase === 'playing' ? RULES.attemptLimit : 0", "s.phase === 'playing' ? s.attemptsRemaining : 0"],
   emptyDeckNoAdvance: ['finishTurn(failed); turnAdvanced = true;', 'if (autoDrawn) { finishTurn(failed); turnAdvanced = true; }'],
-  acceptThirdFailure: ['state: failed, accepted: false', 'state: failed, accepted: turnAdvanced']
+  acceptThirdFailure: ['state: failed, accepted: false', 'state: failed, accepted: turnAdvanced'],
+  countScope: ["!['outOfScope', 'tooShort'].includes(judgment.reason)", "judgment.reason !== 'tooShort'"],
+  countShort: ["!['outOfScope', 'tooShort'].includes(judgment.reason)", "judgment.reason !== 'outOfScope'"]
 };
 let R, evaluatedSource = source;
 if (mutant) {
   assert(mutations[mutant], '알 수 없는 변이');
   const [from, to] = mutations[mutant]; assert(source.includes(from), '변이 대상 없음');
   evaluatedSource = source.replace(from, to);
-  const context = vm.createContext({}); vm.runInContext(evaluatedSource, context); R = context.Rummikub;
+  const context = vm.createContext({}); vm.runInContext(evaluatedSource, context); R = context.Organization;
 } else R = require(modulePath);
 let pass = 0, fail = 0;
 function test(name, fn) { try { fn(); pass++; console.log('PASS ' + name); } catch (e) { fail++; console.log('FAIL ' + name + ' — ' + e.message); } }
@@ -201,6 +203,8 @@ test('범위 밖 5쌍: 제출 맥락만 기록하고 오개념 합계에서 제�
     const s = fixture(ids([a, b, next])); const out = submit(s, [place('line', s.hand)]);
     assert(!out.accepted); assert.equal(out.reason, 'outOfScope'); assert.equal(out.state.signals.outOfScope, 1);
     assert.equal(R.detail(out.state).misconceptionTotal, 0); eq(out.state.hand, s.hand); assert.equal(out.state.turns, 0);
+    assert(!out.attemptCounted); assert.equal(out.state.attemptsRemaining, 3);
+    assert.equal(out.message, '실제로도 이어지지만 이 게임에서는 다루지 않는 연결: ' + a + ' → ' + b);
   }
 });
 test('잘못된 제출 하나는 신호 하나, 중복 token은 집계하지 않음', () => {
@@ -295,7 +299,7 @@ test('뽑기 1장·턴 상한·덱 소진·종료 잠금', () => {
   const afterPlay = submit(all, [place('line', fullAnimal.map(type => all.hand.find(id => R.tile(id).id === type)))]);
   assert(afterPlay.accepted); assert.equal(afterPlay.state.phase, 'playing'); checkState(afterPlay.state);
   const empty = draw(all);
-  assert(!empty.accepted); assert.equal(empty.reason, 'deckEmpty'); assert.equal(empty.state.phase, 'playing'); assert.equal(empty.state.turns, 44); assert.equal(empty.state.revision, all.revision + 1); eq(empty.state.signals, all.signals); assert(empty.message.includes('뽑을 패가 없습니다')); checkState(empty.state);
+  assert(!empty.accepted); assert.equal(empty.reason, 'deckEmpty'); assert.equal(empty.state.phase, 'playing'); assert.equal(empty.state.turns, 44); assert.equal(empty.state.revision, all.revision + 1); eq(empty.state.signals, all.signals); assert(empty.message.includes('뽑을 패가 없다')); checkState(empty.state);
 });
 test('시드 0 포함 재현성·장수 보존·입력과 반환 상태 불변성', () => {
   for (const seed of [0, 1, 2, 17, 0xffffffff]) {
@@ -314,11 +318,11 @@ test('시드 0 포함 재현성·장수 보존·입력과 반환 상태 불변�
 test('브라우저 UMD·외부 무작위/시계/저장소 없이 실행, 결과 문장', () => {
   const context = vm.createContext({ window: {}, Date: undefined, localStorage: undefined, document: undefined });
   vm.runInContext('Math.random = () => { throw new Error("외부 무작위"); };', context);
-  vm.runInContext(evaluatedSource, context); eq(context.window.Rummikub.newGame(9), R.newGame(9));
+  vm.runInContext(evaluatedSource, context); eq(context.window.Organization.newGame(9), R.newGame(9));
   assert.equal(R.result(R.newGame(1)), null);
   const s = fixture(fullPlant, [], { turnLimit: 1 }), won = submit(s, [place('line', s.hand)]).state, result = R.result(won);
   assert.equal(result.quiz.answer, 0); eq(result.quiz.options, ['조직계', '기관계']); assert(result.reflection.includes('사람과 해바라기'));
-  assert(result.lines.join(' ').includes('동물 0개, 식물 1개')); assert(result.lines.join(' ').includes('성취수준이 아닙니다'));
+  assert(result.lines.join(' ').includes('동물 0개, 식물 1개')); assert(result.lines.join(' ').includes('성취수준이 아니다'));
 });
 
 
@@ -408,7 +412,7 @@ test('기본 상한의 손패 최대: 뽑기만 34장, 큰 사용자 상한도 5
   assert.equal(all.hand.length, 58); eq(draw(all).state.hand, all.hand);
 });
 
-// D-057: 신호 집계와 시도 소모를 구별한다. 장수 부족도 유효한 패의 규칙 판정이다.
+// D-057·D-059: 신호 집계와 시도 소모를 구별한다. 범위 밖·장수 부족은 시도를 깎지 않는다.
 test('시도 상한: 판정 실패 3번에만 뽑기·턴 전환, 앞 두 번은 재시도', () => {
   let s = fixture(ids(['심장 근육 세포', '신경 조직', '뇌']));
   const before = plain(s), chosen = s.hand.slice();
@@ -417,7 +421,7 @@ test('시도 상한: 판정 실패 3번에만 뽑기·턴 전환, 앞 두 번은
     const out = submit(deepFreeze(s), [place('line', chosen)]);
     assert(!out.accepted && !out.ignored && out.attemptCounted);
     assert.equal(out.reason, 'relationError'); assert.equal(out.judgment.reason, 'relationError');
-    assert(out.message.includes('앞 패가 뒤 패를 이루는 관계가 아닙니다'));
+    assert(out.message.includes('앞 패가 뒤 패를 이루는 관계가 아니다. 심장 근육 세포 → 신경 조직'));
     assert.equal(out.failedMoveIndex, 0); assert.equal(out.turnAdvanced, n === 3); assert.equal(out.autoDrawn, n === 3);
     assert.equal(out.attemptsRemaining, n === 3 ? 3 : 3 - n);
     assert.equal(out.state.attemptsRemaining, out.attemptsRemaining);
@@ -431,7 +435,7 @@ test('시도 상한: 판정 실패 3번에만 뽑기·턴 전환, 앞 두 번은
   const next = submit(s, [place('line', chosen)]);
   assert.equal(next.state.attemptsRemaining, 2); assert.equal(next.state.turns, 1);
 });
-test('시도 분류: 모든 개념·판정 실패는 세되 신호 분류는 유지', () => {
+test('시도 분류: 범위 밖·장수 부족 제외, 개념·판정 실패와 신호 분리', () => {
   const cases = [
     ['line', ['공변세포', '잎', '순환계'], 'systemInPlant'],
     ['line', ['상피 조직', '기본 조직계', '잎'], 'tissueSystemInAnimal'],
@@ -449,13 +453,49 @@ test('시도 분류: 모든 개념·판정 실패는 세되 신호 분류는 유
     let s = fixture(ids(ns)); const chosen = s.hand.slice();
     for (let n = 1; n <= 3; n++) {
       const out = submit(s, [place(kind, chosen)]);
-      assert.equal(out.reason, reason); assert(out.attemptCounted, reason);
-      assert.equal(out.state.attemptsRemaining, n === 3 ? 3 : 3 - n);
-      assert.equal(out.state.turns, n === 3 ? 1 : 0);
+      const counted = !['outOfScope', 'tooShort'].includes(reason);
+      assert.equal(out.reason, reason); assert.equal(out.attemptCounted, counted, reason);
+      assert.equal(out.state.attemptsRemaining, counted && n < 3 ? 3 - n : 3);
+      assert.equal(out.state.turns, counted && n === 3 ? 1 : 0);
+      assert.equal(out.turnAdvanced, counted && n === 3); assert.equal(out.autoDrawn, counted && n === 3);
       assert.equal(R.detail(out.state).misconceptionTotal, R.SIGNALS.includes(reason) ? n : 0);
       assert.equal(out.state.signals.outOfScope, reason === 'outOfScope' ? n : 0); s = out.state;
     }
   }
+});
+test('D-059: 남은 시도 1에서 범위 밖·장수 부족은 세 번째 실패가 아님', () => {
+  let s = fixture(ids(['심장 근육 세포', '신경 조직', '뇌', '심장', '순환계']));
+  const bad = [place('line', s.hand.slice(0, 3))], scope = [place('line', [s.hand[1], s.hand[3], s.hand[4]])];
+  s = submit(s, bad).state; s = submit(s, bad).state;
+  assert.equal(s.attemptsRemaining, 1);
+  for (const moves of [scope, [place('line', s.hand.slice(0, 2))], [place('group', s.hand.slice(0, 1))]]) {
+    const before = plain(s), out = submit(deepFreeze(s), moves);
+    assert(!out.accepted && !out.attemptCounted && !out.turnAdvanced && !out.autoDrawn);
+    assert.equal(out.state.attemptsRemaining, 1); assert.equal(out.state.turns, 0); assert.equal(out.state.draws, 0);
+    eq(out.state.hand, before.hand); eq(out.state.deck, before.deck); eq(out.state.board, before.board);
+    s = out.state;
+  }
+  const third = submit(s, bad);
+  assert(third.turnAdvanced && third.autoDrawn); assert.equal(third.state.signals.relationError, 3);
+  assert.equal(third.state.signals.outOfScope, 1); assert.equal(R.detail(third.state).misconceptionTotal, 3);
+});
+test('화면 안내: 관계 오류 쌍·줄 제약 까닭·숨긴 숫자 없는 단계 안내·해라체', () => {
+  const relation = R.validateLine(ids(['심장 근육 세포', '신경 조직', '뇌']));
+  assert.equal(relation.message, '앞 패가 뒤 패를 이루는 관계가 아니다. 심장 근육 세포 → 신경 조직');
+  const leaf = R.validateLine(ids(['울타리 조직', '기본 조직계', '줄기']));
+  assert(leaf.message.includes('울타리 조직은 잎에 있다.'));
+  const heart = R.validateLine(ids(['심장 근육 세포', '근육 조직', '위']));
+  assert.equal(heart.message, '심장 근육은 심장에만 있다. 심장 근육 세포가 든 줄의 기관은 심장이어야 한다.');
+  // 기관을 뇌로 골라도 위를 전제로 한 문장이 나오지 않아야 한다(Opus 검토 2026-10-09)
+  const brain = R.validateLine(ids(['심장 근육 세포', '근육 조직', '뇌']));
+  assert.equal(brain.reason, 'lineConflict'); assert(!brain.message.includes('위'));
+  const group = R.validateGroup(ids(['소화계', '신경계', '잎']));
+  assert.equal(group.reason, 'numberGroup'); assert(group.message.includes('기관계와 기관은 다른 단계다.'));
+  assert(!/숫자|[0-9]/.test(group.message));
+  const report = R.result(draw(R.newGame(5, { turnLimit: 1 })).state);
+  assert(!/습니다|어요/.test([...Object.values(R.MESSAGES), ...R.LINE_CONSTRAINTS.map(r => r.message), ...report.lines, report.quiz.explain].join(' ')));
+  assert(report.lines.join(' ').includes('부분 사슬은 세포부터 개체까지 다 잇지 못한 3~4장 줄이다.'));
+  assert(report.quiz.explain.includes('식물의 기관(잎·줄기)은 세 조직계를 모두 가진다. 이 게임의 관계표는 대표 연결만 담았다.'));
 });
 test('토큰·무시·형식·손패 오류와 미리보기는 시도를 소모하지 않음', () => {
   let s = fixture(fullAnimal);
@@ -476,7 +516,7 @@ test('토큰·무시·형식·손패 오류와 미리보기는 시도를 소모�
   }
   R.validateLine(s.hand); R.validateGroup(s.hand); assert.equal(s.attemptsRemaining, 2);
   let empty = R.newGame(1, { turnLimit: 100 }); for (let n = 0; n < 44; n++) empty = draw(empty).state;
-  empty = submit(empty, [place('line', [empty.hand[0]])]).state;
+  empty = submit(empty, [place('line', ['cardiacCell', 'nerve', 'brain'].map(kind => empty.hand.find(id => R.tile(id).id === kind)))]).state;
   const out = draw(empty); assert.equal(out.reason, 'deckEmpty'); assert.equal(out.attemptsRemaining, 2);
   assert(!out.attemptCounted && !out.turnAdvanced && !out.autoDrawn);
 });
@@ -495,22 +535,24 @@ test('성공·수동 뽑기에서 시도 초기화, 세 번째 실패의 모든 
 });
 test('세 번째 실패: 마지막 턴 종료·종료 뒤 무시·빈 덱에서는 턴만 전환', () => {
   for (const emptyDeck of [false, true]) {
-    let s = fixture(ids(['상피 세포']), [], { turnLimit: 1 });
+    let s = fixture(ids(['심장 근육 세포', '신경 조직', '뇌']), [], { turnLimit: 1 });
     if (emptyDeck) { s.hand.push(...s.deck); s.deck = []; }
-    const chosen = [s.hand[0]], before = plain(s);
+    const chosen = s.hand.slice(0, 3), before = plain(s);
     for (let n = 0; n < 2; n++) s = submit(s, [place('line', chosen)]).state;
     const out = submit(s, [place('line', chosen)]);
     assert(out.turnAdvanced); assert.equal(out.autoDrawn, !emptyDeck); assert.equal(out.state.draws, emptyDeck ? 0 : 1);
     assert.equal(out.attemptsRemaining, 0); assert.equal(out.state.attemptsRemaining, 0);
     assert.equal(out.state.turns, 1); assert.equal(out.state.phase, 'lost'); assert.equal(out.state.endReason, 'turnLimit');
-    assert(out.message.includes('정해진 턴')); assert.equal(R.result(out.state).stars, 0);
+    assert(!out.message.includes('정해진 턴')); assert.equal(R.result(out.state).stars, 0);
+    const lines = [out.message, ...R.result(out.state).lines].join(' ');
+    assert.equal(lines.split('정해진 턴을 모두 썼다').length - 1, 1); assert(!lines.includes('손패'));
     eq(out.state.hand, emptyDeck ? before.hand : [...before.hand, before.deck[0]]); checkState(out.state);
     const ignored = submit(out.state, [place('line', chosen)]);
     assert(ignored.ignored && !ignored.attemptCounted && !ignored.turnAdvanced && !ignored.autoDrawn);
     assert.equal(ignored.attemptsRemaining, 0); assert.strictEqual(ignored.state, out.state);
   }
   let s = R.newGame(1, { turnLimit: 100 }); for (let n = 0; n < 44; n++) s = draw(s).state;
-  const chosen = [s.hand[0]];
+  const chosen = ['cardiacCell', 'nerve', 'brain'].map(kind => s.hand.find(id => R.tile(id).id === kind));
   for (let n = 0; n < 3; n++) s = submit(s, [place('line', chosen)]).state;
   assert.equal(s.turns, 45); assert.equal(s.draws, 44); assert.equal(s.phase, 'playing'); assert.equal(s.attemptsRemaining, 3);
   checkState(s);
@@ -604,7 +646,7 @@ function simulate(strategy, seed, turnLimit, chooseMoves) {
       if (!out.accepted && out.turnAdvanced) forcedTurns++;
       if (out.autoDrawn) autoDraws++;
       if (['student', 'full', 'groups'].includes(strategy)) assert(out.accepted, out.reason);
-      else assert(out.accepted || out.attemptCounted, '찍기 전략은 형식 오류를 제출하지 않는다');
+      else assert(out.accepted || out.attemptCounted || ['outOfScope', 'tooShort'].includes(out.reason), '찍기 전략은 형식 오류를 제출하지 않는다');
     }
     // 세 번째 실패는 accepted=false여도 이미 턴을 썼다. 추가로 뽑거나 다음 턴에 찍지 않는다.
     if (s.phase === 'playing' && s.turns === turn) s = draw(s).state;
@@ -616,7 +658,13 @@ function simulate(strategy, seed, turnLimit, chooseMoves) {
 }
 test('시뮬레이터: 최대 찍기 3회 뒤 추가 뽑기 없음, 1회 찍기와 별도 집계', () => {
   for (const [strategy, attempts] of [['random', 1], ['randomMax', 3]]) {
-    const out = simulate(strategy, 7, 20, s => [place('line', [s.hand[0]])]);
+    const out = simulate(strategy, 7, 20, s => {
+      for (let a = 0; a < s.hand.length; a++) for (let b = a + 1; b < s.hand.length; b++) for (let c = b + 1; c < s.hand.length; c++) {
+        const chosen = [s.hand[a], s.hand[b], s.hand[c]], j = R.validateLine(chosen);
+        if (!j.ok && !['tooShort', 'outOfScope'].includes(j.reason)) return [place('line', chosen)];
+      }
+      throw new Error('시도 상한 검사에 쓸 틀린 줄이 없다');
+    });
     assert.equal(out.submissions, 20 * attempts); assert.equal(out.rejected, 20 * attempts);
     assert.equal(out.forcedTurns, attempts === 3 ? 20 : 0); assert.equal(out.autoDraws, out.forcedTurns);
     assert.equal(out.s.turns, 20); assert.equal(out.s.draws, 20); assert.equal(out.s.hand.length, 34);
@@ -669,7 +717,7 @@ if (simulationReports && process.argv.includes('--acceptance')) {
   }
 }
 if (!mutant && !process.env.SKIP_MUTATIONS) {
-  test('고의 변이: 기존 19종·시도 상한 8종 모두 단언 실패·종료1, 원본 보존', () => {
+  test('고의 변이: 기존 19종·시도 상한 8종·시도 예외 2종 모두 단언 실패·종료1, 원본 보존', () => {
     for (const name of Object.keys(mutations)) {
       const run = spawnSync(process.execPath, [__filename, '--mutant=' + name], { encoding: 'utf8', timeout: 30000 });
       assert.equal(run.status, 1, name + ': ' + run.stderr);
@@ -679,5 +727,5 @@ if (!mutant && !process.env.SKIP_MUTATIONS) {
     assert.equal(fs.readFileSync(modulePath, 'utf8'), source);
   });
 }
-console.log('구성 단계 루미큐브: PASS ' + pass + ', FAIL ' + fail);
+console.log('구성 단계 잇기: PASS ' + pass + ', FAIL ' + fail);
 process.exit(fail ? 1 : 0);

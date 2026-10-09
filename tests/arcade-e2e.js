@@ -111,6 +111,15 @@ const root = path.resolve(__dirname, '..');
   await page.screenshot({ path: `${out}/hub.png`, fullPage: true });
 
   // 멘델의 텃밭
+  const checkMendelPrompt = async (kind, required, forbidden = []) => {
+    const result = await page.evaluate(k => {
+      const label = document.querySelector('#ar-refl').closest('.refl');
+      const prompt = [...label.childNodes].filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join('').trim().replace(/^—\s*/, '');
+      return { prompt, detail: JSON.parse(localStorage.getItem(k)).games.mendel.plays.at(-1).detail };
+    }, STORE);
+    check(result.detail.reflectionKind === kind && result.detail.reflectionPrompt === result.prompt && required.every(t => result.prompt.includes(t)) && forbidden.every(t => !result.prompt.includes(t)),
+      `멘델: ${kind} 문항 선택·화면과 저장 원문 일치 실패`);
+  };
   await go('games/mendel/index.html');
   await page.screenshot({ path: `${out}/mendel-intro.png` });
   await page.click('#ar-start');
@@ -128,7 +137,55 @@ const root = path.resolve(__dirname, '..');
   await page.click('[data-g]'); await page.click('#gclose');
   await page.screenshot({ path: `${out}/mendel-garden.png`, fullPage: true });
   await page.click('#t-end');
+  await checkMendelPrompt('selfRrYy', ['내 실험 노트의 RrYy 자가 수분 결과', '9:3:3:1', '분리의 법칙과 독립의 법칙']);
   await finishCheck('mendel');
+
+  // 자가 수분 전에 마감하거나 다른 교배만 했을 때, 하지 않은 실험을 설명시키지 않는다.
+  await go('games/mendel/index.html'); await page.click('#ar-start');
+  await page.click('#t-end');
+  await checkMendelPrompt('noExperiment', ['이번 판에서는 아직 교배하지 않았어요.', '예상해 보세요.'], ['9:3:3:1']);
+  await page.click('#ar-retry');
+  await page.click('.pot[data-i="0"]'); await page.click('.pot[data-i="1"]'); await page.click('#t-cross');
+  await page.click('.seed[data-i="0"]'); await page.click('#plant');
+  await page.click('#t-end');
+  await checkMendelPrompt('otherCross', ['RRYY', 'rryy', '둥글고 황색 16개', '어버이의 대립유전자가 생식세포와 자손에게 전달되는 과정'], ['9:3:3:1', '자가 수분']);
+  await page.click('#ar-retry');
+  await page.click('.pot[data-i="0"]'); await page.click('#t-self'); await page.click('#plant');
+  await page.click('#t-end');
+  await checkMendelPrompt('otherCross', ['RRYY', '자가 수분', '둥글고 황색 16개'], ['9:3:3:1']);
+  await page.click('#ar-retry');
+  await page.click('.pot[data-i="0"]'); await page.click('.pot[data-i="1"]'); await page.click('#t-cross');
+  await page.click('.seed[data-i="0"]'); await page.click('#plant');
+  await page.click('.pot[data-i="2"]'); await page.click('#t-test');
+  await page.click('[data-g="RRYY"]'); await page.click('#gclose'); // 추론을 틀린 뒤 검정 교배
+  await page.click('.pot[data-i="2"]'); await page.click('#t-test'); await page.click('#t-test');
+  await page.click('[data-g="RRYY"]'); await page.click('#gclose');
+  await page.click('#t-end');
+  await checkMendelPrompt('testCross', ['검정 교배', '표현형 비율로 어버이의 유전자형', '약 1:1', '이론상 완전히 확실하지는 않은 까닭'], ['9:3:3:1', '자가 수분']);
+  // 같은 판에 검정 교배도 있으면 RrYy 자가 수분을 우선한다. 난수만 고정해 기대와 같은 경우·다른 경우를 재현한다.
+  await page.click('#ar-retry');
+  await page.click('.pot[data-i="0"]'); await page.click('.pot[data-i="1"]'); await page.click('#t-cross');
+  await page.click('.seed[data-i="0"]'); await page.click('#plant');
+  await page.evaluate(() => {
+    const draws = Array.from({ length: 16 }, (_, i) => [8, 4, 2, 1].map(bit => i & bit ? .75 : .25)).flat();
+    let at = 0;
+    Math.random = () => draws[at++ % draws.length];
+  });
+  await page.click('.pot[data-i="2"]'); await page.click('#t-self'); await page.click('#plant');
+  await page.click('.pot[data-i="2"]'); await page.click('#t-test');
+  await page.click('[data-g="RRYY"]'); await page.click('#gclose');
+  await page.click('.pot[data-i="2"]'); await page.click('#t-test'); await page.click('#t-test');
+  await page.click('[data-g="RrYy"]'); await page.click('#gclose');
+  await page.click('#t-end');
+  await checkMendelPrompt('selfRrYy', ['둥글고 황색 9개', '둥글고 녹색 3개', '주름지고 황색 3개', '주름지고 녹색 1개', '이번에는 기대와 같게 나왔지만']);
+  await page.click('#ar-retry');
+  await page.evaluate(() => { Math.random = () => .25; });
+  await page.click('.pot[data-i="0"]'); await page.click('.pot[data-i="1"]'); await page.click('#t-cross');
+  await page.click('.seed[data-i="0"]'); await page.click('#plant');
+  await page.click('.pot[data-i="2"]'); await page.click('#t-self'); await page.click('#plant');
+  await page.click('#t-end');
+  await checkMendelPrompt('selfRrYy', ['둥글고 황색 16개', '실제 개수가 기대와 다른 까닭'], ['이번에는 기대와 같게']);
+  await page.click('#ar-hub');
 
   // 가계도 지뢰찾기: 해결기가 찾은 확실한 보인자만 표시
   await go('games/pedigree/index.html');
@@ -142,7 +199,16 @@ const root = path.resolve(__dirname, '..');
     };
   });
   for (let lv = 0; lv < 4; lv++) {
+    check(await page.isEnabled('#face') && await page.textContent('#face') === '표시 지우기' && await page.getAttribute('#face', 'title') === '표시 지우기' && await page.getAttribute('#face', 'aria-label') === '표시 지우기',
+      `가계도 ${lv + 1}단계 표시 지우기 이름·활성 상태 실패`);
     const must = await page.evaluate(i => window.Pedigree.solve(window.Pedigree.LEVELS[i]).must, lv);
+    await page.click(`.person[data-id="${must[0]}"]`);
+    await page.click(`.person[data-id="${must[0]}"]`); // ?도 함께 지워야 한다
+    const unmarked = await page.evaluate(({ lv, marked }) => window.Pedigree.LEVELS[lv].people.find(p => !p.affected && p.id !== marked).id, { lv, marked: must[0] });
+    await page.click(`.person[data-id="${unmarked}"]`);
+    await page.click('#face');
+    check(await page.$$eval('#field .person', ps => ps.every(p => p.getAttribute('aria-label').endsWith('표시 없음'))) && !(await page.isDisabled('#face')) && await page.textContent('#judge') === '판정하기',
+      '가계도 표시 지우기가 모든 표시를 지우지 않거나 판정을 바꿈');
     for (const id of must) await page.click(`.person[data-id="${id}"]`);
     if (lv === 3) {
       await page.click('.person[data-id="k3"]'); // 발현자 클릭 → 안내만
@@ -152,6 +218,11 @@ const root = path.resolve(__dirname, '..');
     if (lv === 2) { await page.click('.person[data-id="h1"]'); } // 남성 오표시(일부러) → 지뢰
     if (lv === 2) await page.screenshot({ path: `${out}/pedigree-marked.png` });
     await page.click('#judge');
+    const judgedField = await page.innerHTML('#field');
+    const faceOff = await page.$eval('#face', b => ({ disabled: b.disabled, opacity: Number(getComputedStyle(b).opacity), text: b.textContent }));
+    check(faceOff.disabled && faceOff.opacity < 1 && faceOff.text === '표시 지우기', '가계도 판정 뒤 표시 지우기의 비활성·시각 표시 실패');
+    await page.$eval('#face', b => b.click());
+    check(await page.innerHTML('#field') === judgedField, '가계도 판정 뒤 표시 지우기가 판정 결과를 바꿈');
     if (lv === 2) await page.screenshot({ path: `${out}/pedigree-judged.png`, fullPage: true });
     await page.click('#judge');
   }
@@ -459,6 +530,8 @@ const root = path.resolve(__dirname, '..');
         cursorLast: document.getElementById('trail').lastElementChild.id === 'dark-cursor',
         landmarks: [...document.querySelectorAll('#trail .landmark')].map(x => x.textContent),
         chips: [...document.querySelectorAll('#trail .dark-chip:not(.landmark)')].map(x => x.textContent),
+        trailLabel: document.getElementById('trail-label')?.textContent,
+        trailLabelledBy: document.getElementById('trail').getAttribute('aria-labelledby'),
         toast: document.getElementById('toast').classList.contains('on'),
         stars: document.body.innerText.includes('★'),
       }));
@@ -474,6 +547,21 @@ const root = path.resolve(__dirname, '..');
       check(view.mode === '불 꺼진 바퀴' && !/\/12|\/8|\d|(한|하나|두|세|네|다섯|여섯|일곱|여덟|아홉|열|열두)\s*(칸|개|문항|번째)/.test(view.mode + view.status + view.panel + view.ctrl + view.accessible), '순환 불 꺼진 화면에 개수가 보인다');
       check(!view.toast && !view.stars, '순환 불 꺼진 바퀴·경계 문항에서 토스트나 별이 보인다');
       check(view.chips.length === darkNames, '순환 패널이 지나온 이름 이외의 빈칸을 그렸다');
+      check(view.trailLabel === '내가 고른 경로맞았는지는 바퀴 끝에서 알려 준다.' && view.trailLabelledBy === 'trail-label', '순환 선택한 경로의 이름·정오 공개 시점 안내·접근성 연결 실패');
+      check(await page.$$eval('#trail .dark-chip:not(.landmark)', chips => chips.every(c => !c.matches('.right, .wrong') && !/[✓✗]/.test(c.textContent))), '순환 선택한 경로에서 중간 정오를 드러냄');
+      // 모든 문항 단계·누적 경로 길이에서 작은 화면의 안내와 경로가 조작판 밖으로 넘치지 않는다.
+      await page.setViewportSize({ width: 360, height: 640 });
+      const trailFits = await page.evaluate(() => {
+        const label = document.getElementById('trail-label'), trail = document.getElementById('trail'), panel = document.getElementById('dark');
+        if (!label) return false;
+        const l = label.getBoundingClientRect(), t = trail.getBoundingClientRect(), d = panel.getBoundingClientRect(), ctrl = document.getElementById('ctrl').getBoundingClientRect();
+        return l.top >= d.top && l.bottom <= t.top && t.bottom <= d.bottom && d.bottom <= ctrl.top &&
+          l.left >= 0 && l.right <= innerWidth && trail.scrollWidth <= trail.clientWidth + 1 && document.documentElement.scrollWidth <= innerWidth + 1 &&
+          trail.scrollHeight <= trail.clientHeight + 1 && getComputedStyle(label).visibility === 'visible';
+      });
+      check(trailFits, `순환 360×640: 선택 경로 안내·칩이 겹치거나 잘림(${darkNames}개, ${p.type})`);
+      if (darkNames === 8) await page.screenshot({ path: `${out}/circulation-chosen-path-small.png` });
+      await page.setViewportSize({ width: 390, height: 660 });
       check(view.cursorLast && view.blankHidden === (p.type !== 'finalName'), '순환 방울이 칩 줄 끝에 없거나 까닭·경계 문항에 빈칸이 보인다');
       const expectedLandmarks = ['온몸의 모세 혈관', ...(darkNames >= 4 ? ['폐의 모세 혈관'] : []), ...(darkNames >= 8 ? ['온몸의 모세 혈관'] : [])];
       check(JSON.stringify(view.landmarks) === JSON.stringify(expectedLandmarks), '순환 모세 혈관 표지 칩 순서가 다르다');
@@ -563,6 +651,255 @@ const root = path.resolve(__dirname, '..');
   const circSaved = await page.evaluate(({ k, i }) => JSON.parse(localStorage.getItem(k)).games.circulation.plays[i], { k: STORE, i: circTarget });
   check(typeof circSaved.quizCorrect === 'boolean' && typeof circSaved.flowQuizCorrect === 'boolean' && circSaved.reflection === 'circulation 성찰 테스트',
     '순환 인출 문항·이어서 떠올리기·설명해 보기 기록 실패');
+
+  // 구성 단계: 상태 주입 없이 시드·실제 뽑기·화면 버튼으로 플레이한다.
+  await go('games/organization/index.html');
+  await page.screenshot({ path: `${out}/organization-intro.png` });
+  const orgIntro = await page.textContent('#overlay .card');
+  check(orgIntro.includes('식물의 기관(잎·줄기)은 세 조직계를 모두 가진다. 이 게임의 관계표는 대표 연결만 담았다.') &&
+    orgIntro.includes('부분 사슬은 세포부터 개체까지 다 잇지 못한 3~4장 줄이다.') && !orgIntro.includes('두 계'), '구성 단계 인트로 과학 안내·부분 사슬 정의 누락');
+  await page.click('#ar-start');
+  await page.evaluate(() => window.__org.start(2));
+  const orgState = () => page.evaluate(() => window.__org.state());
+  const orgReady = () => page.waitForFunction(() => document.getElementById('stage').getAttribute('aria-busy') !== 'true');
+  const chooseOrg = async ids => {
+    await orgReady();
+    // 누를 때마다 눌린 패 목록이 줄므로 .all()의 nth 대신 남은 첫 패를 반복해 누른다
+    const pressed = page.locator('#hand .tile[aria-pressed="true"]');
+    while (await pressed.count()) await pressed.first().click();
+    for (const id of ids) await page.locator(`#hand [data-tile="${id}"]`).click();
+  };
+  const orgVisible = () => page.evaluate(() => {
+    const board = document.getElementById('board'), set = board.lastElementChild;
+    if (!set?.matches('.set')) return false;
+    const box = board.getBoundingClientRect();
+    return [set, ...set.querySelectorAll('.stage-name, .tile')].every(el => {
+      const r = el.getBoundingClientRect();
+      return r.top >= box.top - 1 && r.bottom <= box.bottom + 1 && r.left >= box.left - 1 && r.right <= box.right + 1 &&
+        r.top >= 0 && r.bottom <= innerHeight + 1;
+    });
+  });
+  const drawnVisible = () => page.locator('#hand').evaluate(el => {
+    const last = el.lastElementChild.getBoundingClientRect(), box = el.getBoundingClientRect();
+    return last.top >= box.top - 1 && last.bottom <= box.bottom + 1 && last.bottom <= innerHeight + 1;
+  });
+  check(await page.title() === '구성 단계 잇기' && await page.locator('.bar b').textContent() === '구성 단계 잇기', '구성 단계 이름 변경 실패');
+  check(await page.locator('.keyboard-hint').first().isHidden(), '구성 단계 휴대폰에 Esc 안내가 보임');
+  const tileNamesOnly = await page.evaluate(() => [...document.querySelectorAll('#hand .tile')].every(el => {
+    const tile = window.Organization.tile(el.dataset.tile);
+    return el.textContent === tile.name && !/[0-9]/.test(el.textContent) &&
+      el.getAttribute('aria-label') === `${tile.name}, ${tile.kingdom === 'animal' ? '동물' : '식물'}, 고르지 않음`;
+  }));
+  check(tileNamesOnly && await page.locator('#hand .stage-name').count() === 0, '구성 단계 손패에 단계 숫자·이름이 보이거나 패 이름·계 접근성 표시 누락');
+  check(await page.textContent('#goal') === '동물과 식물의 완전한 줄(세포부터 개체까지)을 만드세요', '구성 단계 목표 문구 누락');
+  const wrongOrg = await page.evaluate(() => {
+    const { hand } = window.__org.state(), R = window.Organization;
+    const found = [];
+    for (let a = 0; a < hand.length; a++) for (let b = a + 1; b < hand.length; b++) for (let c = b + 1; c < hand.length; c++) {
+      const ids = [hand[a], hand[b], hand[c]], judgment = R.validateLine(ids);
+      if (!judgment.ok && judgment.misconception) found.push({ ids, message: judgment.message, reason: judgment.reason });
+      if (found.length === 3) return found;
+    }
+    return found;
+  });
+  check(wrongOrg.length === 3, '구성 단계 재현 시드에 틀린 줄 검사 입력이 없음');
+  if (wrongOrg.length === 3) {
+    const before = await orgState();
+    await chooseOrg(wrongOrg[0].ids.slice(0, 1));
+    check(await page.isDisabled('#play-line') && await page.isDisabled('#play-group'), '구성 단계 1장 내기 버튼 활성');
+    await chooseOrg(wrongOrg[0].ids.slice(0, 2));
+    check(await page.isDisabled('#play-line') && await page.isDisabled('#play-group'), '구성 단계 2장 내기 버튼 활성');
+    await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ㅣ', code: 'KeyL', bubbles: true })));
+    check((await orgState()).revision === before.revision, '구성 단계 2장 단축키가 act를 호출함');
+    await chooseOrg(wrongOrg[0].ids); await page.dblclick('#play-line');
+    const after = await orgState();
+    check(after.attemptsRemaining === 2 && after.turns === before.turns && after.revision === before.revision + 1 &&
+      after.signals[wrongOrg[0].reason] === 1 && JSON.stringify(after.hand) === JSON.stringify(before.hand),
+      '구성 단계 틀린 줄 dblclick의 시도·턴·오개념 중복');
+    check(await page.textContent('#feedback') === wrongOrg[0].message && await page.textContent('#attempts') === '2', '구성 단계 틀린 줄의 까닭·남은 시도 표시 실패');
+    await page.screenshot({ path: `${out}/organization-wrong.png` });
+    await orgReady();
+    await page.tap('#play-line'); await page.tap('#play-line');
+    check(JSON.stringify(await orgState()) === JSON.stringify(after), '구성 단계 같은 실패 선택 tap 2회가 act를 호출함');
+    // 시도 상한 검사는 서로 다른 선택으로 제출한다.
+    await chooseOrg(wrongOrg[1].ids); await page.click('#play-line');
+    await chooseOrg(wrongOrg[2].ids); await page.click('#play-line');
+    const third = await orgState(), fb = await page.textContent('#feedback');
+    check(third.turns === before.turns + 1 && third.draws === before.draws + 1 && third.hand.length === before.hand.length + 1 &&
+      third.attemptsRemaining === 3 && third.revision === before.revision + 3 && fb.includes('패를 한 장 뽑았다') && fb.includes('다음 턴'),
+      '구성 단계 세 번째 실패의 자동 뽑기·턴 전환·안내 실패');
+    check(await drawnVisible(), '구성 단계 자동으로 뽑은 패가 안 보임');
+  }
+
+  // 실제 두 번 누르기와 길게 누르기: 화면 잠금이 끝나도 repeat 입력은 추가 행동이 아니다.
+  await page.evaluate(() => window.__org.start(5));
+  await page.dblclick('#draw');
+  check((await orgState()).turns === 1 && (await orgState()).draws === 1, '구성 단계 뽑기 dblclick 중복');
+  await orgReady();
+  await page.tap('#draw'); await page.tap('#draw');
+  check((await orgState()).turns === 2 && (await orgState()).draws === 2, '구성 단계 뽑기 tap 2회 중복');
+  await orgReady();
+  await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ㅇ', code: 'KeyD', bubbles: true })));
+  await orgReady();
+  await page.evaluate(() => { for (let i = 0; i < 4; i++) document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ㅇ', code: 'KeyD', repeat: true, bubbles: true })); });
+  check((await orgState()).turns === 3 && (await orgState()).draws === 3, '구성 단계 한글 자판 D·키 repeat 처리 실패');
+  await page.evaluate(() => window.__org.start(5));
+  await page.locator('#hand .tile').first().focus();
+  await page.keyboard.down('Enter'); await page.keyboard.down('Enter'); await page.keyboard.up('Enter');
+  check((await page.textContent('#selection')).startsWith('고른 패 1장'), '구성 단계 Enter를 누른 채로 패 선택이 반복됨');
+  await page.keyboard.press('Escape');
+  check((await page.textContent('#selection')).startsWith('고른 패 0장'), '구성 단계 Escape 선택 해제 실패');
+  const orgKinds = async kinds => {
+    const s = await orgState(); const used = new Set();
+    return kinds.map(kind => { const id = s.hand.find(h => h.startsWith(kind + ':') && !used.has(h)); used.add(id); return id; });
+  };
+  await chooseOrg(await orgKinds(['stem', 'digestive', 'human']));
+  await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ㅣ', code: 'KeyL', bubbles: true })));
+  await orgReady();
+  const heldLine = await orgState();
+  await page.evaluate(() => { for (let i = 0; i < 4; i++) document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ㅣ', code: 'KeyL', repeat: true, bubbles: true })); });
+  check(heldLine.attemptsRemaining === 2 && heldLine.signals.systemInPlant === 1 && JSON.stringify(await orgState()) === JSON.stringify(heldLine),
+    '구성 단계 한글 자판 L·키 repeat 시도·오개념 중복');
+
+  await page.evaluate(() => window.__org.start(7));
+  await chooseOrg(await orgKinds(['nerve', 'heart', 'circulatory']));
+  await page.click('#play-line'); await orgReady();
+  const scopeOrg = await orgState();
+  check(scopeOrg.attemptsRemaining === 3 && scopeOrg.turns === 0 && scopeOrg.draws === 0 && scopeOrg.signals.outOfScope === 1 &&
+    await page.textContent('#feedback') === '실제로도 이어지지만 이 게임에서는 다루지 않는 연결: 신경 조직 → 심장', '구성 단계 범위 밖의 시도 보존·쌍 안내 실패');
+  await page.dblclick('#play-line');
+  check(JSON.stringify(await orgState()) === JSON.stringify(scopeOrg), '구성 단계 범위 밖 같은 선택 재제출이 act를 호출함');
+  await page.evaluate(() => window.__org.start(7));
+  await chooseOrg(await orgKinds(['cardiacCell', 'nerve', 'brain'])); await page.click('#play-line');
+  check(await page.textContent('#feedback') === '앞 패가 뒤 패를 이루는 관계가 아니다. 심장 근육 세포 → 신경 조직', '구성 단계 관계 오류에서 틀린 쌍이 안 보임');
+
+  await page.evaluate(() => window.__org.start(5, { turnLimit: 1 }));
+  for (const kinds of [['stem', 'digestive', 'human'], ['stem', 'digestive', 'brain'], ['stem', 'digestive', 'stomach']]) {
+    await chooseOrg(await orgKinds(kinds)); await page.click('#play-line');
+  }
+  const lastFailText = await page.textContent('#overlay .card');
+  check(lastFailText.split('정해진 턴을 모두 썼다').length - 1 === 1 && !/손패.*남/.test(lastFailText) && lastFailText.includes('완전한 줄: 동물 0개, 식물 0개'),
+    '구성 단계 마지막 턴 세 번째 실패의 결과 반복·목표 요약 실패');
+  await page.click('#ar-retry');
+
+  // 한글 자판 G·A, 묶음 단계 표시와 붙일 곳 선택 해제.
+  await page.evaluate(() => window.__org.start(5));
+  await chooseOrg(await orgKinds(['stomach', 'brain', 'leaf']));
+  await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ㅎ', code: 'KeyG', bubbles: true })));
+  await orgReady();
+  check((await orgState()).board[0].kind === 'group' && (await page.locator('#board .stage-name').allTextContents()).every(t => t === '기관'), '구성 단계 한글 자판 G·묶음 단계 표시 실패');
+  await chooseOrg(await orgKinds(['stem']));
+  await page.locator('#board .set-target').click();
+  await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ㅁ', code: 'KeyA', bubbles: true })));
+  await orgReady();
+  check((await orgState()).board[0].tiles.length === 4 && await page.locator('#board .set-target').getAttribute('aria-pressed') === 'false' && await page.isDisabled('#attach'),
+    '구성 단계 한글 자판 A·붙이기 뒤 대상 선택 해제 실패');
+  check(await page.locator('#stage .toast.on').count() === 0, '구성 단계 토스트가 피드백과 중복되거나 목표를 덮음');
+
+  // 작은 세로 화면에서 여러 세트·긴 이름·묶음도 새로 낸 세트 전체가 보인다.
+  for (const [width, height] of [[390, 664], [360, 640], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate(() => window.__org.start(266));
+    const sixCells = await page.evaluate(() => [...new Map(window.__org.state().hand.filter(id => window.Organization.tile(id).stage === 'cell')
+      .map(id => [window.Organization.tile(id).id, id])).values()]);
+    check(sixCells.length === 6, '구성 단계 6장 묶음 재현 시드 불일치');
+    await chooseOrg(sixCells); await page.click('#play-group');
+    check(await orgVisible(), `구성 단계 ${width}×${height} 6장 묶음·긴 세포 이름·단계가 판·화면 밖`);
+    await page.screenshot({ path: `${out}/organization-group6-${width}-${height}.png` });
+    await page.evaluate(() => window.__org.start(66));
+    await chooseOrg(await orgKinds(['xylemCell', 'xylem', 'vascular', 'leaf', 'bean'])); await page.click('#play-line');
+    check(await orgVisible() && JSON.stringify(await page.locator('#board .stage-name').allTextContents()) === JSON.stringify(['세포', '조직', '조직계', '기관', '개체']),
+      `구성 단계 ${width}×${height} 새 완전한 줄·긴 이름·단계가 판·화면 밖`);
+    await page.screenshot({ path: `${out}/organization-line5-${width}-${height}.png` });
+    await page.evaluate(() => window.__org.start(11, { turnLimit: 21 }));
+    for (let step = 0; step < 20; step++) {
+      await orgReady();
+      const plan = await page.evaluate(() => {
+        const R = window.Organization, { hand } = window.__org.state();
+        for (const stage of Object.keys(R.STAGES)) {
+          const unique = [...new Map(hand.filter(id => R.tile(id).stage === stage).map(id => [R.tile(id).id, id])).values()];
+          if (unique.length >= 3) return { kind: 'group', ids: unique };
+        }
+        for (let a = 0; a < hand.length; a++) for (let b = a + 1; b < hand.length; b++) for (let c = b + 1; c < hand.length; c++) {
+          const ids = [hand[a], hand[b], hand[c]];
+          if (R.validateLine(ids).ok) return { kind: 'line', ids };
+        }
+        return null;
+      });
+      if (plan) {
+        await chooseOrg(plan.ids); await page.click(plan.kind === 'line' ? '#play-line' : '#play-group');
+        check(await orgVisible(), `구성 단계 ${width}×${height} 새 ${plan.kind} 세트·단계 이름이 판·화면 밖: 턴 ${step + 1}`);
+        check(await page.locator('#board .set').last().locator('.stage-name').count() === plan.ids.length, '구성 단계 낸 묶음·줄의 단계 이름 누락');
+      } else {
+        await page.click('#draw');
+        check(await drawnVisible(), `구성 단계 ${width}×${height} 뽑은 패가 화면 밖`);
+      }
+    }
+    check((await orgState()).board.length > 1, '구성 단계 새 세트 자동 스크롤 검사에 세트가 부족함');
+    await page.screenshot({ path: `${out}/organization-board-${width}-${height}.png` });
+  }
+
+  // 기본 20턴의 마지막 손패는 34장이다. 화면 검사 동안 결과 카드에 가리지 않도록 상한만 21로 둔다.
+  await page.evaluate(() => window.__org.start(2, { turnLimit: 21 }));
+  for (let i = 0; i < 20; i++) { await page.click('#draw'); await orgReady(); }
+  check((await orgState()).hand.length === 34, '구성 단계 34장 손패 재현 실패');
+  for (const [width, height] of [[390, 664], [360, 640], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    const fit = await page.evaluate(() => {
+      const hand = document.getElementById('hand'), board = document.getElementById('board'), goal = document.getElementById('goal');
+      const buttons = [...document.querySelectorAll('.controls .btn')];
+      const cards = [...hand.querySelectorAll('.tile')], rects = cards.map(el => el.getBoundingClientRect());
+      const overlaps = rects.some((r, i) => rects.slice(i + 1).some(q => r.left < q.right - 1 && r.right > q.left + 1 && r.top < q.bottom - 1 && r.bottom > q.top + 1));
+      const visible = el => { const r = el.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth + 1 && r.top >= 0 && r.bottom <= innerHeight + 1; };
+      return { fits: document.documentElement.scrollWidth <= innerWidth + 1 && document.documentElement.scrollHeight <= innerHeight + 1 &&
+        [hand, board, goal, ...buttons].every(visible), overlaps,
+        scrolls: hand.scrollHeight > hand.clientHeight && ['auto', 'scroll'].includes(getComputedStyle(hand).overflowY),
+        readable: cards.every(el => el.clientWidth >= el.scrollWidth && parseFloat(getComputedStyle(el).fontSize) >= 12 && el.getBoundingClientRect().height >= 44) &&
+          buttons.every(el => el.getBoundingClientRect().height >= 44 && el.getBoundingClientRect().width >= 44) };
+    });
+    check(fit.fits && !fit.overlaps && fit.scrolls && fit.readable, `구성 단계 34장 ${width}×${height} 화면 넘침·겹침·스크롤·크기 실패: ${JSON.stringify(fit)}`);
+    await page.locator('#hand').evaluate(el => { el.scrollTop = el.scrollHeight; });
+    check(await page.locator('#hand').evaluate(el => {
+      const last = el.lastElementChild.getBoundingClientRect(), box = el.getBoundingClientRect();
+      return el.scrollTop > 0 && last.top >= box.top && last.bottom <= box.bottom + 1 && last.bottom <= innerHeight + 1;
+    }), '구성 단계 손패 마지막 줄 스크롤 실패');
+    await page.screenshot({ path: `${out}/organization-hand34-${width}-${height}.png` });
+  }
+  await page.setViewportSize({ width: 390, height: 664 });
+  await page.evaluate(() => window.__org.start(2));
+  let attachedOrg = false;
+  for (let step = 0; step < 20 && (await orgState()).phase === 'playing'; step++) {
+    const line = await page.evaluate(() => {
+      const full = window.Organization.completed(window.__org.state());
+      return window.__org.completeLines().find(l => !full[l.kingdom]) || null;
+    });
+    if (!line) { await orgReady(); await page.click('#draw'); continue; }
+    if (!attachedOrg) {
+      await chooseOrg(line.tiles.slice(0, 3).reverse()); await page.click('#play-line');
+      const set = (await orgState()).board.at(-1);
+      check(set.tiles.length === 3, '구성 단계 부분 사슬 놓기 실패');
+      await chooseOrg(line.tiles.slice(3).reverse());
+      await page.locator(`#board [data-set="${set.id}"]`).click(); await page.click('#attach');
+      check(await page.locator(`#board [data-set="${set.id}"]`).getAttribute('aria-pressed') === 'false', '구성 단계 줄 붙이기 뒤 대상 선택 유지');
+      attachedOrg = true;
+    } else {
+      await chooseOrg(line.tiles.slice().reverse()); await page.click('#play-line');
+    }
+    const sortedOrg = await page.evaluate(() => window.__org.state().board.every(set => set.tiles.every((id, i) =>
+      i === 0 || window.Organization.tile(id).number > window.Organization.tile(set.tiles[i - 1]).number)));
+    check(sortedOrg, '구성 단계 제출·붙이기 뒤 줄 자동 정렬 실패');
+    const stageLabels = await page.locator('#board .stage-name').allTextContents();
+    const expectedStages = await page.evaluate(() => window.__org.state().board.flatMap(s =>
+      window.Organization.tile(s.tiles[0]).kingdom === 'animal' ? ['세포', '조직', '기관', '기관계', '개체'] : ['세포', '조직', '조직계', '기관', '개체']));
+    check(JSON.stringify(stageLabels) === JSON.stringify(expectedStages), '구성 단계 낸 줄의 단계 이름·순서 표시 실패');
+  }
+  const orgFinal = await orgState();
+  check(orgFinal.phase === 'won' && attachedOrg && orgFinal.turnLimit === 20, '구성 단계 기본 20턴에서 붙이기·동물과 식물 완성 실패');
+  check(await page.evaluate(k => JSON.parse(localStorage.getItem(k)).games.organization.plays.at(-1).stars === 3, STORE), '구성 단계 결과 별 3 기록 실패');
+  await page.locator('#ar-refl').focus(); await page.keyboard.type('단계'); await page.keyboard.press('Space'); await page.keyboard.type('비교');
+  check(await page.inputValue('#ar-refl') === '단계 비교', '구성 단계 결과 입력칸 키보드 띄어쓰기 실패');
+  await finishCheck('organization');
+  await page.setViewportSize({ width: 390, height: 844 });
 
   // 생명 탐사대로 가는 길과 오락실 복귀
   await go('games/quest/index.html');
