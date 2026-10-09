@@ -191,7 +191,7 @@
     ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(8, 8, 90, 28); ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left'; ctx.fillText(`📍 ${z.name}`, 16, 28);
   }
   function hud() {
-    const set = (id, v, max) => { $(id + '-v').textContent = Math.round(v); $(id + '-b').style.width = `${Math.max(0, Math.min(100, v / max * 100))}%`; };
+    const set = (id, v, max) => { $(id + '-v').textContent = Math.max(0, Math.round(v)); $(id + '-b').style.width = `${Math.max(0, Math.min(100, v / max * 100))}%`; };
     set('e', S.E, E_MAX); set('n', S.nut.length, CARRY); set('o', S.O, CARRY); set('c', S.C, 10); set('u', S.U, 10);
     $('dist').textContent = `${Math.round(S.x / 10)} m`;
     $('time').textContent = `${Math.max(0, Math.ceil(DURATION - S.t))}초`;
