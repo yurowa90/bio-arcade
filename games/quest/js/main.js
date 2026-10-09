@@ -636,6 +636,20 @@
       const box = document.createElement('div');
       box.innerHTML = `<div class="feedback ${st.win ? 'ok' : 'bad'}"><b>${st.win ? '승리!' : '패배…'}</b> 녹말 ${st.starch} ${starsHTML(stars)}
         <p>${msg}</p></div>
+        <details class="photo-history"><summary>전체 턴 기록 펼쳐 보기 (1~${st.history.length}턴)</summary>
+          <p class="muted">빛·이산화 탄소·물은 그 턴의 광합성 계산에 쓴 값이다(모두 0~${B.PHOTO.maxFactor}). 호흡은 매 턴 일어나며, 녹말 저장량은 0 아래로 내려가지 않는다.</p>
+          <ol>${st.history.map((h, i) => {
+            const before = i ? st.history[i - 1].starch : 0;
+            const change = h.starch - before;
+            const signed = n => `${n >= 0 ? '+' : ''}${n}`;
+            return `<li data-turn="${h.turn}" class="photo-turn${h.P === 0 ? ' stopped' : ''}">
+              <b>${h.turn}턴${h.P === 0 ? ' · 광합성 멈춤' : ''}</b>
+              <p class="turn-action">행동: ${B.PHOTO.actions.find(a => a.id === h.action).label} · ${h.night ? '밤' : '낮'} · 기공 ${h.stomata ? '열림' : '닫힘'}</p>
+              <dl><div><dt>빛</dt><dd>${h.light}</dd></div><div><dt>이산화 탄소</dt><dd>${h.co2}</dd></div><div><dt>물</dt><dd>${h.water}</dd></div>
+                <div><dt>광합성량</dt><dd>${h.P}</dd></div><div><dt>호흡</dt><dd>${h.P - h.net}</dd></div><div><dt>광합성량 − 호흡</dt><dd>${signed(h.net)}</dd></div>
+                <div class="starch-change"><dt>녹말 변화</dt><dd>${before} → ${h.starch} (${signed(change)})</dd></div></dl></li>`;
+          }).join('')}</ol>
+        </details>
         <p><b>설명해 보기</b> — 이번 대결에서 광합성이 멈춘 턴 하나를 골라, 어떤 요인이 모자랐는지 설명하세요. 밤에 기공을 닫는 것이 식물에게 유리한 까닭도 함께 쓰세요.</p>
         <textarea id="refl" placeholder="두세 문장으로 써 보세요."></textarea>
         <div class="row-btns"><button class="btn primary" id="p-done">${st.win ? '배지 받기' : '저장하고 나가기'}</button><button class="btn" id="p-retry">다시 도전</button></div>`;

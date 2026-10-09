@@ -243,6 +243,53 @@ const fs = require('fs');
   check('녹말 막대 숫자 = 결과 녹말', starchLabel.includes((photoRes.match(/녹말 (\d+)/) || [])[1] + ' '), starchLabel);
   let stored = await questSave();
   check('광합성 버튼 전 결과 기록 1개·별 3 배지가 저장됨', stored.records.filter(r => r.gym === 'photo').length === 1 && stored.badges.photo === 3);
+  const photoHistory = stored.records.find(r => r.gym === 'photo').history;
+  check('광합성 결과 전체 기록은 기본 접힘·1턴부터 마지막 턴까지 있음',
+    await page.locator('.photo-history').count() === 1 && await page.$eval('.photo-history', d => !d.open) &&
+    !(await page.isVisible('.photo-turn[data-turn="1"]')) && await page.locator('.photo-turn').count() === 10 &&
+    (await page.textContent('.photo-history summary')).includes('1~10턴'));
+  // 진행 중의 8줄 로그와 구별해, 결과의 새 목록을 펼쳐 처음 턴·멈춘 턴도 읽는다.
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.click('.photo-history summary');
+  const fullPhoto = await page.evaluate(history => {
+    const turns = [...document.querySelectorAll('.photo-turn')];
+    const body = document.getElementById('panel-body');
+    const values = turns.every((el, i) => {
+      const h = history[i];
+      if (!h) return false;
+      const fields = Object.fromEntries([...el.querySelectorAll('dl > div')].map(d => [d.querySelector('dt').textContent, d.querySelector('dd').textContent]));
+      const before = i ? history[i - 1].starch : 0, delta = h.starch - before;
+      const action = window.Battles.PHOTO.actions.find(a => a.id === h.action).label;
+      return Number(el.dataset.turn) === h.turn && el.querySelector('.turn-action').textContent.includes(action) &&
+        el.querySelector('.turn-action').textContent.includes(h.night ? '밤' : '낮') &&
+        el.querySelector('.turn-action').textContent.includes(h.stomata ? '기공 열림' : '기공 닫힘') &&
+        fields['빛'] === String(h.light) && fields['이산화 탄소'] === String(h.co2) && fields['물'] === String(h.water) &&
+        fields['광합성량'] === String(h.P) && fields['호흡'] === '1' && fields['광합성량 − 호흡'] === `${h.net >= 0 ? '+' : ''}${h.net}` &&
+        fields['녹말 변화'] === `${before} → ${h.starch} (${delta >= 0 ? '+' : ''}${delta})` &&
+        el.classList.contains('stopped') === (h.P === 0) && el.querySelector('b').textContent.includes('광합성 멈춤') === (h.P === 0);
+    });
+    return { values: turns.length === history.length && values,
+      stops: turns.filter(el => el.classList.contains('stopped')).map(el => Number(el.dataset.turn)),
+      stopStyle: turns.filter(el => el.classList.contains('stopped')).every(el => parseFloat(getComputedStyle(el).borderLeftWidth) >= 4 &&
+        getComputedStyle(el.querySelector('b')).color !== getComputedStyle(turns.find(t => !t.classList.contains('stopped')).querySelector('b')).color),
+      readable: turns.every(el => parseFloat(getComputedStyle(el).fontSize) >= 14 && el.scrollWidth <= el.clientWidth + 1),
+      fits: body.scrollWidth <= body.clientWidth + 1 && document.documentElement.scrollWidth <= innerWidth + 1,
+      open: document.querySelector('.photo-history').open };
+  }, photoHistory);
+  check('광합성 결과 10턴의 행동·요인·광합성량·호흡·실제 녹말 변화가 저장 기록과 일치', fullPhoto.values);
+  check('광합성이 멈춘 턴은 색과 글자로 표시(밤 7턴 포함)', fullPhoto.stopStyle && fullPhoto.stops.includes(7) && fullPhoto.stops.length === photoHistory.filter(h => h.P === 0).length);
+  check('광합성 360×640 전체 기록을 펼쳐도 글자가 읽히고 가로 넘침 없음', fullPhoto.open && fullPhoto.readable && fullPhoto.fits);
+  await page.locator('.photo-turn').last().scrollIntoViewIfNeeded();
+  check('광합성 마지막 턴까지 패널 안에서 스크롤해 읽음', await page.locator('.photo-turn').last().evaluate(el => {
+    const r = el.getBoundingClientRect(), p = document.getElementById('panel-body').getBoundingClientRect();
+    return r.top >= p.top && r.bottom <= p.bottom + 1;
+  }));
+  await page.screenshot({ path: `${out}/07-photo-history-small.png` });
+  check('광합성 전체 기록 열람은 history 저장 형식을 바꾸지 않음', JSON.stringify((await questSave()).records.find(r => r.gym === 'photo').history) === JSON.stringify(photoHistory) &&
+    photoHistory.every(h => Object.keys(h).sort().join() === 'P,action,co2,light,limiting,net,night,starch,stomata,turn,water'));
+  await page.click('.photo-history summary');
+  check('광합성 전체 기록을 다시 접을 수 있음', !(await page.isVisible('.photo-turn[data-turn="1"]')));
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.fill('#refl', '밤에는 빛이 없어 광합성을 못 하므로 기공을 닫아 물을 아꼈다.');
   await page.waitForTimeout(500);
   check('광합성 버튼 전 0.5초 서술 답 저장', (await questSave()).records.find(r => r.gym === 'photo')?.reflection === '밤에는 빛이 없어 광합성을 못 하므로 기공을 닫아 물을 아꼈다.');
