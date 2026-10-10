@@ -68,7 +68,7 @@ module.exports = {
         } else if (v.type === 'die') {
           // 보기의 눈이 큰 주사위를 고른다. 감춰진 도착 칸의 이름은 읽지 않는다.
           pick = v.buttons.slice().sort((a, b) => {
-            const count = s => Number(s.match(/\s([1-6])\s*→/)?.[1] || 0);
+            const count = s => Number(s.match(/([1-6])칸\s*→/)?.[1] || 0);
             return count(b.text) - count(a.text);
           })[0];
           await h.caption('이번 주사위는 더 멀리 가는 걸 골라 보자.');

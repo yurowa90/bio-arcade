@@ -94,6 +94,204 @@ function finishErrors() {
     const noOverflow = page => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
     const shot = (page, name) => page.screenshot({ path: path.join(out, name + '.png') });
 
+    // CI-1~CI-11: 혈액 순환 일주 그래픽 A(D-068) 회귀
+    let ci = await open('circulation');
+    const ciStore = await ci.evaluate(() => localStorage.getItem('bioArcade.v1'));
+    await ci.click('#ar-start');
+    const artGeometry = await ci.evaluate(() => {
+      const board = document.getElementById('board');
+      const transform = el => board.getCTM().inverse().multiply(el.getCTM());
+      const point = (el, p) => new DOMPoint(p.x, p.y).matrixTransform(transform(el));
+      const sample = (el, n) => Array.from({ length:n }, (_,i) => point(el,el.getPointAtLength(el.getTotalLength()*i/n)));
+      const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
+      const nearest = (p,points) => Math.min(...points.map(q => distance(p,q)));
+      const inside = (p,poly) => {
+        let inPoly=false;
+        for (let a=0,b=poly.length-1;a<poly.length;b=a++) {
+          const u=poly[a],v=poly[b];
+          if ((u.y>p.y)!==(v.y>p.y) && p.x<(v.x-u.x)*(p.y-u.y)/(v.y-u.y)+u.x) inPoly=!inPoly;
+        }
+        return inPoly;
+      };
+      const wallEl=board.querySelector('.heart-outline');
+      // 새 그림이 없는 이전 화면도 예외 대신 CI-1 실패로 보고한다.
+      if (!wallEl) return { missing:true };
+      const wall=sample(wallEl,1500), chambers={}, medians={}, acc={RA:[],RV:[],LA:[],LV:[]};
+      for (const k of Object.keys(acc)) chambers[k]=sample(board.querySelector(`path.chamber[data-chamber="${k}"]`),600);
+      const scale=Math.hypot(transform(wallEl).a,transform(wallEl).b);
+      for (const p of wall) {
+        const distances=Object.keys(chambers).map(k => [k,nearest(p,chambers[k])]).sort((a,b) => a[1]-b[1]);
+        if (distances[0][1]<45*scale) acc[distances[0][0]].push(distances[0][1]);
+      }
+      for (const k of Object.keys(acc)) { acc[k].sort((a,b) => a-b); medians[k]=acc[k][acc[k].length>>1]; }
+      // 검토 측정 2절: 방 위 도형과 관 외곽을 장애물로 포함해 보이는 벽을 잰다.
+      const boxPoints = el => {
+        const b=el.getBBox(), ps=[], perimeter=2*(b.width+b.height);
+        for (let i=0;i<200;i++) {
+          let d=perimeter*i/200,x,y;
+          if (d<b.width) { x=b.x+d;y=b.y; }
+          else if ((d-=b.width)<b.height) {x=b.x+b.width;y=b.y+d;}
+          else if ((d-=b.height)<b.width) {x=b.x+b.width-d;y=b.y+b.height;}
+          else {d-=b.width;x=b.x;y=b.y+b.height-d;}
+          ps.push(point(el,{x,y}));
+        }
+        return ps;
+      };
+      const obstacles={},visible={RA:[],RV:[],LA:[],LV:[]};
+      for (const k of Object.keys(visible)) {
+        const group=board.querySelector(`.square[data-square="${k}"]`);
+        obstacles[k]=chambers[k].concat(...[...group.querySelectorAll('text, rect, ellipse, circle')].map(boxPoints));
+      }
+      const drop=board.querySelector('#drop');
+      if (drop && obstacles[drop.dataset.square]) obstacles[drop.dataset.square].push(...boxPoints(drop));
+      const tubes=[...board.querySelectorAll('path[data-vessel]')].map(el => sample(el,800));
+      for (const p of wall) {
+        const ds=Object.keys(obstacles).map(k => [k,nearest(p,obstacles[k])]).sort((a,b) => a[1]-b[1]);
+        const tubeDistance=Math.min(...tubes.map(ps => nearest(p,ps)-9.3));
+        if (ds[0][1]<45*scale && ds[0][1]<=tubeDistance) visible[ds[0][0]].push(ds[0][1]);
+      }
+      const visibleMedians=Object.fromEntries(Object.entries(visible).map(([k,ds]) => {ds.sort((a,b) => a-b);return [k,ds[ds.length>>1]];}));
+      const gap = (a,b) => Math.min(...chambers[a].map(p => nearest(p,chambers[b])));
+      const septum=gap('RV','LV');
+      const valveDistances={};
+      for (const [edge,from,to,vessel] of [['RA:RV','RA','RV',null],['RV:PA1','RV',null,'PA'],['LA:LV','LA','LV',null],['LV:Ao1','LV',null,'Ao']]) {
+        const el=board.querySelector(`.valve[data-edge="${edge}"]`), box=el.getBBox();
+        const center=point(el,{x:box.x+box.width/2,y:box.y+box.height/2});
+        valveDistances[edge]=[nearest(center,chambers[from]),nearest(center,to ? chambers[to] : sample(board.querySelector(`[data-vessel="${vessel}"]`),1200))];
+      }
+      const ao=board.querySelector('[data-vessel="Ao"]'), start=point(ao,ao.getPointAtLength(0)), next=point(ao,ao.getPointAtLength(1));
+      const lvX=chambers.LV.map(p => p.x);
+      // use의 사각형 대신 원본 다리 path를 같은 viewBox 배율로 놓아 실제 그림 높이를 잰다.
+      const leg=board.querySelector('[data-organ="leg-muscle"]');
+      const symbol=document.getElementById(leg.getAttribute('href').slice(1)), vb=symbol.viewBox.baseVal;
+      const width=+leg.getAttribute('width'),height=+leg.getAttribute('height'), legScale=Math.min(width/vb.width,height/vb.height);
+      const legGroup=document.createElementNS('http://www.w3.org/2000/svg','g');
+      legGroup.setAttribute('visibility','hidden');
+      legGroup.setAttribute('transform',`translate(${+leg.getAttribute('x')+(width-vb.width*legScale)/2} ${+leg.getAttribute('y')+(height-vb.height*legScale)/2}) scale(${legScale}) translate(${-vb.x} ${-vb.y})`);
+      for (const p of symbol.querySelectorAll('path')) legGroup.appendChild(p.cloneNode(true));
+      board.appendChild(legGroup);
+      const legBoxes=[...legGroup.querySelectorAll('path')].map(el => {const b=el.getBBox();return [point(el,{x:b.x,y:b.y}).y,point(el,{x:b.x,y:b.y+b.height}).y];});
+      const legHeight=Math.max(...legBoxes.map(b => b[1]))-Math.min(...legBoxes.map(b => b[0]));
+      legGroup.remove();
+      return { medians, visibleMedians, septum, gaps:[gap('RA','RV')/scale,gap('LA','LV')/scale],
+        outside:Object.values(chambers).reduce((n,ps) => n+ps.filter(p => !inside(p,wall)).length,0),
+        valveDistances, aoDistance:nearest(start,chambers.LV), aoRight:start.x>(Math.min(...lvX)+Math.max(...lvX))/2, aoDx:next.x-start.x,
+        legHeight };
+    });
+    const m=artGeometry.medians || {}, v=artGeometry.visibleMedians || {};
+    check(!artGeometry.missing && m.LV>=1.6*m.RV && m.RV>=1.3*Math.max(m.RA,m.LA) && artGeometry.septum/m.LV>=.6 && artGeometry.septum/m.LV<=.9 && artGeometry.outside===0 && artGeometry.gaps.every(d => d<=4.5) && v.LV>=1.6*v.RV && v.RV>Math.max(v.RA,v.LA), `CI-1 심장 벽·보이는 벽·중격·방 포함·방 사이 간격: ${JSON.stringify(artGeometry)}`);
+    check(!artGeometry.missing && Object.keys(artGeometry.valveDistances).length===4 && Object.values(artGeometry.valveDistances).every(ds => ds.every(d => d<=8)), `CI-2 판막이 방 경계·동맥 뿌리에서 8 이내: ${JSON.stringify(artGeometry.valveDistances)}`);
+    check(!artGeometry.missing && artGeometry.aoDistance<=8 && artGeometry.aoRight && artGeometry.aoDx>0, 'CI-3 대동맥은 좌심실 오른쪽 가까이에서 오른쪽으로 나감');
+    const artDisplay = await ci.evaluate(() => {
+      const C=window.Circulation, state=window.__circ.state();
+      const groups=[...document.querySelectorAll('#board .square')];
+      // 금색 현재 칸 표시를 잠깐 빼고 실제 평소 테두리색을 읽은 뒤 복원한다.
+      const highlights=groups.filter(g => g.classList.contains('current') || g.classList.contains('asked')).map(g => [g,g.getAttribute('class')]);
+      highlights.forEach(([g]) => g.classList.remove('current','asked'));
+      const chamberColors=Object.fromEntries(['RA','RV','LA','LV'].map(k => [k,getComputedStyle(document.querySelector(`path.chamber[data-chamber="${k}"]`)).stroke]));
+      highlights.forEach(([g,classes]) => g.setAttribute('class',classes));
+      const color=k => chamberColors[k];
+      const rims=!!document.querySelector('path.chamber') && color('RA')===color('LV') && color('RV')===color('LA') && color('RA')!==color('RV');
+      const legend=document.getElementById('board').textContent;
+      const names=[...document.querySelectorAll('text.circuit-name')];
+      const rgb=hex => {const p=hex.slice(1).match(/../g).map(x => parseInt(x,16));return `rgb(${p.join(', ')})`;};
+      const namesMatch=names.length===2 && names[0].dataset.circuit==='pulmonary' && names[1].dataset.circuit==='systemic' && getComputedStyle(names[0]).fill!==getComputedStyle(names[1]).fill && names.every(n => getComputedStyle(n).fill===color(n.dataset.circuit==='pulmonary' ? 'RV' : 'RA') && getComputedStyle(n).fill===rgb(window.CirculationBoard.circuit[n.dataset.circuit]));
+      const luminance=c => {const ns=c.match(/[\d.]+/g).slice(0,3).map(Number).map(x => x/255).map(x => x<=.04045 ? x/12.92 : ((x+.055)/1.055)**2.4);return ns[0]*.2126+ns[1]*.7152+ns[2]*.0722;};
+      const contrast=(a,b) => {const x=luminance(a),y=luminance(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);};
+      const nameContrast=names.every(n => contrast(getComputedStyle(n).fill,'rgb(247, 251, 241)')>=4.5);
+      const dotsContrast=groups.every(g => [...g.querySelectorAll('circle')].every(dot => {
+        const center=new DOMPoint(+dot.getAttribute('cx'),+dot.getAttribute('cy')).matrixTransform(dot.getCTM());
+        // 나중에 그린 혈액색 알약을 고른다. 크림색 변이는 낮은 대비로 실패한다.
+        const beds=[...g.querySelectorAll('.oxygen-bed, .chamber, rect')].reverse();
+        const bed=beds.find(el => el.isPointInFill(center.matrixTransform(el.getCTM().inverse())));
+        return !!bed && contrast(getComputedStyle(dot).fill,getComputedStyle(bed).fill)>=3;
+      }));
+      return { circuits:groups.length===18 && C.SQUARES.every(s => groups.find(g => g.dataset.square===s.id)?.dataset.circuit===s.circuit), rims,
+        legend:legend.includes('폐순환') && legend.includes('온몸순환') && !legend.includes('우심실→좌심방') && !legend.includes('좌심실→우심방') && !legend.includes('?→?'), namesMatch, nameContrast, dotsContrast,
+        oxygen:C.SQUARES.filter(s => s.kind!=='capillary').every(s => document.querySelectorAll(`.square[data-square="${s.id}"] circle`).length===C.BLOOD[s.blood].oxygen),
+        drop:document.querySelectorAll('#drop circle').length===C.BLOOD.high.co2 && document.querySelector('#drop path')?.getAttribute('fill')===C.BLOOD.high.color,
+        score:document.getElementById('score').textContent===`${C.hud(state).score}점`, best:document.getElementById('best')?.textContent };
+    });
+    check(artDisplay.circuits && artDisplay.rims && artDisplay.legend && artDisplay.namesMatch && artDisplay.nameContrast, 'CI-4 18칸 소속·네 방 테두리·순환 이름 data-circuit·색 일치·글자 대비');
+    check(artDisplay.oxygen && artDisplay.drop && artDisplay.dotsContrast, 'CI-5 혈관·방의 O₂ 개수·모든 칸의 점과 바로 밑 바탕 대비 3:1·방울 색·CO₂ 고리');
+    // 규칙 상태는 건드리지 않고 문자열 렌더러로 18칸·보충 심장 방을 그려 검사한다.
+    const artOverlap = await ci.evaluate(() => {
+      const board=document.getElementById('board'), original=board.innerHTML;
+      const C=window.Circulation, B=window.CirculationBoard;
+      const stateBefore=JSON.stringify(window.__circ.state());
+      const labels=Object.fromEntries(Object.keys(C.STRUCTURES).map(k => [k,true]));
+      const overlaps=[], outside=[], dashed=[];
+      let views=0;
+      const boardPoint=(el,p) => new DOMPoint(p.x,p.y).matrixTransform(board.getCTM().inverse().multiply(el.getCTM()));
+      const localPoint=(el,p) => new DOMPoint(p.x,p.y).matrixTransform(el.getCTM().inverse().multiply(board.getCTM()));
+      try {
+        for (const names of [{},labels]) for (const sq of C.SQUARES) {
+          board.innerHTML=B.svg({labels:names,current:sq.id,dropSquare:sq.id,dropBlood:sq.bloodOut || sq.blood});
+          views++;
+          const drop=board.querySelector('#drop'), b=drop.getBBox();
+          const a=boardPoint(drop,{x:b.x,y:b.y}), z=boardPoint(drop,{x:b.x+b.width,y:b.y+b.height});
+          // 상자 내부까지 0.75 판 단위 이하로 표본화해 얇은 테두리와 포함된 방도 잡는다.
+          const points=[], nx=Math.ceil((z.x-a.x)/.75), ny=Math.ceil((z.y-a.y)/.75);
+          for (let x=0;x<=nx;x++) for (let y=0;y<=ny;y++) points.push({x:a.x+(z.x-a.x)*x/nx,y:a.y+(z.y-a.y)*y/ny});
+          for (const chamber of board.querySelectorAll('path.chamber')) {
+            const id=chamber.dataset.chamber;
+            if (id===sq.id) {
+              if (points.some(p => !chamber.isPointInFill(localPoint(chamber,p)))) outside.push([sq.id,Object.keys(names).length]);
+            } else if (points.some(p => {
+              const q=localPoint(chamber,p);
+              return chamber.isPointInFill(q) || chamber.isPointInStroke(q);
+            })) overlaps.push([sq.id,id,Object.keys(names).length]);
+          }
+        }
+        for (const id of ['RA','RV','LA','LV']) {
+          board.innerHTML=B.svg({labels,asked:[id],dropSquare:'LV',dropBlood:'high'});
+          const group=board.querySelector(`.square.asked[data-square="${id}"]`);
+          const chamber=group?.querySelector(`path.chamber[data-chamber="${id}"]`);
+          dashed.push({id,ok:!!chamber && getComputedStyle(chamber).strokeDasharray!=='none' && !board.querySelector('.square.current')});
+        }
+      } finally { board.innerHTML=original; }
+      return {views,overlaps,outside,dashed,restored:board.innerHTML===original,stateUnchanged:stateBefore===JSON.stringify(window.__circ.state())};
+    });
+    check(artOverlap.views===36 && !artOverlap.overlaps.length && !artOverlap.outside.length && artOverlap.restored && artOverlap.stateUnchanged, `CI-10 18칸 방울과 다른 방 path의 채움·선 겹침 없음·자기 방 안·판 복원·상태 보존: ${JSON.stringify(artOverlap)}`);
+    check(artOverlap.dashed.length===4 && artOverlap.dashed.every(d => d.ok), `CI-11 묻는 심장 방 네 path의 실제 점선: ${JSON.stringify(artOverlap.dashed)}`);
+    check(artDisplay.score && artDisplay.best==='내 최고 —', 'CI-6 점수는 규칙 HUD와 같고 기록이 없으면 내 최고 —');
+    check(!artGeometry.missing && artGeometry.legHeight>=34, `CI-9 다리 근육 그림 높이 34 이상: ${artGeometry.legHeight}`);
+    await ci.evaluate(() => {
+      const d=window.Arcade.data(); d.student={id:'20315',name:'테스트'};
+      d.games.circulation={best:2,bestScore:320,plays:[]};
+      localStorage.setItem('bioArcade.v1',JSON.stringify(d));
+    });
+    await ci.close(); ci=await open('circulation'); await ci.click('#ar-start');
+    check(await ci.textContent('#best')==='내 최고 320', 'CI-6 가상 최고 기록 320을 읽음');
+    for (const [width,height] of [[360,640],[390,844],[412,780]]) {
+      await ci.setViewportSize({width,height});
+      const fit=await ci.evaluate(() => {
+        const bar=document.querySelector('header.bar').getBoundingClientRect();
+        const labels=['mode','score','best'].map(id => document.getElementById(id).getBoundingClientRect());
+        return { x:document.documentElement.scrollWidth<=innerWidth+1,
+          labels:labels.every(r => r.left>=bar.left && r.right<=bar.right && r.top>=bar.top && r.bottom<=bar.bottom) && labels.every((a,i) => labels.slice(i+1).every(b => a.right<=b.left || b.right<=a.left || a.bottom<=b.top || b.bottom<=a.top)),
+          link:document.querySelector('.bar a').getBoundingClientRect().height>=44 };
+      });
+      check(fit.x && fit.labels && fit.link, `CI-7 ${width}×${height} 가로 넘침·정보 띠 잘림·복귀 링크: ${JSON.stringify(fit)}`);
+      await shot(ci,`circulation-art-${width}x${height}`);
+    }
+    await ci.evaluate(() => window.__circ.fast(true));
+    // 시작 이름은 실제 보기 버튼으로 답하고, 계속·굴리기까지 시계를 진행한다.
+    for (let guard=0;guard<8;guard++) {
+      const p=await ci.evaluate(() => window.__circ.pending());
+      if (p.type==='die') break;
+      const pick=await ci.evaluate(() => window.__circ.correct());
+      await ci.locator(p.options.length && pick!=null ? `#ctrl button[data-k="${pick}"]:not([disabled])` : '#ctrl button:not([disabled])').first().click();
+      await ci.clock.runFor(100);
+    }
+    const glyphs=await ci.evaluate(() => ({
+      clean:!/[⚀-⚅]|\p{Extended_Pictographic}/u.test(document.body.innerText+document.getElementById('board').textContent),
+      back:!!document.querySelector('.bar a svg'),
+      dice:window.__circ.pending().type==='die' && document.querySelectorAll('.sheet-opts.dice .btn').length===2 && [...document.querySelectorAll('.sheet-opts.dice .btn')].every(b => b.querySelector('svg') && /[1-6]칸\s*→/.test(b.textContent)) }));
+    check(glyphs.clean && glyphs.back && glyphs.dice, `CI-8 그림 문자 없이 SVG 복귀·주사위와 숫자 칸 표시: ${JSON.stringify(glyphs)}`);
+    await ci.evaluate(saved => { if (saved===null) localStorage.removeItem('bioArcade.v1'); else localStorage.setItem('bioArcade.v1',saved); }, ciStore);
+    await ci.close();
+
     // BP-1: 실제 resolve가 만든 모든 연쇄 판·강조 타일·수소 결합 합계·점수를 대조한다.
     const bp = await open('basepang');
     check((await bp.textContent('#overlay')).includes('80·160·260') && (await bp.textContent('#overlay')).includes('40·70·110'), 'BP-5 시작 별 기준');
