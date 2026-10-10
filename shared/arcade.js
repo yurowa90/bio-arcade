@@ -7,7 +7,7 @@
   const GAMES = [
     { id: 'quest', title: '생명 탐사대', path: 'games/quest/index.html', color: '#2f7d55',
       homage: '포켓몬스터 레드·그린 (게임보이, 1996)', genre: '수집 RPG',
-      pitch: '초록섬 풀숲에서 생물을 관찰해 도감을 채우고, 광합성·소화 체육관에 도전한다.',
+      pitch: '학교와 둘레를 걸으며 생물을 관찰해 생태 도감과 지도를 채우고, 광합성·소화 체육관에 도전한다.',
       standards: ['9과02-04', '9과12-01', '9과12-02', '9과13-01'], target: 'C~B',
       // 열려 있는 체육관(games/quest/js/data.js의 GYMS 중 ready: true). 체육관을 열면 여기에도 더한다.
       gyms: [{ id: 'photo', name: '광합성 체육관' }, { id: 'digest', name: '소화 체육관' }] },

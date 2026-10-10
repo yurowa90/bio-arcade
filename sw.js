@@ -26,6 +26,8 @@ const FILES = [
   'games/quest/js/battles.js',
   'games/quest/js/data.js',
   'games/quest/js/main.js',
+  'games/quest/js/mapdata.js',
+  'games/quest/js/maprender.js',
   'games/run/game.js',
   'games/run/index.html',
   'icons/icon-180.png',
