@@ -244,7 +244,7 @@
       return `<details class="std"><summary>성취기준 ${list.map(s => `<span class="code">[${s.code}]</span>`).join(' ')}${target ? ` <span class="lv">겨냥 수준 ${target}</span>` : ''}</summary>
         ${list.map(s => `<div class="std-item"><b>[${s.code}]</b> ${s.text}
           <ol class="levels">${s.levels.map(l => `<li><b>${l.level}</b> ${l.text}</li>`).join('')}</ol></div>`).join('')}
-        <p class="note">게임 점수는 성취수준이 아닙니다. 수준 판단은 끝의 “설명해 보기” 답과 수업 속 산출물로 하세요.</p></details>`;
+        <p class="note">게임 점수는 성취수준이 아니다. 수준 판단은 끝의 “설명해 보기” 답과 수업 속 산출물로 한다.</p></details>`;
     },
 
     stars(n) { let h = ''; for (let i = 0; i < 3; i++) h += i < n ? '★' : '<span class="off">★</span>'; return `<span class="stars" aria-label="별 ${n}개">${h}</span>`; },
@@ -330,7 +330,7 @@
         overlay.querySelectorAll('.quiz-opts .btn').forEach(x => { x.disabled = true; if (+x.dataset.i === quiz.answer) x.classList.add('right'); });
         if (!ok) b.classList.add('wrong');
         const fb = overlay.querySelector('.quiz-fb'); fb.hidden = false;
-        fb.textContent = (ok ? '정답! ' : '아쉬워요. ') + quiz.explain;
+        fb.textContent = (ok ? '정답! ' : '아쉽다. ') + quiz.explain;
         patchPlay({ quizCorrect: ok });
       });
       // 흐름 문항이 label을 잠시 떼었다 붙여도 같은 textarea와 리스너를 쓴다.

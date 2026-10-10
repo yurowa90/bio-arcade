@@ -19,7 +19,7 @@ if (!out || !path.relative(root, out).startsWith('..' + path.sep)) {
 }
 const STORE = 'bioArcade.v1', QUEST_STORE = 'bioQuest.v1';
 const games = ['mendel', 'pedigree', 'basepang', 'run', 'glucose', 'circulation'];
-const submitHint = '복사·저장은 제출 완료가 아닙니다. 선생님이 안내한 곳에 붙여넣거나 파일을 첨부하세요.';
+const submitHint = '복사·저장은 제출 완료가 아니다. 선생님이 안내한 곳에 붙여넣거나 파일을 첨부하세요.';
 const errors = [], failures = [], consoleErrors = [];
 let ignoredManifestErrors = 0, assertions = 0;
 const check = (ok, msg) => {
@@ -584,14 +584,14 @@ async function recordDataTests(browser) {
       await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true,
         value: { writeText: async text => { window.__uxCopied = text; } } }));
       await page.locator('#copy').tap();
-      await page.waitForFunction(() => document.getElementById('msg').textContent === '복사했습니다.');
+      await page.waitForFunction(() => document.getElementById('msg').textContent === '복사했다.');
       check(await page.evaluate(() => window.__uxCopied === document.getElementById('summary').value), `허브 ${height}: 요약 복사 성공`);
       check((await page.textContent('#submit-hint')) === submitHint, `허브 ${height}: 복사 뒤 제출 안내 유지`);
       await page.screenshot({ path: path.join(out, `hub-${height}-copy-success.png`) });
       await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true,
         value: { writeText: async () => { throw new Error('가상 복사 실패'); } } }));
       await page.locator('#copy').tap();
-      await page.waitForFunction(() => document.getElementById('msg').textContent.startsWith('복사하지 못했습니다.'));
+      await page.waitForFunction(() => document.getElementById('msg').textContent.startsWith('복사하지 못했다.'));
       const feedback = await page.evaluate(() => {
         const msg = document.getElementById('msg'), r = msg.getBoundingClientRect(), panel = msg.parentElement.getBoundingClientRect();
         const buttons = ['copy', 'dl', 'clear'].map(id => document.getElementById(id).getBoundingClientRect());
