@@ -5,6 +5,7 @@
   const cv = $('cv'), ctx = cv.getContext('2d');
   const W = cv.width, H = cv.height;
   let s, hold = false, running = false, mode = 'normal', last = 0, holdTime = 0;
+  let frameId = null, challengeRun = null;
   const G_MIN = 30, G_MAX = 350, NOW_X = W * 0.42, PX_PER_S = 26;
   const gy = g => H - 40 - (g - G_MIN) / (G_MAX - G_MIN) * (H - 150);
   const starRule = `목표 범위(70~180)에 머문 시간 60·75·90% 이상이면 별 1·2·3개. 단, 혈당이 54 미만에 머문 시간이 합쳐서 ${M.SEVERE_LIMIT}초 이상인 판은 별이 1개까지다.`;
@@ -42,6 +43,38 @@
   const toastMs = t => Math.min(6000, Math.max(2200, Array.from(t).length * 70));
   function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), toastMs(t)); }
 
+  // 같은 줄의 앞 이름표들과 겹치지 않는 첫 줄을 쓴다. 맞닿기만 하면 겹침이 아니다.
+  // 세 줄 모두 겹치면 겹치는 너비의 합이 가장 작은 줄을 쓴다.
+  function scheduleLabelY(x, width, labels) {
+    let bestY = 78, leastOverlap = Infinity;
+    for (const y of [78, 98, 118]) {
+      let overlap = 0;
+      for (const label of labels) if (label.y === y) {
+        overlap += Math.max(0, Math.min(x + width, label.x + label.width) - Math.max(x, label.x));
+      }
+      if (overlap === 0) return y;
+      if (overlap < leastOverlap) { bestY = y; leastOverlap = overlap; }
+    }
+    return bestY;
+  }
+
+  const scheduleLabelCache = new WeakMap();
+  function scheduleLabelRows(events) {
+    if (scheduleLabelCache.has(events)) return scheduleLabelCache.get(events);
+    const rows = new Map(), labels = [];
+    ctx.font = 'bold 16px sans-serif';
+    // 화면 밖도 포함한 하루 전체의 상대 위치로 한 번만 정해, 화면이 이동해도 줄은 유지한다.
+    for (const e of [...events].sort((a, b) => a.t - b.t)) {
+      const x = e.t * PX_PER_S + 4;
+      const width = ctx.measureText((e.type === 'meal' ? '🍚 ' : '🏃 ') + e.name).width;
+      const y = scheduleLabelY(x, width, labels);
+      labels.push({ x, width, y });
+      rows.set(e, y);
+    }
+    scheduleLabelCache.set(events, rows);
+    return rows;
+  }
+
   function draw() {
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#f7fbff'; ctx.fillRect(0, 0, W, H);
@@ -59,14 +92,19 @@
     // 지금 선
     ctx.strokeStyle = '#9fb3c8'; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(NOW_X, 60); ctx.lineTo(NOW_X, H - 30); ctx.stroke(); ctx.setLineDash([]);
     // 다가오는 일정(식사·운동)
-    for (const e of M.EVENTS) {
+    const events = s.events || M.EVENTS;
+    // 기본 판은 측정 호출도 추가하지 않고 기존 줄·그리기 순서를 유지한다.
+    const labelRows = events !== M.EVENTS ? scheduleLabelRows(events) : null;
+    for (const e of events) {
       const x = NOW_X + (e.t - s.t) * PX_PER_S;
       if (x < -40 || x > W + 40) continue;
-      const w = (e.type === 'meal' ? 5 : e.dur) * PX_PER_S;
+      const w = (e.type === 'meal' ? M.MEAL_DUR : e.dur) * PX_PER_S;
       ctx.fillStyle = e.type === 'meal' ? 'rgba(241, 163, 60, .22)' : 'rgba(61, 133, 198, .18)';
       ctx.fillRect(x, 60, w, H - 90);
       ctx.fillStyle = e.type === 'meal' ? '#b36b00' : '#1f5f99'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left';
-      ctx.fillText((e.type === 'meal' ? '🍚 ' : '🏃 ') + e.name, x + 4, 78);
+      const label = (e.type === 'meal' ? '🍚 ' : '🏃 ') + e.name;
+      const y = labelRows ? labelRows.get(e) : 78;
+      ctx.fillText(label, x + 4, y);
     }
     // 지나온 혈당
     ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 3; ctx.beginPath();
@@ -83,12 +121,13 @@
     ctx.fillStyle = '#10243a'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(`인슐린 ${hold ? '분비 중 ▲' : ''}`, 10 + barW / 2, 30);
     ctx.fillText(`글루카곤 ${hold ? '' : '분비 중 ▲'}`, 20 + barW * 1.5, 30);
-    if (mode === 'resistance') { ctx.fillStyle = '#7a4bb3'; ctx.font = 'bold 16px sans-serif'; ctx.fillText('인슐린 저항성: 세포가 인슐린에 덜 반응한다', W / 2, 58); }
+    if (s.mode === 'resistance') { ctx.fillStyle = '#7a4bb3'; ctx.font = 'bold 16px sans-serif'; ctx.fillText('인슐린 저항성: 세포가 인슐린에 덜 반응한다', W / 2, 58); }
   }
   function clockText(t) { const h = 6 + (t / M.DAY) * 18; const hh = Math.floor(h), mm = Math.floor((h - hh) * 60 / 10) * 10; return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`; }
   let warned = {};
   function frame(now) {
     if (!running) return;
+    frameId = null;
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     M.step(s, hold, dt);
     if (hold) holdTime += dt;
@@ -99,15 +138,48 @@
     $('clock').textContent = clockText(s.t);
     $('tir').textContent = `${Math.round(s.tir / Math.max(0.01, s.t) * 100)}%`;
     draw();
-    if (s.t >= M.DAY) return finish();
-    requestAnimationFrame(frame);
+    if (s.t >= M.DAY) return challengeRun ? finishChallenge() : finish();
+    frameId = requestAnimationFrame(frame);
   }
-  function start() {
+  function settleChallenge(result) {
+    if (!challengeRun) return;
+    const { resolve } = challengeRun;
+    challengeRun = null;
+    resolve(result);
+  }
+  function beginRound(createState, nextChallenge = null) {
+    // 새 판으로 바꾸면 진행 중인 도전을 포기 기록으로 끝내고 예약 프레임도 취소한다.
+    if (running && challengeRun) {
+      const { challenge, seed } = challengeRun;
+      settleChallenge(M.challengeFinish(s, challenge, seed, [], { abandoned: true }));
+    }
+    if (frameId !== null) { cancelAnimationFrame(frameId); frameId = null; }
     // 숨겨진 시작·다시 하기 버튼에 포커스가 남으면 게임 중 Space가 그 버튼을 누를 수 있어 포커스를 푼다
     if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
     // 이전 판 끝 무렵에 뜬 경고가 새 판(혈당 95)에 남지 않게 토스트를 바로 내린다
     clearTimeout(toastT); $('toast').classList.remove('on');
-    s = M.init(mode); hold = false; warned = {}; holdTime = 0; running = true; last = performance.now(); requestAnimationFrame(frame);
+    s = createState(); challengeRun = nextChallenge;
+    if (challengeRun) $('overlay').hidden = true;
+    hold = false; warned = {}; holdTime = 0; running = true; last = performance.now(); frameId = requestAnimationFrame(frame);
+  }
+  function start() {
+    beginRound(() => M.init(mode));
+  }
+  function startChallenge(id) {
+    const challenge = M.CHALLENGES.find(candidate => candidate.id === id);
+    if (!challenge) throw new RangeError('알 수 없는 도전');
+    const seed = Math.floor(Math.random() * 4294967296);
+    return new Promise(resolve => {
+      beginRound(() => M.init(challenge.mode, M.makeSchedule(challenge.kind, seed)), { challenge, seed, resolve });
+    });
+  }
+  function finishChallenge() {
+    running = false; hold = false;
+    const { challenge, seed } = challengeRun;
+    // T12의 A.plays가 생기기 전까지 이전 판 목록은 비워 두고 기록·결과 카드를 연결하지 않는다.
+    const result = M.challengeFinish(s, challenge, seed, []);
+    settleChallenge(result);
+    return result;
   }
   function finish() {
     running = false; hold = false;
@@ -141,6 +213,9 @@
   const typing = e => e.target instanceof Element && e.target.closest('textarea, input, select, [contenteditable]');
   window.addEventListener('keydown', e => { if (e.code === 'Space' && running && !typing(e)) { e.preventDefault(); hold = true; } });
   window.addEventListener('keyup', e => { if (e.code !== 'Space') return; if (running && !typing(e)) e.preventDefault(); hold = false; });
+
+  // 도전 선택 화면(T9)과 기록 연결(T12) 전까지 학생 화면에서 부르지 않는다.
+  window.GlucoseGame = Object.freeze({ startChallenge });
 
   s = M.init('normal'); draw();
   A.intro($('overlay'), {
