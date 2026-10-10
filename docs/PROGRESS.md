@@ -7,7 +7,7 @@
 
 - 게임 8종(생명 탐사대, 멘델의 텃밭, 가계도 지뢰찾기, 염기쌍 팡, 에너지 런, 혈액 순환 일주, 혈당 지키기, 구성 단계 잇기)과 허브가 동작한다. 구성 단계 잇기는 아직 배포 전이다(배포본은 7종).
 - 학생용 주소: https://bio-arcade-f5u1.netlify.app (Netlify, 2026-10-06 커밋 54e5c87 기준 배포, 캐시 bio-arcade-v3. 배포 뒤 모든 페이지 200, https 전환, 새 코드 반영, 오프라인에서 허브·탐사대·염기쌍 팡·혈액 순환 일주 열림, 계정 이름 0건 확인). 다시 배포하는 절차는 `/deploy` 스킬(사용자 확인 뒤).
-- 마지막 전체 검증(2026-10-10, 공통 기록·구성 단계 첫 경험·가계도 2판·혈액 순환 그래픽 A를 합친 통합 상태, 0b1a802): 문법 검사 43개, `quest-logic` 86, `circulation-logic` 50, `glucose-logic` 통과, `organization-logic` 38·`--acceptance` 42, `pedigree-logic` 33, 성취기준 대조 일치, `sw.js` 36개 일치, E2E 5종 × Chromium·WebKit × 동작 줄이기 끔·켬 20조합 errors·failures none(ux-mendel-pedigree는 통합 수정 뒤 다시 4조합). 배포본은 아직 54e5c87.
+- 마지막 전체 검증(2026-10-10, 여섯 세션 브랜치를 합치고 화면 문체를 통일한 통합 상태): 문법 검사 43개, `quest-logic` 86, `circulation-logic` 50, `glucose-logic` 통과(단언 1,731,521개), `organization-logic` 38·`--acceptance` 42, `pedigree-logic` 33, 성취기준 대조 일치, `sw.js` 36개 일치, E2E 5종 × Chromium·WebKit × 동작 줄이기 끔·켬 20조합 모두 첫 실행에 errors·failures none(허브 확인 창 4회 검사 통과). 배포본은 아직 54e5c87.
 - 교차 검토 지적 65건(확정 53, 의견 갈림 12) 가운데 확정 지적은 모두 고쳤고, 의견 갈림 지적은 고치거나 결정으로 정리했다(`docs/DECISIONS.md`).
 
 ## 다음 할 일

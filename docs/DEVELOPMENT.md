@@ -116,7 +116,7 @@ WebKit(아이폰 Safari와 같은 계열의 엔진)으로도 돌릴 수 있다. 
 
 - `E2E_BROWSER=chromium`(기본)|`webkit`: 엔진을 고른다. 다른 값은 오류로 멈춘다.
 - `E2E_REDUCED_MOTION=1`: 모든 페이지(새 컨텍스트·팝업 포함)에 `prefers-reduced-motion: reduce`를 적용한다. 학생 가운데 '동작 줄이기'를 켠 아이폰이 있을 수 있어서 둔 조건이다.
-- WebKit은 `file://`로 연 페이지의 `manifest.webmanifest` 요청을 CORS로 막아 콘솔에 `Origin null is not allowed by Access-Control-Allow-Origin. Status code: 0`(앞에 `Failed to load resource: `가 붙은 꼴 포함) 두 문장을 낸다. E2E는 WebKit에서 이 두 문장 가운데 manifest 요청 실패로 확인된 것만 걸러 `무시한 오류: webkit file:// manifest N건`으로 따로 출력하고, 다른 오류는 `errors`에 남긴다. Chromium에서는 걸러지는 것이 없다(0건). 건수는 2026-10-06 실행에서 arcade 48건, quest 18건이었다.
+- WebKit은 `file://`로 연 페이지의 `manifest.webmanifest` 요청을 CORS로 막아 콘솔에 `Origin null is not allowed by Access-Control-Allow-Origin. Status code: 0`(앞에 `Failed to load resource: `가 붙은 꼴 포함) 두 문장을 낸다. E2E는 WebKit에서 이 두 문장 가운데 manifest 요청 실패로 확인된 것만 걸러 `무시한 오류: webkit file:// manifest N건`으로 따로 출력하고, 다른 오류는 `errors`에 남긴다. Chromium에서는 걸러지는 것이 없다(0건). 건수는 2026-10-06 실행에서 arcade 48건, quest 18건이었고, 구성 단계 잇기와 도전 판이 들어온 뒤 2026-10-10 실행에서 arcade 64건, quest 22건, ux-common 124건이었다. 건수는 여는 페이지 수에 따라 늘어나므로 그 자체로는 실패가 아니다.
 
 ```bash
 PW=~/.cache/bio-arcade-tools/node_modules/playwright E2E_BROWSER=webkit E2E_REDUCED_MOTION=1 node tests/arcade-e2e.js /tmp/bio-arcade-e2e/arcade-webkit-reduce
