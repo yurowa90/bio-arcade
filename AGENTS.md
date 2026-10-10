@@ -22,7 +22,7 @@ index.html            허브(게임 칸, 학번·이름, 기록 요약·제출, 
 shared/               미니게임 공통: arcade.js(window.Arcade, GAMES, 기록), arcade.css, standards.js(성취기준 발췌), art/symbols.js(공용 SVG 기호)
 games/<id>/           게임마다 index.html + game.js(화면). 규칙 모듈: basepang/engine.js, circulation/circulation.js,
                       glucose/model.js, mendel/genetics.js, organization/organization.js, pedigree/pedigree.js. run(에너지 런)은 규칙이 game.js 안에 있다
-games/quest/          생명 탐사대 — 독립 앱. shared/를 읽지 않고 저장 키도 따로 쓴다
+games/quest/          생명 탐사대 — 독립 앱. shared/를 읽지 않고(예외 art/symbols.js) 저장 키도 따로 쓴다. 지도 js/mapdata.js는 저장소 밖 생성기 산출물
 tests/                quest-logic.js·circulation-logic.js·glucose-logic.js·organization-logic.js·pedigree-logic.js·quest-tune-photo.js(Node),
                       arcade-e2e.js·quest-e2e.js·ux-common-e2e.js·ux-arcade-e2e.js·ux-mendel-pedigree-e2e.js(Playwright),
                       video/(학생 플레이 영상 녹화, D-060)

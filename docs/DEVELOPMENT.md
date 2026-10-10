@@ -20,7 +20,7 @@
 | `games/organization/` | 구성 단계 잇기. `organization.js`(`window.Organization`, 패·'이룬다' 관계표·줄 전체 제약·판정·별), `game.js`(손패·판·붙이기 화면, 놀이 중 단계 숫자 숨김). |
 | `games/pedigree/` | 가계도 지뢰찾기. `pedigree.js`(`window.Pedigree`: 기본 판 4문제 데이터, 단서 카드까지 다루는 유전자형 조합 전수 해결기, 판정 근거 사슬을 만드는 추론 엔진, 도전 1·2 검증 후보표 7,447개와 묶음 고르기, D-077. 382KB), `game.js`(판 고르기·기본 판·도전 판·풀이 보기). |
 | `games/run/` | 에너지 런. `game.js` 하나(구간 `ZONES`, 아이템 묶음 `DECK`, 세포 전달). 규칙 모듈이 따로 없다. |
-| `games/quest/` | 생명 탐사대. **독립 앱**: `shared/`를 읽지 않는다. `js/data.js`(`window.GameData`: 생물 19종, 지도 4개, 체육관), `js/battles.js`(`window.Battles`: 광합성·소화 규칙), `js/main.js`(이동·대화·관찰·도감·체육관·저장), `css/style.css`. |
+| `games/quest/` | 생명 탐사대. **독립 앱**: `shared/`를 읽지 않는다(예외: `shared/art/symbols.js`, D-074, 그래픽 적용 때 연결). `js/mapdata.js`(`window.QuestMaps`: 지역 지도 두 장 '신항고와 정원'·'저수지 생태공원'의 줄 단위 RLE 행과 장식·문·표지판. 저장소 밖 생성기 `~/.cache/bio-arcade-work/quest-map/`의 산출물이라 직접 고치지 않는다), `js/maprender.js`(`window.QuestRender`: 픽셀 지도·미니맵·생태 지도), `js/data.js`(`window.GameData`: 생물 28종, 서식지, 파트너, 체육관), `js/battles.js`(`window.Battles`: 광합성·소화 규칙), `js/main.js`(이동·대화·관찰·도감·체육관·저장), `css/style.css`. |
 | `tests/` | `quest-logic.js`·`circulation-logic.js`·`glucose-logic.js`·`organization-logic.js`·`pedigree-logic.js`(Node 단언·시뮬레이션), `quest-tune-photo.js`(광합성 난이도 보고), `arcade-e2e.js`·`quest-e2e.js`·`ux-*-e2e.js`(Playwright), `video/`(학생처럼 끝까지 해 보는 플레이 영상 녹화, D-060). |
 | `docs/` | 진행 상황, 결정 기록, 이 문서, 당시 기록 2개(복구 기록서, 교차 검토 결과). |
 
