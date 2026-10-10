@@ -63,16 +63,16 @@
       <button class="btn" id="dl">JSON 저장</button>
       <button class="btn" id="clear">기록 지우기</button>
       <p id="msg" role="status" aria-live="polite" aria-atomic="true"></p>
-      <p class="hint" id="submit-hint">복사·저장은 제출 완료가 아닙니다. 선생님이 안내한 곳에 붙여넣거나 파일을 첨부하세요.</p>
+      <p class="hint" id="submit-hint">복사·저장은 제출 완료가 아니다. 선생님이 안내한 곳에 붙여넣거나 파일을 첨부하세요.</p>
       <p class="hint">여러 학생이 함께 쓰는 기기라면, 제출한 뒤 ‘기록 지우기’를 누르고 다음 학생에게 넘기세요.</p>
     </section>
 
     <section class="panel-dark">
       <h3>휴대폰·태블릿에 설치하기</h3>
-      <p>아이폰·아이패드: 사파리의 <b>공유 → 홈 화면에 추가</b><br>안드로이드: 크롬 메뉴의 <b>앱 설치</b> 또는 <b>홈 화면에 추가</b><br>설치하면 인터넷이 끊겨도 실행됩니다.</p>
+      <p>아이폰·아이패드: 사파리의 <b>공유 → 홈 화면에 추가</b><br>안드로이드: 크롬 메뉴의 <b>앱 설치</b> 또는 <b>홈 화면에 추가</b><br>설치하면 인터넷이 끊겨도 실행된다.</p>
     </section>
 
-    <p class="foot">모든 게임은 원작의 이름·캐릭터·그림을 쓰지 않고 구조와 조작감만 빌린 오마주입니다. 성취기준·성취수준: 2022 개정 과학과 교육과정(교육부 고시 제2022-33호 별책9)과 교육부·평가원 성취수준. 기록은 이 기기에만 저장됩니다.</p>
+    <p class="foot">모든 게임은 원작의 이름·캐릭터·그림을 쓰지 않고 구조와 조작감만 빌린 오마주다. 성취기준·성취수준: 2022 개정 과학과 교육과정(교육부 고시 제2022-33호 별책9)과 교육부·평가원 성취수준. 기록은 이 기기에만 저장된다.</p>
   </main>
 
   <script src="shared/standards.js"></script>
@@ -86,7 +86,11 @@
           const q = A.questBadges();
           return q ? `배지 ${q.got}/${q.total}` : '아직 안 함';
         }
-        return A.data().games[g.id]?.plays?.length ? `최고 ${A.stars(A.best(g.id))}` : '아직 안 함';
+        const progress = A.progress(g.id);
+        const completed = Object.keys(progress.levels).map(Number).filter(level => level >= 1 && progress.levels[level].cleared !== null);
+        const challenge = completed.length ? `도전 ${Math.max(...completed)} 완료` : '';
+        if (progress.levels[0]) return `최고 ${A.stars(A.best(g.id))}${challenge ? ' · ' + challenge : ''}`;
+        return challenge || (progress.total ? '도전 해 봄' : '아직 안 함');
       };
       const drawCabinets = () => { box.innerHTML = A.GAMES.map(g => `<a class="cab" href="${g.path}">
         <div class="screen" style="background:${g.color}">${g.title[0]}</div>
@@ -124,7 +128,7 @@
         if (!ok) return;
         A.clearRecords(); owner = {};
         A.setStudent(typed());
-        drawCabinets(); $('msg').textContent = ' 앞 학생의 기록을 지웠습니다.';
+        drawCabinets(); $('msg').textContent = ' 앞 학생의 기록을 지웠다.';
       };
       const sync = e => {
         if (raw() !== last) { last = raw(); pressedOut = false; } // 조합을 끝내며 값 변화 없이 나는 input은 새 입력으로 보지 않는다
@@ -143,11 +147,11 @@
       });
       document.addEventListener('pointerdown', e => { if (e.target !== document.activeElement) pressedOut = true; }, true);
       $('clear').onclick = () => {
-        if (!confirm('이 기기에 저장된 학번·이름과 모든 게임 기록(생명 탐사대 저장 포함)을 지울까요?\n'
-          + '지운 기록은 되살릴 수 없어요. 아직 제출하지 않았다면 먼저 ‘요약 복사’나 ‘JSON 저장’을 하세요.')) return;
+        if (!confirm('이 기기에 저장된 학번·이름과 모든 게임 기록(생명 탐사대 저장 포함)을 지울까?\n'
+          + '지운 기록은 되살릴 수 없다. 아직 제출하지 않았다면 먼저 ‘요약 복사’나 ‘JSON 저장’을 하세요.')) return;
         A.clearRecords(); owner = {}; asked = false; answered = null; pressedOut = false;
         $('sid').value = ''; $('sname').value = '';
-        drawCabinets(); render(); $('msg').textContent = ' 기록을 지웠습니다.';
+        drawCabinets(); render(); $('msg').textContent = ' 기록을 지웠다.';
       };
 
       function summary() {
@@ -162,14 +166,24 @@
           }
           const r = d.games[g.id]; if (!r) return;
           // 서술 답은 마지막 판만이 아니라 쓴 판 모두를 판 번호와 함께 싣는다
-          const refl = r.plays.map((p, i) => p.reflection ? ` / 설명(${i + 1}판): ${p.reflection}` : '').join('');
-          lines.push(`${head}: 최고 ★${r.best}, ${r.plays.length}판${refl}`);
+          const plays = A.plays(g.id), progress = A.progress(g.id);
+          const refl = plays.map((p, i) => p.reflection ? ` / 설명(${i + 1}판): ${p.reflection}` : '').join('');
+          const levels = Object.keys(progress.levels).map(Number).sort((a, b) => a - b);
+          if (!levels.some(level => level >= 1)) {
+            lines.push(`${head}: 최고 ★${r.best}, ${plays.length}판${refl}`);
+            return;
+          }
+          const counts = levels.map(level => `${level === 0 ? '기본 판' : '도전 ' + level} ${progress.levels[level].plays}`).join('·');
+          const completed = levels.filter(level => level >= 1 && progress.levels[level].cleared !== null);
+          const challenge = completed.length ? `, 도전 ${Math.max(...completed)} 완료` : '';
+          lines.push(`${head}: ${progress.levels[0] ? '최고 ★' + r.best : '기본 판 안 함'}, ${plays.length}판(${counts})${challenge}${refl}`);
         });
         return lines.join('\n');
       }
       function render() { $('summary').value = summary(); }
       render();
-      $('copy').onclick = async () => { try { await navigator.clipboard.writeText(summary()); $('msg').textContent = '복사했습니다.'; } catch { $('msg').textContent = '복사하지 못했습니다. 글상자를 길게 눌러 복사하세요.'; } };
+      if (!A.canSave()) $('msg').textContent = '이 브라우저에서는 기록을 저장할 수 없다. 선생님께 알려 주세요.';
+      $('copy').onclick = async () => { try { await navigator.clipboard.writeText(summary()); $('msg').textContent = '복사했다.'; } catch { $('msg').textContent = '복사하지 못했다. 글상자를 길게 눌러 복사하세요.'; } };
       $('dl').onclick = () => {
         $('msg').textContent = '';
         let quest = null; try { quest = JSON.parse(localStorage.getItem('bioQuest.v1')); } catch {}

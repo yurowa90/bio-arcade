@@ -70,3 +70,4 @@ details.std summary { cursor: pointer; font-weight: 700; }
 .toast.on { opacity: 1; }
 /* hidden 속성이 .btn·.row .btn의 display 규칙에 덮이지 않게 한다 */
 .btn[hidden], .row .btn[hidden] { display: none; }
+.save-warn { color: var(--bad); font-weight: 700; }
