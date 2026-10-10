@@ -12,15 +12,16 @@
 | `shared/arcade.js` | `window.Arcade`: `GAMES` 목록, 기록 저장, 시작·결과 카드, 모달 처리, 성취기준 표시, 탐사대 배지 읽기, 기록 지우기. |
 | `shared/arcade.css` | 미니게임 공통 스타일(세로 휴대폰 기준). |
 | `shared/standards.js` | `window.ARCADE_STANDARDS`: 2022 개정 성취기준 14개 코드, 성취수준 70개 발췌. |
+| `shared/art/symbols.js` | `window.ArcadeArt`: 공용 SVG 기호(D-078). 기능 아이콘(뒤로·도움말·닫기·별·확인·잠금·주사위 등, 이모지·문자 글리프 대체), 주사위 눈, 심장 단면·폐·뇌·콩팥·다리 근육. 접두사 `art-`, 숨은 스프라이트를 한 번만 넣고 외부 요청이 없다. 사용법은 `docs/design/visual-style.md`. 생명 탐사대도 이 파일 하나는 읽는다(D-074 예외). |
 | `games/basepang/` | 염기쌍 팡. `engine.js`(`window.BasePang`, 판·짝 규칙·연쇄), `game.js`(화면·오개념 신호·흐름 문항). |
-| `games/circulation/` | 혈액 순환 일주. `circulation.js`(`window.Circulation`, 판·경로·혈액 상태, 연습 3바퀴와 불 꺼진 바퀴 상태 기계, 별·결과 문장·오개념 신호), `game.js`(SVG 판·이벤트 재생·불 꺼진 바퀴 패널). 설계는 `docs/design/circulation-board.md`. |
+| `games/circulation/` | 혈액 순환 일주. `circulation.js`(`window.Circulation`, 판·경로·혈액 상태, 연습 3바퀴와 불 꺼진 바퀴 상태 기계, 별·결과 문장·오개념 신호), `game.js`(SVG 판·이벤트 재생·불 꺼진 바퀴 패널). 설계는 `docs/design/circulation-board.md`. `board.js`(`window.CirculationBoard`, 판의 칸 좌표·혈관 관·심장 배치를 SVG 문자열로 만드는 화면 모듈, DOM 없음, D-078). |
 | `games/glucose/` | 혈당 지키기. `model.js`(`window.GlucoseModel`, 45초=하루 모델·별), `game.js`(캔버스·모드 선택). |
 | `games/mendel/` | 멘델의 텃밭. `genetics.js`(`window.Genetics`), `game.js`(화분·교배·검정 교배·추론). |
 | `games/organization/` | 구성 단계 잇기. `organization.js`(`window.Organization`, 패·'이룬다' 관계표·줄 전체 제약·판정·별), `game.js`(손패·판·붙이기 화면, 놀이 중 단계 숫자 숨김). |
-| `games/pedigree/` | 가계도 지뢰찾기. `pedigree.js`(`window.Pedigree`, 단계 데이터·유전자형 조합 전수 해결기), `game.js`. |
+| `games/pedigree/` | 가계도 지뢰찾기. `pedigree.js`(`window.Pedigree`: 기본 판 4문제 데이터, 단서 카드까지 다루는 유전자형 조합 전수 해결기, 판정 근거 사슬을 만드는 추론 엔진, 도전 1·2 검증 후보표 7,447개와 묶음 고르기, D-077. 382KB), `game.js`(판 고르기·기본 판·도전 판·풀이 보기). |
 | `games/run/` | 에너지 런. `game.js` 하나(구간 `ZONES`, 아이템 묶음 `DECK`, 세포 전달). 규칙 모듈이 따로 없다. |
 | `games/quest/` | 생명 탐사대. **독립 앱**: `shared/`를 읽지 않는다. `js/data.js`(`window.GameData`: 생물 19종, 지도 4개, 체육관), `js/battles.js`(`window.Battles`: 광합성·소화 규칙), `js/main.js`(이동·대화·관찰·도감·체육관·저장), `css/style.css`. |
-| `tests/` | `quest-logic.js`·`circulation-logic.js`·`glucose-logic.js`·`organization-logic.js`(Node 단언·시뮬레이션), `quest-tune-photo.js`(광합성 난이도 보고), `arcade-e2e.js`·`quest-e2e.js`·`ux-*-e2e.js`(Playwright), `video/`(학생처럼 끝까지 해 보는 플레이 영상 녹화, D-060). |
+| `tests/` | `quest-logic.js`·`circulation-logic.js`·`glucose-logic.js`·`organization-logic.js`·`pedigree-logic.js`(Node 단언·시뮬레이션), `quest-tune-photo.js`(광합성 난이도 보고), `arcade-e2e.js`·`quest-e2e.js`·`ux-*-e2e.js`(Playwright), `video/`(학생처럼 끝까지 해 보는 플레이 영상 녹화, D-060). |
 | `docs/` | 진행 상황, 결정 기록, 이 문서, 당시 기록 2개(복구 기록서, 교차 검토 결과). |
 
 ## 2. 모듈 관례
@@ -42,11 +43,15 @@ node -e "global.window=global; const S=require('./shared/standards.js'); const A
 
 ## 4. 기록 저장(localStorage)
 
-- `bioArcade.v1`(`shared/arcade.js`): `{ student: { id, name }, games: { [gameId]: { best, bestScore, plays: [{ at, stars, score, detail, quizCorrect?, reflection?, flowQuizCorrect? }] } } }`. 읽기·쓰기는 try/catch로 감싼다.
+- `bioArcade.v1`(`shared/arcade.js`): `{ student: { id, name }, games: { [gameId]: { best, bestScore, plays: [{ at, playId?, stars, score, detail, quizCorrect?, reflection?, flowQuizCorrect?, level?, cond?, playScore?, maxCombo?, cleared?, eligible? }] } } }`. 읽기·쓰기는 try/catch로 감싼다. 쓰기 함수(`setStudent`, `patchLast`, `finish`의 `patchPlay`)는 `{ ok: true }` 또는 `{ ok: false, errorCode }`를 돌려준다. errorCode는 `quota`(저장 공간 부족), `unavailable`(저장 차단), `unknown`, `gone`(고칠 판이 지워졌거나 바뀜)이다(D-076).
+- **난도와 해금(D-065·D-068·D-076).** 판의 `level`은 0 기본 판, 1 도전 1, 2 도전 2이고, 없으면 0으로 읽는다(옛 판은 모두 기본 판). `best`·`bestScore`는 기본 판만 반영한다. 해금과 개인 최고는 따로 저장하지 않고 판에서 계산한다. 기본 판과 도전 1은 늘 열려 있고, 도전 L(L≥2)은 도전 L−1에 `cleared: true` 판이 있으면 열린다(`A.isUnlocked`). `cond`에는 게임이 정한 짧은 코드(예: 혈당 'resistance', 시간표군)만 넣고 학생이 입력한 글은 넣지 않는다. 개인 최고(`A.personalBest`)는 level과 `cond`가 같고 `eligible`이 false가 아닌 판의 `playScore` 최댓값이다. 놀이 점수가 없는 옛 판은 비교하지 않으므로 처음 값은 null이다. 가계도 판이 이미 있으면 '첫 판 아님'이 저절로 성립한다(`A.plays('pedigree', { level: 0 }).length`). 허브 '기록 지우기'(D-023)는 판과 함께 도전 해금과 개인 최고도 지운다.
+- **판 식별자.** 새 판에는 `playId`가 붙는다. crypto.getRandomValues로 만든 소문자 영숫자 12자이고 시각·기기·학번 정보가 없다(crypto가 없으면 붙이지 않고 Math.random으로 대신하지 않는다). 배포본을 포함한 옛 코드도 load→수정→save로 객체 전체를 다시 쓰고 판에는 Object.assign만 하므로 새 필드를 지우지 않는다.
+- **저장 실패 안내.** `A.finish`는 판 기록 저장이 실패하면 결과 카드의 별 아래 `.save-warn`(role="alert")에 "기록을 저장하지 못했다. 이 화면을 닫으면 이번 판 결과가 남지 않으니 선생님께 보여 주세요."를 띄운다. 판 기록은 됐는데 그 뒤의 문항·서술 답 저장이 실패하면 "답을 저장하지 못했다. 화면을 닫기 전에 답을 따로 적어 두세요."를 띄우고, 같은 판의 다음 답 저장이 성공하면 다시 숨긴다(판 기록 실패 안내는 남는다). `gone`은 의도한 삭제이므로 안내하지 않는다. 실패한 판은 자동으로 다시 저장하지 않는다. 허브는 열 때 `A.canSave()`(시험 키 `bioArcade.v1.probe`를 쓰고 바로 지움)가 거짓이면 상태 줄에 "이 브라우저에서는 기록을 저장할 수 없다. 선생님께 알려 주세요."를 띄운다.
+- **허브 표시(임시, T9 시안 전).** 도전 판이 없으면 칸과 요약은 예전과 같다(`최고 ★n, m판`). 도전 판이 있으면 요약은 `최고 ★n, m판(기본 판 a·도전 1 b), 도전 N 완료`이다. 판 수는 모든 판, '최고 ★'은 기본 판만 센다. 칸은 기본 판 최고 뒤에 ' · 도전 N 완료'를 붙이고, 기본 판 없이 도전만 했으면 '도전 N 완료' 또는 '도전 해 봄'을 쓴다.
 - `bioQuest.v1`(`games/quest/js/main.js`): 탐사대 전용. 위치, 도감, 배지, 시간 모드, 체육관 기록, 학번·이름, 인트로 완료 여부.
 - 허브의 `Arcade.hasRecords()`는 `bioArcade.v1`의 `games`에 게임 기록이 하나라도 있거나 `bioQuest.v1` 키가 있으면 참이다. 학번·이름만 저장된 상태는 기록 없음으로 본다. `clearRecords()`는 두 키를 모두 지운다. 'JSON 저장'은 `생명오락실_<학번>.json`으로 내려받는다.
 - 기록은 기기 밖으로 보내지 않는다. `detail`에는 교사가 볼 오개념 신호를 넣는다.
-- **설명해 보기 답(미니게임).** `A.finish`가 판 기록을 만드는 순간 그 판의 번호(`plays` 안의 위치)와 `at`을 고정하고, 그 판만 고치는 함수 `patchPlay(patch)`를 돌려준다. 답은 입력을 멈추고 약 300ms 뒤(`input`·`compositionend`), `pagehide`, `visibilitychange`(hidden), '다시 하기'·'오락실로' 버튼에서 저장한다. 판 번호와 `at`이 다르거나 판이 지워졌으면(다른 탭의 지우기는 `storage` 이벤트로 알아챈다) 쓰지 않는다. 마지막 판을 찾아 쓰지 않는 것은 다음 판이나 다른 탭의 기록을 덮어쓰지 않기 위해서다. 답을 모두 지우면 `reflection`이 빈 문자열로 저장된다(키는 남는다). '오락실로'는 답만 저장하고 리스너를 떼지 않으므로, 뒤로 가기(bfcache)로 결과 카드가 복원돼도 같은 판에 이어 저장된다. 리스너는 카드가 닫히거나 `A.intro`·`A.finish`가 다시 불릴 때 정리된다(`stopReflection`).
+- **설명해 보기 답(미니게임).** `A.finish`가 판 기록을 만드는 순간 그 판의 번호(`plays` 안의 위치)·`at`·`playId`를 고정하고, 그 판만 고치는 함수 `patchPlay(patch)`를 돌려준다. 답은 입력을 멈추고 약 300ms 뒤(`input`·`compositionend`), `pagehide`, `visibilitychange`(hidden), '다시 하기'·'오락실로' 버튼에서 저장한다. 판 번호·`at`·`playId`가 다르거나 판이 지워졌으면(다른 탭의 지우기는 `storage` 이벤트로 알아챈다) 쓰지 않는다. 마지막 판을 찾아 쓰지 않는 것은 다음 판이나 다른 탭의 기록을 덮어쓰지 않기 위해서다. 답을 모두 지우면 `reflection`이 빈 문자열로 저장된다(키는 남는다). '오락실로'는 답만 저장하고 리스너를 떼지 않으므로, 뒤로 가기(bfcache)로 결과 카드가 복원돼도 같은 판에 이어 저장된다. 리스너는 카드가 닫히거나 `A.intro`·`A.finish`가 다시 불릴 때 정리된다(`stopReflection`).
 - **흐름 문항.** 염기쌍 팡·혈액 순환 일주의 `addFlowQuiz`는 `A.finish`가 돌려준 `patchPlay`로 `flowQuizCorrect`를 쓴다. 설명해 보기 칸을 떼었다 붙여도 같은 textarea와 리스너를 쓴다. `A.patchLast`는 정의만 남았고 게임 코드는 부르지 않는다.
 - **탐사대 체육관(`games/quest/js/main.js`).** 결과가 나오는 순간 `saveBattleResult(play)`가 `appendBattleRecord`로 대결 기록을 더하고 최고 배지(`badges[gym]`)를 갱신해 한 번 저장한다. 다른 탭이 저장한 `records`·`badges`는 보존한다. 서술 답은 그 기록(기록 위치·`at`·`gym`이 같을 때만)에 `patchBattleReflection`으로 갱신하며, 시점은 미니게임과 같다. 패널을 닫거나 다른 패널을 열면 마지막으로 저장하고 리스너를 정리한다(`endBattleReflection`). 허브에서 기록을 지운 뒤(`storage` 이벤트로 `bioQuest.v1`이 사라지면) 열려 있던 탐사대가 `writeSave`로 기록을 되살리지 않는다. '처음부터'를 누르면 다시 쓰기 시작한다.
 
@@ -54,7 +59,9 @@ node -e "global.window=global; const S=require('./shared/standards.js'); const A
 
 - `A.intro(overlay, { id, rules: [HTML], onStart })`: 시작 카드.
 - `A.finish(overlay, { id, stars(0~3), score, lines: [HTML], detail, quiz: { q, options(2개), answer, explain }, reflection, onRetry })`: 기록을 먼저 저장하고 결과 카드를 띄운 뒤, 그 판만 고치는 `patchPlay`를 돌려준다. 인출 문항 정답 여부는 고르는 즉시, '설명해 보기' 답은 쓰는 동안과 화면을 떠날 때 저장된다(4절).
-- 그 밖: `A.GAMES`, `A.game(id)`, `A.data()`, `A.student()`, `A.setStudent()`, `A.record()`, `A.patchLast()`, `A.best()`, `A.questBadges()`, `A.hasRecords()`, `A.clearRecords()`, `A.standards()`, `A.standardsHTML()`, `A.stars()`.
+- `A.finish`의 선택 인자 `level?, cond?, playScore?, maxCombo?, cleared?, eligible?`(D-076): level은 0~9 정수, cond는 1~40자 문자열, playScore·maxCombo는 유한수, cleared는 true일 때만, eligible은 false일 때만 저장한다. 돌려주는 `patchPlay(patch)`는 저장 결과를 돌려주고, 속성 `save`(판 기록 저장 결과), `playId`, `best`(playScore를 넘긴 판이면 `{ previous, current, isNew }`), `firstClear`(그 도전의 첫 완료이고 저장됐을 때만 참)를 가진다.
+- `A.scoreboard({ id, level, cond })`: 화면 요소가 없는 점수판. `add(n)`, `set(n)`(연속 값 게임용), `hit(n = 1)`(콤보), `miss()`(콤보 끊김), `on(fn)`(해제 함수를 돌려줌), `state()`(`{ score, combo, maxCombo, best, beatBest }`), `result()`(`{ playScore, maxCombo }`, `A.finish` 인자에 펼쳐 넣음). 이벤트는 `score`·`combo`·`break`·`best`(판마다 한 번)이다. 콤보로 점수를 늘리지 않는다.
+- 그 밖: `A.GAMES`, `A.game(id)`, `A.data()`, `A.student()`, `A.setStudent()`, `A.record()`, `A.patchLast()`, `A.best()`, `A.questBadges()`, `A.hasRecords()`, `A.plays(id, filter)`, `A.isUnlocked(id, level)`, `A.personalBest(id, level, cond)`, `A.progress(id)`, `A.canSave()`, `A.clearRecords()`, `A.standards()`, `A.standardsHTML()`, `A.stars()`.
 - 결과 카드를 꾸밀 때는 공통 클릭 처리(`.quiz-opts .btn`)에 걸리지 않게 클래스를 따로 쓴다. 혈당은 `addModePicker`, 염기쌍 팡은 `addFlowQuiz`(`.flow-quiz`, `.flow-opts`)를 쓴다.
 - 모달: intro·finish가 뜨면 overlay의 형제 요소에 `inert`를 달고, 캡처 단계 keydown을 끊는다. 게임이 같은 overlay의 `hidden`을 직접 바꿔도 MutationObserver가 맞춘다.
 - 토스트: 공용 함수가 없다. 게임마다 `#toast`와 자체 `toast()`가 있고, 표시 시간은 모든 미니게임이 같은 규칙으로 글자당 약 70ms(최소 2.2초, 최대 6초)다. 가계도도 D-053부터 같다. 탐사대에는 토스트가 없고 대화창을 쓴다.
@@ -63,7 +70,7 @@ node -e "global.window=global; const S=require('./shared/standards.js'); const A
 
 - `window.__game`(염기쌍 팡): `grid()`, `level()`, `moves()`, `trySwap(a, b)`.
 - `window.__circ`(혈액 순환 일주): `state()`, `pending()`, `correct()`(지금 입력의 정답 키, 테스트 전용), `fast(on)`(이벤트 재생 대기를 없앤다), `view()`(화면이 지금 그리는 문항. 재생 중에는 판이 직전 상태로 그려지므로 판·경로 칩 검사는 `pending()`이 아니라 이것과 비교한다). `window.__game`은 염기쌍 팡이 쓰므로 이름을 나눴다.
-- `window.__org`(구성 단계 잇기): `state()`(상태 사본), `completeLines()`, `start(seed, options)`(시드·턴 상한으로 새 판을 재현한다. 패를 넣거나 규칙을 건너뛰지 않는다), `draw()`.
+- `window.__org`(구성 단계 잇기): `state()`(상태 사본), `mode()`('intro'·'practice'·'main'), `practice()`(연습 줄 상태 사본, 읽기 전용), `completeLines()`, `start(seed, options)`(시드·턴 상한으로 새 판을 재현한다. 패를 넣거나 규칙을 건너뛰지 않는다), `draw()`.
 - `window.__bq`(탐사대): 상태 `S`, `mode`, `player`, `warp(map, x, y)`, `encounter(habitat, sp?)`, `observationQuestions(sp)`, `gymPhoto`, `gymDigest`, `openDex`.
 - E2E는 전역 모듈도 직접 쓴다(`window.Pedigree.solve`, `window.BasePang.findPairs`, `window.GameData.SPECIES`). 혈당·에너지 런·멘델은 DOM 선택자와 포인터로 조작한다.
 
@@ -99,6 +106,7 @@ WebKit(아이폰 Safari와 같은 계열의 엔진)으로도 돌릴 수 있다. 
 | `node tests/circulation-logic.js` | 약 1분 | `FAIL` 0, 종료 코드 0. 별 전수 분포와 32,000판 시뮬레이션 값을 함께 출력한다 |
 | `node tests/glucose-logic.js` | 수 초 | 종료 코드 0. 혈당 별 기준(54 미만 상한)과 전략별 분포 |
 | `node tests/organization-logic.js` (`--acceptance`) | 기본 약 36초, 인수 약 13초 | `FAIL` 0, 종료 코드 0. 출력의 '고의 변이 … FAIL' 줄(기본·인수 모두)은 변이를 잡았다는 뜻이다. 숫자 전략은 보고만 한다(D-058) |
+| `node tests/pedigree-logic.js` (`--quick`, `--verify-candidates`, `--rebuild-candidates`) | 기본 약 1분(`--quick` 약 9초, 후보표 전수 확인 약 250초) | `FAIL` 0, 종료 코드 0. 해결기·추론 엔진·후보표·찍기 5% 이하·화면 크기 상한(D-077) |
 | `PW=… node tests/ux-common-e2e.js`·`ux-arcade-e2e.js`·`ux-mendel-pedigree-e2e.js <저장소 밖 폴더>` | 각 수 초 | `errors: none`, `failures: none`, 종료 코드 0. 플레이 테스트 반영(D-054) 화면 검사 |
 | `node tests/quest-tune-photo.js` | 1초 미만 | 보고만 한다. 광합성 규칙을 바꿀 때 별 분포를 본다 |
 | `PW=~/.cache/bio-arcade-tools/node_modules/playwright node tests/arcade-e2e.js <저장소 밖 폴더>` | 약 2분 | `errors: none`, `failures: none`, 종료 코드 0 |

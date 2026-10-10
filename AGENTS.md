@@ -19,11 +19,11 @@
 
 ```
 index.html            허브(게임 칸, 학번·이름, 기록 요약·제출, 기록 지우기)
-shared/               미니게임 공통: arcade.js(window.Arcade, GAMES, 기록), arcade.css, standards.js(성취기준 발췌)
+shared/               미니게임 공통: arcade.js(window.Arcade, GAMES, 기록), arcade.css, standards.js(성취기준 발췌), art/symbols.js(공용 SVG 기호)
 games/<id>/           게임마다 index.html + game.js(화면). 규칙 모듈: basepang/engine.js, circulation/circulation.js,
                       glucose/model.js, mendel/genetics.js, organization/organization.js, pedigree/pedigree.js. run(에너지 런)은 규칙이 game.js 안에 있다
 games/quest/          생명 탐사대 — 독립 앱. shared/를 읽지 않고 저장 키도 따로 쓴다
-tests/                quest-logic.js·circulation-logic.js·glucose-logic.js·organization-logic.js·quest-tune-photo.js(Node),
+tests/                quest-logic.js·circulation-logic.js·glucose-logic.js·organization-logic.js·pedigree-logic.js·quest-tune-photo.js(Node),
                       arcade-e2e.js·quest-e2e.js·ux-common-e2e.js·ux-arcade-e2e.js·ux-mendel-pedigree-e2e.js(Playwright),
                       video/(학생 플레이 영상 녹화, D-060)
 sw.js, manifest.webmanifest, icons/   PWA
@@ -40,6 +40,7 @@ node tests/quest-logic.js                                   # 탐사대 규칙·
 node tests/circulation-logic.js                             # 혈액 순환 일주 규칙·별 전수 분포·시뮬레이션(약 1분)
 node tests/glucose-logic.js                                 # 혈당 지키기 별 기준·전략별 분포
 node tests/organization-logic.js                            # 구성 단계 잇기 판정·별 조건(--acceptance는 전략별 시뮬레이션)
+node tests/pedigree-logic.js                                # 가계도 해결기·추론 엔진·도전 후보표(약 1분, --quick 약 9초)
 PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/quest-e2e.js /tmp/bio-arcade-e2e/quest     # 약 15초
 PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/arcade-e2e.js /tmp/bio-arcade-e2e/arcade   # 약 3분
 for s in ux-common ux-arcade ux-mendel-pedigree; do PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/$s-e2e.js /tmp/bio-arcade-e2e/$s; done   # 플레이 테스트 반영 화면 검사, 각 수 초
@@ -55,7 +56,7 @@ PW="$HOME/.cache/bio-arcade-tools/node_modules/playwright" node tests/video/play
 - 화면 용어는 한국 중학교·통합과학 교과서를 따른다(순종·잡종, 대립유전자, 보인자, 세포 호흡, 유화, 모세 혈관). 생명과학Ⅰ 용어(동형 접합 등)는 쓰지 않는다. 예외: 고등학교 생명과학을 겨냥한 면역 게임 두 개(D-070·D-071)는 그 게임 안에서만 생명과학 교과서 용어를 쓴다.
 - 과학을 단순화하면 README의 '게임이 단순화한 것'에 적는다. 적지 않은 단순화는 오류로 본다. 가르치려는 개념과 반대되는 전략에 점수를 주지 않고, 별 기준을 바꾸면 시뮬레이션이나 전수 탐색으로 확인한다.
 - 게임 점수는 성취수준이 아니다. 원작의 이름·캐릭터·그림·상징은 쓰지 않고 구조와 조작감만 빌린다(오마주 표기 `homage`는 둔다).
-- 학생 기록은 기기의 localStorage에만 두고 앱이 밖으로 보내지 않는다. 실제 학생 이름·학번·성적·학교 정보를 코드·테스트·커밋·로그·문서에 넣지 않는다(테스트는 20315, '테스트' 같은 가상 값). 학생 기록 JSON을 외부 모델(GPT 등)에 보내지 않는다. 학교를 게임 속 장소로 쓸 때는 실제 이름을 바꾼 이름만 쓰고 실제 학교 이름은 어디에도 넣지 않는다(D-067).
+- 학생 기록은 기기의 localStorage에만 두고 앱이 밖으로 보내지 않는다. 실제 학생 이름·학번·성적·학교 정보를 코드·테스트·커밋·로그·문서에 넣지 않는다(테스트는 20315, '테스트' 같은 가상 값). 학생 기록 JSON을 외부 모델(GPT 등)에 보내지 않는다. 학교를 게임 속 장소로 쓸 때는 실제 이름을 바꾼 이름만 쓰고 실제 학교 이름은 어디에도 넣지 않는다(D-067). 유일한 예외는 탐사대 정원 장식의 관목 글자 두 자다(D-074).
 - 실행한 명령의 출력으로 보고한다. 돌리지 않은 검증은 '미실행'이라고 적는다.
 - 변경 파일을 명시해 스테이징한다(`git add .` 금지). 커밋은 게임 단위로 나누고 제목은 `<게임 이름 | 허브·공통 | 문서>: <바꾼 내용>`으로 쓴다. push는 사용자가 요청할 때만 한다. 기본 브랜치는 `main`.
 - 교사 판단이 필요한 선택은 추측으로 정하지 않고 사용자에게 묻거나 PROGRESS의 미결 사항(M)에 올린다. 결정은 내린 자리에서 DECISIONS에, 상태는 작업 단위마다 PROGRESS에 남긴다(Claude Code는 `/handoff`).
