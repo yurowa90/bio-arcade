@@ -121,9 +121,9 @@
         if (asked || !changed || !A.hasRecords()) return;
         asked = true;
         const who = `${owner.id || ''} ${owner.name || ''}`.trim();
-        const ok = confirm((anon ? '이 기기에 학번·이름 없이 한 게임 기록이 남아 있어요.\n\n' : `이 기기에 ‘${who}’의 게임 기록이 남아 있어요.\n\n`)
+        const ok = confirm((anon ? '이 기기에 학번·이름 없이 한 게임 기록이 남아 있다.\n\n' : `이 기기에 ‘${who}’의 게임 기록이 남아 있다.\n\n`)
           + '다른 학생의 기록이면 [확인]을 눌러 지우고 새로 시작하세요.\n'
-          + '내 기록이면 [취소]를 누르세요. 기록은 그대로 두고 학번·이름만 바꿔요.');
+          + '내 기록이면 [취소]를 누르세요. 기록은 그대로 두고 학번·이름만 바꾼다.');
         answered = raw();
         if (!ok) return;
         A.clearRecords(); owner = {};

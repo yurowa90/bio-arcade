@@ -467,7 +467,8 @@ function finishErrors() {
 
     // GL-2·3·6: 누르지 않은 판/계속 누른 판을 끝까지 돌려 그래프 상하한과 결과를 본다.
     const gl = await open('glucose');
-    await gl.evaluate(() => { const init = window.GlucoseModel.init; window.GlucoseModel.init = mode => (window.__glucose = init(mode)); });
+    // 도전 판의 일정(두 번째 인자)도 그대로 넘긴다. 첫 인자만 넘기면 고정 시간표로 바뀐다.
+    await gl.evaluate(() => { const init = window.GlucoseModel.init; window.GlucoseModel.init = (...args) => (window.__glucose = init(...args)); });
     check((await gl.textContent('.hint')).includes('Space 누르고 있기'), 'GL-4 / Q8 Space 안내');
     await gl.click('#ar-start');
     await gl.keyboard.down('Space'); await gl.evaluate(() => window.__tick(10));

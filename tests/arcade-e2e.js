@@ -143,7 +143,7 @@ const root = path.resolve(__dirname, '..');
   // 자가 수분 전에 마감하거나 다른 교배만 했을 때, 하지 않은 실험을 설명시키지 않는다.
   await go('games/mendel/index.html'); await page.click('#ar-start');
   await page.click('#t-end');
-  await checkMendelPrompt('noExperiment', ['이번 판에서는 아직 교배하지 않았어요.', '예상해 보세요.'], ['9:3:3:1']);
+  await checkMendelPrompt('noExperiment', ['이번 판에서는 아직 교배하지 않았다.', '예상해 보세요.'], ['9:3:3:1']);
   await page.click('#ar-retry');
   await page.click('.pot[data-i="0"]'); await page.click('.pot[data-i="1"]'); await page.click('#t-cross');
   await page.click('.seed[data-i="0"]'); await page.click('#plant');
@@ -1108,10 +1108,10 @@ const root = path.resolve(__dirname, '..');
   await page.click('#btn-hub');
   await page.waitForTimeout(300);
 
-  // 허브 '앞 학생 기록을 지울까요' 확인 창: 기록이 남은 상태에서
+  // 허브 '앞 학생 기록을 지울까' 확인 창: 기록이 남은 상태에서
   // 빈 이름 채우기 → 묻지 않음, 학번 20315→20316 → 물음([취소]), 입력을 마친 뒤 20316→20317 → 다시 물음,
   // 한 번의 input으로 값을 통째 바꾸고(붙여넣기와 같음) 더 입력하지 않은 채 칸을 벗어난 뒤 또 바꿔도 다시 물음
-  const asked = () => dialogs.filter(m => m.includes('게임 기록이 남아 있어요')).length;
+  const asked = () => dialogs.filter(m => m.includes('게임 기록이 남아 있다')).length;
   const edit = async (sel, keys, text) => {
     await page.click(sel); await page.keyboard.press('End');
     for (let i = 0; i < keys; i++) await page.keyboard.press('Backspace');

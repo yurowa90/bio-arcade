@@ -134,7 +134,7 @@
       area.querySelectorAll('.btn').forEach(x => { x.disabled = true; if (x.dataset.flow === '0') x.classList.add('right'); });
       if (!ok) b.classList.add('wrong');
       const fb = area.querySelector('.flow-fb'); fb.hidden = false;
-      fb.textContent = (ok ? '정답! ' : '아쉬워요. ') + '좌심실은 온몸으로 혈액을 내보내는 방이다. 온몸까지 혈액을 보내려면 강하게 수축해야 해서 근육 벽이 가장 두껍다. 심방은 바로 이어진 심실로 혈액을 보내므로 벽이 얇다.';
+      fb.textContent = (ok ? '정답! ' : '아쉽다. ') + '좌심실은 온몸으로 혈액을 내보내는 방이다. 온몸까지 혈액을 보내려면 강하게 수축해야 해서 근육 벽이 가장 두껍다. 심방은 바로 이어진 심실로 혈액을 보내므로 벽이 얇다.';
       patchPlay({ flowQuizCorrect: ok }); card.insertBefore(refl, card.querySelector('.row'));
     });
     refl.querySelector('textarea').placeholder = '발표 원고처럼 네다섯 문장으로 써 보세요.';

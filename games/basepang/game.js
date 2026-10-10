@@ -162,7 +162,7 @@
     const opts = FLOW_QUIZ.options.map((o, i) => ({ o, i })).sort(() => Math.random() - 0.5);
     box.innerHTML = `<p><b>이어서 떠올리기</b> — ${FLOW_QUIZ.q}</p>
       <div class="flow-opts">${opts.map(({ o, i }) => `<button class="btn" data-i="${i}">${o}</button>`).join('')}</div>
-      <p class="flow-fb"${refl ? '' : ' hidden'}>${refl ? '답을 고르면 ‘설명해 보기’가 나와요.' : ''}</p>`;
+      <p class="flow-fb"${refl ? '' : ' hidden'}>${refl ? '답을 고르면 ‘설명해 보기’가 나온다.' : ''}</p>`;
     if (first) first.after(box); else card.insertBefore(box, refl || card.querySelector('.row'));
     if (refl) refl.remove();
     const btns = box.querySelectorAll('.flow-opts .btn');
@@ -171,7 +171,7 @@
       btns.forEach(x => { x.disabled = true; if (+x.dataset.i === FLOW_QUIZ.answer) x.classList.add('right'); });
       if (!ok) btn.classList.add('wrong');
       const fb = box.querySelector('.flow-fb'); fb.hidden = false;
-      fb.textContent = (ok ? '정답! ' : '아쉬워요. ') + FLOW_QUIZ.explain;
+      fb.textContent = (ok ? '정답! ' : '아쉽다. ') + FLOW_QUIZ.explain;
       if (refl && !refl.isConnected) box.after(refl);
       patchPlay({ flowQuizCorrect: ok });
     });
