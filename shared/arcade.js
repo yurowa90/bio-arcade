@@ -42,7 +42,8 @@
   ];
 
   const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
-  const readLevel = play => Number.isInteger(play.level) && play.level >= 0 ? play.level : 0;
+  // 저장이 깨져 판 목록에 객체가 아닌 값(null 등)이 섞일 수 있다. 판으로 세지 않고 건너뛴다
+  const readLevel = play => isObject(play) && Number.isInteger(play.level) && play.level >= 0 ? play.level : 0;
   const validLevel = level => Number.isInteger(level) && level >= 0 && level <= 9;
   function load() {
     try {
@@ -77,7 +78,7 @@
     if (!Array.isArray(game.plays)) game.plays = [];
     const level = validLevel(play.level) ? play.level : 0;
     const previousBest = Arcade.personalBest(id, level, play.cond)?.playScore ?? null;
-    const alreadyCleared = game.plays.some(p => readLevel(p) === level && p.cleared === true);
+    const alreadyCleared = game.plays.some(p => isObject(p) && readLevel(p) === level && p.cleared === true);
     const entry = { at: new Date().toISOString() };
     for (const [key, value] of Object.entries(play)) {
       if (value !== undefined && key !== 'playId' && (key !== 'level' || validLevel(value))) entry[key] = value;
@@ -168,13 +169,13 @@
     // 방금 저장한 판에 퀴즈 결과·성찰을 덧붙인다
     patchLast(id, patch) {
       const d = load(), plays = d.games[id]?.plays;
-      if (!Array.isArray(plays) || !plays.length) return { ok: false, errorCode: 'gone' };
+      if (!Array.isArray(plays) || !plays.length || !isObject(plays[plays.length - 1])) return { ok: false, errorCode: 'gone' };
       Object.assign(plays[plays.length - 1], patch); return save(d);
     },
     plays(id, filter = {}) {
       const plays = load().games[id]?.plays;
       if (!Array.isArray(plays)) return [];
-      return plays.filter(p => (!('level' in filter) || readLevel(p) === filter.level) &&
+      return plays.filter(p => isObject(p) && (!('level' in filter) || readLevel(p) === filter.level) &&
         (!('cond' in filter) || p.cond === filter.cond));
     },
     isUnlocked(id, level) {

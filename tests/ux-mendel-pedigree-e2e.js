@@ -374,8 +374,8 @@ fs.mkdirSync(out, { recursive: true });
     check(fixedRef.cards > 0 && fixedRef.matching && fixedRef.conditions && fixedRef.tests && fixedRef.noAnswers, `${prefix} 카드가 있는 고정 마지막 문제의 축소본 자료 유지`);
     await page.screenshot({ path: path.join(out, `pedigree-${prefix.replace(/[^\w-]/g, '-')}-challenge.png`) });
     await page.click('#ar-retry'); check(await page.isDisabled('#choose-2'), `${prefix} 고정 문제 완전 해결 뒤에도 도전 2 잠김`);
-    // 뒤의 작은 화면 도전 2 검사를 위한 가상 해금 기록이다.
-    await page.evaluate(() => { const data = window.Arcade.data(); data.games.pedigree.plays.push({ detail: { kind: 'challenge', level: 1, cleared: true } }); localStorage.setItem('bioArcade.v1', JSON.stringify(data)); });
+    // 뒤의 작은 화면 도전 2 검사를 위한 가상 해금 기록이다. 공통 기록 계약(D-076)대로 level·cleared를 판 맨 위에 둔다.
+    await page.evaluate(() => { const data = window.Arcade.data(); data.games.pedigree.plays.push({ level: 1, cond: 'mix', cleared: true, detail: { kind: 'challenge', level: 1, cleared: true } }); localStorage.setItem('bioArcade.v1', JSON.stringify(data)); });
   }
 
   // 카드 ②가 판정 줄 뒤에 가려지거나 방식 고르기가 화면 밖이면 잡는다.

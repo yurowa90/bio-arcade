@@ -5,6 +5,7 @@ const FILES = [
   'games/basepang/engine.js',
   'games/basepang/game.js',
   'games/basepang/index.html',
+  'games/circulation/board.js',
   'games/circulation/circulation.js',
   'games/circulation/game.js',
   'games/circulation/index.html',
@@ -34,6 +35,7 @@ const FILES = [
   'manifest.webmanifest',
   'shared/arcade.css',
   'shared/arcade.js',
+  'shared/art/symbols.js',
   'shared/standards.js',
 ];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
