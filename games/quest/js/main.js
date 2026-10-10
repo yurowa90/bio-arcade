@@ -15,10 +15,42 @@
     record.reflection = reflection;
     return true;
   }
-  if (typeof window === 'undefined' && typeof module !== 'undefined') {
-    module.exports = { appendBattleRecord, patchBattleReflection }; return;
+  const WALKABLE = new Set('.=YFPgfB:,;');
+  // 옛 저장의 도감·배지·기록은 그대로 두고 위치를 복구한다. 빠진 프로필은 시작할 때 묻는다.
+  function normalizeSave(saved, maps) {
+    const start = maps.school.start;
+    const fresh = { v: 1, partner: null, map: 'school', x: start.x, y: start.y, dir: start.direction || 'down',
+      avatar: null, dex: {}, badges: {}, timeMode: 'real', records: [], student: { id: '', name: '' }, introDone: false };
+    const state = Object.assign(fresh, saved || {});
+    if (!Object.hasOwn(maps, state.map)) { state.map = 'school'; state.x = start.x; state.y = start.y; state.dir = start.direction || 'down'; }
+    const m = maps[state.map];
+    const valid = (!saved || (Number.isInteger(saved.x) && Number.isInteger(saved.y))) && Number.isInteger(state.x) && Number.isInteger(state.y) &&
+      WALKABLE.has(m.rows[state.y]?.[state.x]) && !m.doors?.[`${state.x},${state.y}`] &&
+      !(m.npcs || []).some(n => n.x === state.x && n.y === state.y);
+    if (!valid) { state.x = m.start.x; state.y = m.start.y; state.dir = m.start.direction || 'down'; }
+    state.dir = ['up', 'down', 'left', 'right'].includes(state.dir) ? state.dir : 'down';
+    state.avatar = ['m', 'f'].includes(state.avatar) ? state.avatar : null;
+    return state;
   }
-  const { SPECIES, MAPS, PARTNERS, GYMS } = window.GameData;
+  function speciesWeight(sp, dex) { return (dex[sp.id]?.done ? 1 : 2) * (sp.rare ? .5 : 1); }
+  function buildRecordSummary(state, species, gyms) {
+    const byId = Object.fromEntries(species.map(sp => [sp.id, sp]));
+    const done = species.filter(sp => state.dex[sp.id]?.done);
+    const lines = [`[생명 탐사대] ${state.student.id || ''} ${state.student.name || ''}`.trim(),
+      `도감: 관찰 완료 ${done.length}/${species.length} (생산자 ${done.filter(sp => sp.role === '생산자').length}, 소비자 ${done.filter(sp => sp.role === '소비자').length}, 분해자 ${done.filter(sp => sp.role === '분해자').length})`];
+    const wrong = Object.entries(state.dex).filter(([id, r]) => byId[id] && r.wrong).map(([id, r]) => `${byId[id].name}(${r.wrong})`);
+    if (wrong.length) lines.push('관찰 오답: ' + wrong.join(', '));
+    gyms.filter(g => g.ready).forEach(g => { if (state.badges[g.id]) lines.push(`${g.name}: ★${state.badges[g.id]}`); });
+    state.records.forEach(r => { if (r.reflection) lines.push(`[${r.gym === 'photo' ? '광합성' : '소화'} 성찰] ${r.reflection}`); });
+    return lines.join('\n');
+  }
+  if (typeof window === 'undefined' && typeof module !== 'undefined') {
+    module.exports = { appendBattleRecord, patchBattleReflection, normalizeSave, speciesWeight, buildRecordSummary }; return;
+  }
+  const { SPECIES, PARTNERS, GYMS, HABITATS } = window.GameData;
+  const { MAPS: generatedMaps, OVERVIEW } = window.QuestMaps;
+  const MAPS = generatedMaps;
+  const R = window.QuestRender;
   const B = window.Battles;
   const $ = id => document.getElementById(id);
   const SAVE_KEY = 'bioQuest.v1';
@@ -26,10 +58,7 @@
   const SPECIES_BY_ID = Object.fromEntries(SPECIES.map(s => [s.id, s]));
 
   /* ---------------- 저장 ---------------- */
-  const freshSave = () => ({
-    v: 1, partner: null, map: 'town', x: 9, y: 5, dir: 'down',
-    dex: {}, badges: {}, timeMode: 'real', records: [], student: { id: '', name: '' }, introDone: false,
-  });
+  const freshSave = () => normalizeSave(null, MAPS);
   function loadSave() { try { return JSON.parse(localStorage.getItem(SAVE_KEY)); } catch { return null; } }
   let saveInvalidated = false, hadSave = !!loadSave();
   function writeSave() {
@@ -97,14 +126,15 @@
 
   /* ---------------- 상태 ---------------- */
   let mode = 'title';          // title | walk | dialog | panel | busy
-  const player = { x: 9, y: 5, dir: 'down', moving: false, fromX: 9, fromY: 5, t: 0, stepsSinceEnc: 0 };
+  const player = { x: S.x, y: S.y, dir: S.dir, moving: false, fromX: S.x, fromY: S.y, t: 0, stepsSinceEnc: 0 };
   const held = new Set();
   let frame = 0;
 
   const map = () => MAPS[S.map];
   const tileAt = (x, y) => { const m = map(); if (y < 0 || y >= m.rows.length || x < 0 || x >= m.rows[0].length) return 'T'; return m.rows[y][x]; };
   const npcAt = (x, y) => map().npcs.find(n => n.x === x && n.y === y);
-  const WALKABLE = new Set(['.', ',', ';', 'f', 'B']);
+  const doorAt = (x, y) => map().doors[`${x},${y}`];
+  const HABITAT_BY_TILE = Object.fromEntries(Object.entries(HABITATS).map(([id, h]) => [h.tile, id]));
   const DOORS = new Set(['D', 'L', 'G', 'J']);
 
   /* ---------------- 대화 ---------------- */
@@ -115,6 +145,7 @@
       dlg = { lines: Array.isArray(lines) ? lines : [lines], idx: 0, name: name || '', resolve, choices: choices || null, prevMode };
       mode = 'dialog';
       $('dialog').hidden = false;
+      $('screen').classList.add('dialog-open');
       showLine();
     });
   }
@@ -168,6 +199,7 @@
   function closeDialog(value) {
     clearInterval(typeTimer);
     $('dialog').hidden = true;
+    $('screen').classList.remove('dialog-open');
     const d = dlg; dlg = null;
     mode = d.prevMode === 'dialog' ? 'walk' : d.prevMode;
     d.resolve(value);
@@ -198,106 +230,53 @@
   /* ---------------- 지도 그리기 ---------------- */
   const cv = $('map'), ctx = cv.getContext('2d');
   ctx.imageSmoothingEnabled = false;
-  const PAL = {
-    grass: '#9ccf7f', grassDot: '#8bc070', path: '#e8d7a4', pathDot: '#d6c28a',
-    canopy: '#2f6b3f', canopyHi: '#3f8a51', trunk: '#6b4a2b',
-    tall: '#5aa65a', blade: '#2f7d3a', wet: '#7fbf9a', wetBlade: '#2e7d6b',
-    water: '#4f9bd1', wave: '#8ec8ef', plank: '#b08a5a', plankLine: '#7d5d35',
-    roof: '#c0563f', roofLine: '#8e3b2b', wall: '#efe3c8', window: '#6fa8c9', door: '#5a3b2a',
-    signPost: '#8a6a44', signBoard: '#d9b87c',
-  };
-  function rect(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); }
-  function drawTile(ch, px, py) {
-    // 바탕
-    const bg = ch === '.' || ch === 'D' || ch === 'L' || ch === 'G' || ch === 'J' ? PAL.path : PAL.grass;
-    rect(px, py, TILE, TILE, bg);
-    switch (ch) {
-      case '.':
-        rect(px + 3, py + 4, 1, 1, PAL.pathDot); rect(px + 11, py + 10, 1, 1, PAL.pathDot); break;
-      case 'T':
-        rect(px + 7, py + 11, 2, 5, PAL.trunk);
-        ctx.fillStyle = PAL.canopy; ctx.beginPath(); ctx.arc(px + 8, py + 7, 7, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = PAL.canopyHi; ctx.beginPath(); ctx.arc(px + 6, py + 5, 3, 0, Math.PI * 2); ctx.fill(); break;
-      case ',':
-        rect(px, py, TILE, TILE, PAL.tall);
-        for (let i = 0; i < 4; i++) { const bx = px + 2 + i * 4, by = py + 4 + (i % 2) * 6; rect(bx, by, 1, 4, PAL.blade); rect(bx + 1, by - 1, 1, 3, PAL.blade); }
-        break;
-      case ';':
-        rect(px, py, TILE, TILE, PAL.wet);
-        for (let i = 0; i < 4; i++) { const bx = px + 2 + i * 4, by = py + 3 + (i % 2) * 6; rect(bx, by, 1, 5, PAL.wetBlade); }
-        rect(px + 5, py + 13, 3, 1, PAL.wave); break;
-      case '~':
-        rect(px, py, TILE, TILE, PAL.water);
-        { const o = (frame >> 5) % 2 ? 2 : 0; rect(px + 2 + o, py + 5, 5, 1, PAL.wave); rect(px + 8 - o, py + 11, 5, 1, PAL.wave); }
-        break;
-      case 'B':
-        rect(px, py, TILE, TILE, PAL.plank);
-        for (let i = 0; i < 4; i++) rect(px + i * 4, py, 1, TILE, PAL.plankLine); break;
-      case 'f':
-        rect(px + 3, py + 4, 2, 2, '#f2c14e'); rect(px + 10, py + 9, 2, 2, '#e8757f'); rect(px + 6, py + 12, 2, 2, '#ffffff'); break;
-      case 'R':
-        rect(px, py, TILE, TILE, PAL.roof); rect(px, py + 5, TILE, 1, PAL.roofLine); rect(px, py + 11, TILE, 1, PAL.roofLine); break;
-      case 'H':
-        rect(px, py, TILE, TILE, PAL.wall); rect(px + 4, py + 4, 8, 6, PAL.window); rect(px + 7, py + 4, 1, 6, PAL.wall); break;
-      case 'D': case 'L': case 'G': case 'J': {
-        rect(px, py, TILE, TILE, PAL.wall);
-        rect(px + 3, py + 3, 10, 13, PAL.door);
-        const accent = { D: '#c9a25b', L: '#3d7fc9', G: '#3f9d56', J: '#e0833a' }[ch];
-        rect(px + 3, py + 1, 10, 2, accent);
-        if (ch === 'G') { ctx.fillStyle = accent; ctx.beginPath(); ctx.ellipse(px + 8, py + 9, 3, 5, 0.5, 0, Math.PI * 2); ctx.fill(); }
-        if (ch === 'J') { ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(px + 8, py + 9, 3, 0, Math.PI * 2); ctx.fill(); }
-        if (ch === 'L') { rect(px + 6, py + 7, 4, 1, accent); rect(px + 7, py + 6, 2, 3, accent); }
-        break;
-      }
-      case 'S':
-        rect(px + 7, py + 8, 2, 8, PAL.signPost); rect(px + 2, py + 3, 12, 7, PAL.signBoard); rect(px + 4, py + 5, 8, 1, PAL.signPost); rect(px + 4, py + 7, 6, 1, PAL.signPost); break;
-      default:
-        rect(px + 4, py + 6, 1, 1, PAL.grassDot); rect(px + 12, py + 12, 1, 1, PAL.grassDot);
-    }
-  }
-  function drawPerson(px, py, dir, body, cap, bob) {
-    const y = py + (bob ? -1 : 0);
-    rect(px + 4, y + 8, 8, 6, body);                  // 몸
-    rect(px + 4, y + 14, 3, 2, '#3a3a3a'); rect(px + 9, y + 14, 3, 2, '#3a3a3a'); // 발
-    rect(px + 4, y + 2, 8, 7, '#f1c79b');             // 얼굴
-    rect(px + 3, y + 1, 10, 3, cap);                  // 모자/머리
-    ctx.fillStyle = '#222';
-    if (dir === 'down') { rect(px + 6, y + 5, 1, 2, '#222'); rect(px + 9, y + 5, 1, 2, '#222'); }
-    if (dir === 'left') rect(px + 5, y + 5, 1, 2, '#222');
-    if (dir === 'right') rect(px + 10, y + 5, 1, 2, '#222');
-    if (dir === 'up') rect(px + 3, y + 3, 10, 3, cap);
-  }
+  const miniCtx = $('minimap').getContext('2d');
+  let miniPosition = '';
   function render() {
     frame++;
-    const m = map();
-    const W = m.rows[0].length, H = m.rows.length;
-    // 플레이어의 픽셀 위치(이동 보간)
-    const k = player.moving ? player.t : 1;
-    const ppx = (player.fromX + (player.x - player.fromX) * k) * TILE;
-    const ppy = (player.fromY + (player.y - player.fromY) * k) * TILE;
-    let camX = ppx - ((VW - 1) / 2) * TILE, camY = ppy - ((VH - 1) / 2) * TILE;
-    camX = Math.max(0, Math.min(camX, W * TILE - VW * TILE));
-    camY = Math.max(0, Math.min(camY, H * TILE - VH * TILE));
-    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cv.width, cv.height);
-    const x0 = Math.floor(camX / TILE), y0 = Math.floor(camY / TILE);
-    for (let ty = y0; ty <= y0 + VH; ty++) {
-      for (let tx = x0; tx <= x0 + VW; tx++) {
-        if (ty < 0 || ty >= H || tx < 0 || tx >= W) continue;
-        drawTile(m.rows[ty][tx], Math.round(tx * TILE - camX), Math.round(ty * TILE - camY));
-      }
+    if (mode === 'title') return;
+    const position = R.drawWorld(ctx, map(), player, { avatar: S.avatar, night: isNight() });
+    positionMini(position);
+    const key = `${S.map}:${player.x},${player.y}`;
+    if (!$('minimap').hidden && key !== miniPosition) {
+      R.drawMini(miniCtx, map(), player.x, player.y); miniPosition = key;
     }
-    for (const n of m.npcs) drawPerson(Math.round(n.x * TILE - camX), Math.round(n.y * TILE - camY), 'down', n.color, '#3b3027', false);
-    const partner = PARTNERS.find(p => p.id === S.partner);
-    drawPerson(Math.round(ppx - camX), Math.round(ppy - camY), player.dir, '#3b5b8c', partner ? partner.color : '#c0563f', player.moving && player.t < 0.5);
-    if (isNight()) { ctx.fillStyle = 'rgba(18, 26, 70, 0.45)'; ctx.fillRect(0, 0, cv.width, cv.height); }
   }
+  function positionMini(position) {
+    if ($('minimap').hidden) return;
+    const tools = $('map-tools'), mini = $('minimap').getBoundingClientRect();
+    const bounds = cv.getBoundingClientRect(), scale = bounds.width / cv.width;
+    const left = bounds.left + position.x * scale, top = bounds.top + position.y * scale;
+    const right = left + TILE * scale, bottom = top + TILE * scale;
+    if (left < mini.right && right > mini.left && top < mini.bottom && bottom > mini.top) {
+      tools.classList.toggle('mini-left');
+    }
+  }
+  function resizeMap() {
+    miniPosition = '';
+    // 정수배만 쓰면 폭 339px 안팎의 휴대폰에서 1배(176px)로 작아진다. 원래 게임처럼 폭에 맞춰 키운다(pixelated).
+    const scale = Math.max(1, $('screen').clientWidth / (VW * TILE));
+    cv.style.width = `${VW * TILE * scale}px`; cv.style.height = `${VH * TILE * scale}px`;
+    $('screen').style.setProperty('--map-height', `${VH * TILE * scale}px`);
+  }
+  function setMiniExpanded(expanded) {
+    $('minimap-toggle').setAttribute('aria-expanded', String(expanded));
+    $('minimap-toggle').setAttribute('aria-label', expanded ? '미니맵 접기' : '미니맵 펼치기');
+    $('minimap-toggle').innerHTML = R.icon('map') + `<span>${expanded ? '접기' : '지도'}</span>`;
+    $('minimap').hidden = !expanded; miniPosition = '';
+  }
+  setMiniExpanded(window.innerWidth >= 480);
+  $('minimap-toggle').addEventListener('click', () => setMiniExpanded($('minimap').hidden));
+  window.addEventListener('resize', resizeMap);
+  resizeMap();
 
   let hudNight = null; // HUD에 표시한 낮·밤(실제 시계 모드에서 시간대가 바뀌면 다시 그린다)
   function updateHUD() {
     if (mode === 'title') { $('hud-place').textContent = ''; $('hud-time').textContent = ''; return; }
     hudNight = isNight();
     $('hud-place').textContent = map().name;
-    $('hud-time').textContent = hudNight ? '☾ 밤' : '☀ 낮';
+    $('hud-time').innerHTML = R.icon(hudNight ? 'moon' : 'sun') + (hudNight ? ' 밤' : ' 낮');
+    $('map-tools').hidden = false;
   }
 
   /* ---------------- 이동 ---------------- */
@@ -326,7 +305,8 @@
     const [dx, dy] = DIRS[d];
     const nx = player.x + dx, ny = player.y + dy;
     const ch = tileAt(nx, ny);
-    if (DOORS.has(ch)) { held.clear(); enterDoor(ch, nx, ny); return; }
+    const door = doorAt(nx, ny);
+    if (DOORS.has(door)) { held.clear(); enterDoor(door); return; }
     if (!WALKABLE.has(ch) || npcAt(nx, ny)) return;
     player.fromX = player.x; player.fromY = player.y;
     player.x = nx; player.y = ny; player.t = 0; player.moving = true;
@@ -336,15 +316,18 @@
     const ex = map().exits.find(e => e.x === player.x && e.y === player.y);
     if (ex) { warp(ex.to, ex.tx, ex.ty); return; }
     const ch = tileAt(player.x, player.y);
-    if (ch === ',' || ch === ';') {
+    if (HABITAT_BY_TILE[ch]) {
       player.stepsSinceEnc++;
       if (player.stepsSinceEnc >= 3 && Math.random() < 0.16) {
         player.stepsSinceEnc = 0; held.clear();
-        encounter(ch === ',' ? 'forest' : 'wetland');
+        encounter(HABITAT_BY_TILE[ch]);
       }
     }
   }
   function warp(to, x, y) {
+    if (!Object.hasOwn(MAPS, to)) return;
+    const start = MAPS[to].start; x ??= start.x; y ??= start.y;
+    held.clear(); player.stepsSinceEnc = 0; player.t = 1;
     S.map = to; player.x = player.fromX = x; player.y = player.fromY = y; player.moving = false;
     S.x = x; S.y = y;
     updateHUD(); writeSave();
@@ -356,25 +339,26 @@
     const [fx, fy] = facing();
     const ch = tileAt(fx, fy);
     const n = npcAt(fx, fy);
-    if (n) { await say('', n.lines); return; }
+    if (n) { await say(n.name, n.lines); return; }
     const sign = map().signs[`${fx},${fy}`];
     if (ch === 'S' && sign) { await say('표지판', sign); return; }
-    if (DOORS.has(ch)) enterDoor(ch, fx, fy);
+    const door = doorAt(fx, fy);
+    if (DOORS.has(door)) enterDoor(door);
   }
 
   const doneList = () => SPECIES.filter(s => S.dex[s.id] && S.dex[s.id].done);
   async function enterDoor(ch) {
     if (ch === 'D') {
-      await say('', ['집에 들어가 푹 쉬었다.', '탐사 기록을 저장했다.']);
+      await say('', ['교실에서 잠시 쉬며 탐사 기록을 정리했다.', '탐사 기록을 저장했다.']);
       writeSave();
     } else if (ch === 'L') {
       const done = doneList(), n = done.length;
       const hasProducer = done.some(s => s.role === '생산자');
-      await say('한결 박사', [
+      await say('한결 선생님', [
         `도감은 잘 채우고 있니? 지금 관찰을 마친 생물은 ${n}종이구나.`,
         n < 4 ? '광합성 체육관에 가려면 생물 4종 이상, 그중 생산자 1종 이상을 관찰해야 해.'
           : !hasProducer ? '종 수는 충분하지만 아직 생산자가 없구나. 스스로 양분을 만드는 생물도 관찰해 와야 광합성 체육관에 들어갈 수 있어.'
-          : '좋아! 잎새마을 광합성 체육관에 도전해 보렴.',
+          : '좋아! 저수지 생태공원의 광합성 체육관에 도전해 보렴.',
         '낮과 밤에 만나는 생물이 달라. 메뉴의 “시간 설정”에서 탐사 시간을 바꿀 수도 있단다.',
       ]);
     } else if (ch === 'G') {
@@ -388,11 +372,13 @@
   function pickSpecies(habitat) {
     const night = isNight();
     const pool = SPECIES.filter(s => s.habitat === habitat && (s.time === 'both' || (night ? s.time === 'night' : s.time === 'day')));
-    const weighted = pool.flatMap(s => (S.dex[s.id] && S.dex[s.id].done ? [s] : [s, s]));
-    return weighted[Math.floor(Math.random() * weighted.length)];
+    if (!pool.length) return;
+    let roll = Math.random() * pool.reduce((sum, sp) => sum + speciesWeight(sp, S.dex), 0);
+    for (const sp of pool) { roll -= speciesWeight(sp, S.dex); if (roll < 0) return sp; }
+    return pool[pool.length - 1];
   }
   function badgeHTML(sp, big, unknown) {
-    return `<div class="badge${big ? ' big' : ''}" style="background:${unknown ? '#ddd6c3' : sp.color}">${unknown ? '?' : sp.name[0]}</div>`;
+    return `<div class="badge${big ? ' big' : ''}" style="background:${unknown ? 'var(--table)' : sp.color}">${unknown ? '?' : sp.name[0]}</div>`;
   }
   /* 관찰 질문은 세 종류다. 무리·역할 질문은 어느 생물에게나, 척추 질문은 동물에게만 낸다(동물 안에서만 답이 갈린다).
    * 생물마다 어떤 질문을 낼지는 data.js의 ask가 정한다. 질문 종류만 보고 답을 짐작하지 못하도록
@@ -407,7 +393,7 @@
     vert: sp => ({ q: `${josa(sp.name, '은/는')} 등뼈(척추)가 있을까?`, hint: '몸 겉이 단단하다고 등뼈가 있는 것은 아니다. 몸속에 등뼈가 있는지 떠올려 보자.',
       options: [{ v: 'yes', label: '척추동물 — 등뼈가 있다' }, { v: 'no', label: '무척추동물 — 등뼈가 없다' }], answer: sp.cls.startsWith('척추') ? 'yes' : 'no' }),
   };
-  // ask가 배열이면(느타리) 차례로 낼 질문 목록이 된다. 앞 질문을 맞혀야 다음 질문으로 간다.
+  // ask가 배열이면(먹물버섯) 차례로 낼 질문 목록이 된다. 앞 질문을 맞혀야 다음 질문으로 간다.
   function observationQuestions(sp) {
     return [].concat(sp.ask || 'kind').map(k => {
       let key = QUESTIONS[k] ? k : 'kind';
@@ -416,23 +402,23 @@
     });
   }
   function speciesCardHTML(sp, full) {
-    const t = sp.time === 'night' ? '☾ 밤' : sp.time === 'day' ? '☀ 낮' : '☀☾ 낮·밤';
+    const t = sp.time === 'night' ? R.icon('moon') + ' 밤' : sp.time === 'day' ? R.icon('sun') + ' 낮' : R.icon('sun') + R.icon('moon') + ' 낮·밤';
     // 관찰을 마치기 전에는 무리·분류·역할 칩을 숨긴다. 관찰 질문의 답이 화면에 그대로 보이지 않게 한다.
     const meta = full
       ? `<span class="chip">${sp.kind}</span> <span class="chip">${sp.cls}</span> <span class="chip ok">${sp.role}</span> <span class="chip">${t}</span>`
-      : `<span class="chip">${sp.habitat === 'forest' ? '숲' : '습지'}</span> <span class="chip">${t}</span>`;
+      : `<span class="chip">${HABITATS[sp.habitat].name}</span> <span class="chip">${t}</span>`;
     return `<div class="species-card">${badgeHTML(sp, true)}<h3>${sp.name}</h3>
       <div class="meta">${meta}</div>
-      ${full ? `<p>${sp.fact}</p>` : '<p class="muted">관찰을 마치면 자세한 정보가 기록됩니다.</p>'}</div>`;
+      ${full ? `<p>${sp.fact}</p>` : '<p class="muted">관찰을 마치면 자세한 정보가 기록된다.</p>'}</div>`;
   }
   function partnerLine(sp) {
     const p = PARTNERS.find(x => x.id === S.partner);
     if (!p) return '';
     const L = {
       leafy: sp.role === '생산자' ? '이 친구도 나처럼 엽록체로 광합성을 해!' : '이 친구는 광합성을 못 해. 다른 생물에게서 양분을 얻어야 해.',
-      mito: sp.role === '분해자' ? '분해자도 양분을 분해해서 에너지를 얻어. 세포 호흡은 모든 생물이 해!' : '살아 있는 생물은 모두 세포 호흡으로 에너지를 얻어.',
-      // 분해자는 느타리(죽은 나무)와 푸른곰팡이(떨어진 열매·낙엽)이므로 분해하는 대상을 '죽은 생물'로 넓게 쓴다
-      spore: sp.role === '분해자' ? '나랑 같은 균류야! 죽은 생물을 분해해 흙으로 돌려보내지.' : '이 친구가 죽으면 결국 분해자가 흙으로 돌려보낼 거야.',
+      mito: sp.role === '분해자' ? '분해자도 죽은 생물에서 얻은 양분으로 세포 호흡을 해서 에너지를 얻어. 살아 있는 생물은 모두 그래!' : '살아 있는 생물은 모두 세포 호흡으로 에너지를 얻어.',
+      // 세 분해자 균류가 분해하는 대상을 '죽은 생물'로 넓게 쓴다
+      spore: sp.role === '분해자' ? '나랑 같은 균류야! 죽은 생물을 분해해 몸을 이루던 물질을 흙과 공기로 돌려보내지. 눈에 안 보이는 세균도 분해자야.' : '이 친구도 죽으면 결국 분해자가 흙과 공기로 돌려보낼 거야.',
     }[p.id];
     return `<p class="feedback"><b>${p.name}</b>: ${L}</p>`;
   }
@@ -441,7 +427,8 @@
     const rec = S.dex[sp.id] || (S.dex[sp.id] = { seen: 0, done: false, first: new Date().toISOString(), atNight: isNight() });
     rec.seen++;
     writeSave();
-    const body = openPanel(habitat === 'forest' ? '숲 풀숲 조우!' : '습지 풀숲 조우!', false);
+    const place = habitat === 'park' ? '물가' : '풀숲';
+    const body = openPanel(`${HABITATS[habitat].name} ${place} 조우!`, false);
     if (rec.done) {
       body.innerHTML = `<p>${josa(sp.name, '을/를')} 다시 만났다! (${rec.seen}번째)</p>${speciesCardHTML(sp, true)}${partnerLine(sp)}
         <div class="row-btns"><button class="btn primary" id="enc-ok">계속 탐사</button></div>`;
@@ -449,7 +436,7 @@
       return;
     }
     const QS = observationQuestions(sp);
-    // 질문이 여럿이어도 첫 화면에 몇 개인지 보이지 않게 한다(질문 수로 느타리임을 짐작하지 못하게).
+    // 질문이 여럿이어도 첫 화면에 몇 개인지 보이지 않게 한다(질문 수로 먹물버섯임을 짐작하지 못하게).
     // 다음 질문을 내는 동안에는 카드를 계속 가려 둔다. 카드에 다음 질문의 답(역할)이 있다.
     const showQuestion = (i, lead) => {
       const Q = QS[i];
@@ -480,12 +467,12 @@
         $('enc-ok').onclick = closePanel; $('enc-ok').focus({ preventScroll: true }); body.scrollTop = 0;
       }));
     };
-    showQuestion(0, `<p>풀숲에서 무언가가 움직인다… <b>${josa(sp.name, '이/가')}</b> 나타났다!</p>`);
+    showQuestion(0, `<p>${josa(place, '을/를')} 살피다가 <b>${josa(sp.name, '을/를')}</b> 발견했다!</p>`);
   }
 
   /* ---------------- 도감 ---------------- */
   function openDex() {
-    const body = openPanel('초록섬 도감', true);
+    const body = openPanel('신항고 생태 도감', true);
     const done = doneList();
     const seen = SPECIES.filter(s => S.dex[s.id]);
     const cnt = r => done.filter(s => s.role === r).length;
@@ -494,7 +481,7 @@
       <div class="dex-grid">${SPECIES.map(s => {
         const r = S.dex[s.id];
         const cls = !r ? 'unknown' : r.done ? 'done' : 'seen';
-        return `<button class="dex-cell ${cls}" data-id="${s.id}">${badgeHTML(s, false, !r)}${r ? s.name : '???'}${r ? `<br><span class="dex-state">${r.done ? '✓ 관찰 완료' : '발견'}</span>` : ''}<br><span class="muted">${s.habitat === 'forest' ? '숲' : '습지'} · ${s.time === 'night' ? '밤' : s.time === 'day' ? '낮' : '낮·밤'}</span></button>`;
+        return `<button class="dex-cell ${cls}" data-id="${s.id}">${badgeHTML(s, false, !r)}${r ? s.name : '???'}${r ? `<br><span class="dex-state">${r.done ? R.icon('check') + '관찰 완료' : '발견'}</span>` : ''}<br><span class="muted">${HABITATS[s.habitat].name} · ${s.time === 'night' ? '밤' : s.time === 'day' ? '낮' : '낮·밤'}</span></button>`;
       }).join('')}</div>
       <p class="muted">회색 칸은 아직 만나지 못한 생물이다. 서식지와 활동 시간이 힌트다.</p>`;
     body.querySelectorAll('.dex-cell').forEach(c => c.addEventListener('click', () => {
@@ -511,49 +498,47 @@
     const p = PARTNERS.find(x => x.id === S.partner);
     body.innerHTML = `<div class="choice-list">
       <button class="btn" id="m-dex">도감</button>
+      <button class="btn" id="m-eco">생태 지도</button>
       <button class="btn" id="m-gym">체육관·배지</button>
+      <button class="btn" id="m-avatar">캐릭터 바꾸기</button>
       <button class="btn" id="m-time">시간 설정 (지금: ${{ real: '실제 시계', day: '항상 낮', night: '항상 밤' }[S.timeMode]})</button>
       <button class="btn" id="m-rec">기록 보기·제출</button>
       <button class="btn" id="m-save">저장하기</button>
       <button class="btn small" id="m-title">처음 화면</button>
-      <button class="btn small" id="m-hub">← 오락실로</button></div>
+      <button class="btn small" id="m-hub">${R.icon('left')} 오락실로</button></div>
       ${p ? `<p class="muted">파트너: <b style="color:${p.color}">${p.name}</b> — ${p.desc}</p>` : ''}`;
     $('m-dex').onclick = openDex;
+    $('m-eco').onclick = openEcoMap;
     $('m-gym').onclick = openGyms;
+    $('m-avatar').onclick = async () => { closePanel(); await chooseAvatar(); openMenu(); };
     $('m-time').onclick = () => { S.timeMode = { real: 'day', day: 'night', night: 'real' }[S.timeMode]; writeSave(); updateHUD(); openMenu(); };
     $('m-rec').onclick = openRecords;
-    $('m-save').onclick = () => { writeSave(); $('m-save').textContent = '저장했습니다 ✓'; };
+    $('m-save').onclick = () => { writeSave(); $('m-save').textContent = '저장했다'; };
     $('m-title').onclick = () => { writeSave(); location.reload(); };
     $('m-hub').onclick = () => { writeSave(); location.href = '../../index.html'; };
   }
-  function starsHTML(n) { let h = ''; for (let i = 0; i < 3; i++) h += i < n ? '★' : '<span class="off">★</span>'; return `<span class="stars">${h}</span>`; }
+  function openEcoMap() { openPanel('생태 지도', true).innerHTML = R.ecoMap(OVERVIEW, SPECIES, HABITATS, S.dex); }
+  function starsHTML(n) {
+    return `<span class="stars" role="img" aria-label="별 ${n}개">${[0, 1, 2].map(i => `<span${i >= n ? ' class="off"' : ''}>${R.icon('star')}</span>`).join('')}</span>`;
+  }
   function openGyms() {
     const body = openPanel('체육관 = 교과 단원', true);
     body.innerHTML = `<ol class="roadmap">${GYMS.map(g => {
       const st = S.badges[g.id];
       return `<li><b>${g.name}</b> <span class="muted">${g.unit}</span><br>${g.ready ? (st ? `${g.badge} ${starsHTML(st)}` : '<span class="muted">도전 전</span>') : '<span class="chip warn">준비 중</span>'}</li>`;
-    }).join('')}</ol><p class="muted">체육관 대결의 규칙이 곧 그 단원의 개념입니다.</p>`;
+    }).join('')}</ol><p class="muted">체육관 대결의 규칙이 곧 그 단원의 개념이다.</p>`;
   }
-  function recordSummary() {
-    const done = doneList();
-    const lines = [`[생명 탐사대] ${S.student.id || ''} ${S.student.name || ''}`.trim(),
-      `도감: 관찰 완료 ${done.length}/${SPECIES.length} (생산자 ${done.filter(s => s.role === '생산자').length}, 소비자 ${done.filter(s => s.role === '소비자').length}, 분해자 ${done.filter(s => s.role === '분해자').length})`];
-    const wrong = Object.entries(S.dex).filter(([, r]) => r.wrong).map(([id, r]) => `${SPECIES_BY_ID[id].name}(${r.wrong})`);
-    if (wrong.length) lines.push('관찰 오답: ' + wrong.join(', '));
-    GYMS.filter(g => g.ready).forEach(g => { if (S.badges[g.id]) lines.push(`${g.name}: ★${S.badges[g.id]}`); });
-    S.records.forEach(r => { if (r.reflection) lines.push(`[${r.gym === 'photo' ? '광합성' : '소화'} 성찰] ${r.reflection}`); });
-    return lines.join('\n');
-  }
+  function recordSummary() { return buildRecordSummary(S, SPECIES, GYMS); }
   function openRecords() {
     const body = openPanel('기록 보기·제출', true);
-    body.innerHTML = `<p class="muted">선생님께 제출할 때 학번과 이름을 적으세요. 이 기기에만 저장됩니다.</p>
+    body.innerHTML = `<p class="muted">선생님께 제출할 때 학번과 이름을 적으세요. 이 기기에만 저장된다.</p>
       <div class="row-btns"><input id="r-id" class="btn" style="font-weight:400" placeholder="학번" value="${S.student.id || ''}" maxlength="12"><input id="r-name" class="btn" style="font-weight:400" placeholder="이름" value="${S.student.name || ''}" maxlength="20"></div>
       <textarea id="r-text" readonly>${recordSummary()}</textarea>
       <div class="row-btns"><button class="btn primary" id="r-copy">요약 복사</button><button class="btn" id="r-json">JSON 저장</button></div>
       <p id="r-msg" class="muted"></p>`;
     const sync = () => { S.student = { id: $('r-id').value.trim(), name: $('r-name').value.trim() }; writeSave(); $('r-text').value = recordSummary(); };
     $('r-id').oninput = sync; $('r-name').oninput = sync;
-    $('r-copy').onclick = async () => { try { await navigator.clipboard.writeText(recordSummary()); $('r-msg').textContent = '복사했습니다. 과제 제출란에 붙여 넣으세요.'; } catch { $('r-msg').textContent = '복사 권한이 없습니다. 위 글상자를 길게 눌러 복사하세요.'; } };
+    $('r-copy').onclick = async () => { try { await navigator.clipboard.writeText(recordSummary()); $('r-msg').textContent = '복사했다. 과제 제출란에 붙여 넣으세요.'; } catch { $('r-msg').textContent = '복사 권한이 없다. 위 글상자를 길게 눌러 복사하세요.'; } };
     $('r-json').onclick = () => {
       const blob = new Blob([JSON.stringify({ app: 'bio-quest', exportedAt: new Date().toISOString(), ...S }, null, 2)], { type: 'application/json' });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `생명탐사대_${S.student.id || 'noid'}.json`; a.click();
@@ -589,7 +574,7 @@
     const NAME = { cloud: '먹구름', drought: '가뭄', night: '밤', wind: '마른바람' };
     // text를 주면 오른쪽 숫자 대신 쓴다. 막대 너비만 max에서 자른다(숫자는 실제 값).
     function meter(label, v, max, limit, goal, text) {
-      return `<div class="meter${limit ? ' limit' : ''}"><div class="meter-label"><span>${label}${limit ? ' ← 제한 요인' : ''}</span><span>${text != null ? text : `${v}/${max}`}</span></div>
+      return `<div class="meter${limit ? ' limit' : ''}"><div class="meter-label"><span>${label}${limit ? ' (제한 요인)' : ''}</span><span>${text != null ? text : `${v}/${max}`}</span></div>
         <div class="meter-bar"><i style="width:${(Math.min(v, max) / max) * 100}%"></i>${(goal || []).map(g => `<span class="goal" style="left:${(g / max) * 100}%"></span>`).join('')}</div></div>`;
     }
     function draw() {
@@ -659,7 +644,7 @@
       $('p-retry').onclick = () => { save(); closePanel(); gymPhoto(true); };
       $('p-done').onclick = async () => {
         save(); closePanel();
-        if (st.win) await say('관장 초록', ['훌륭해! 새잎 배지를 줄게.', '기억해. 광합성 속도는 가장 모자란 요인이 정해. 그리고 식물도 늘 호흡을 한단다.', '다음은 습지길 동쪽의 소화 체육관이야.']);
+        if (st.win) await say('관장 초록', ['훌륭해! 새잎 배지를 줄게.', '기억해. 광합성 속도는 가장 모자란 요인이 정해. 그리고 식물도 늘 호흡을 한단다.', '다음은 신항고 급식실의 소화 체육관이야.']);
       };
     }
   }
@@ -668,7 +653,7 @@
   async function gymDigest(skipRules = false) {
     if (!S.badges.photo) { await say('관장 모아', ['소화 체육관이다.', '광합성 체육관의 새잎 배지를 가져오면 상대해 주지.']); return; }
     if (!skipRules) await say('관장 모아', [
-      '나는 소화 체육관 관장 모아! 오늘의 식단은 밥(녹말)·불고기(단백질)·버터(지방)다.',
+      '나는 소화 체육관 관장 모아! 오늘의 급식은 밥(녹말)·불고기(단백질)·버터(지방)다.',
       '음식은 입 → 위 → 소장을 차례로 지나간다. 장소마다 쓸 수 있는 소화액이 달라.',
       '소화 효소는 정해진 영양소에만 작용한다. 맞지 않으면 효과 없음!',
       '모든 영양소를 흡수할 수 있는 크기까지 분해하고, 알맞은 흡수 통로로 보내라!',
@@ -739,7 +724,7 @@
       body.innerHTML = `<div class="feedback ${win ? 'ok' : 'bad'}"><b>${win ? '승리!' : '패배…'}</b> ${starsHTML(stars)}
         ${!win ? '<p>분해되지 않은 영양소는 흡수되지 못한다. 어느 장소에서 어떤 소화액이 나오는지 다시 떠올려 보자.</p>'
           : notes.length ? notes.map(n => `<p>${n}</p>`).join('') : '<p>완벽한 소화와 흡수!</p>'}</div>
-        <p><b>설명해 보기</b> — 쓸개즙에는 소화 효소가 없는데도 지방의 소화를 돕는 까닭은 무엇일까요?</p>
+        <p><b>설명해 보기</b> — 쓸개즙에는 소화 효소가 없는데도 지방의 소화를 돕는 까닭은 무엇일까?</p>
         <textarea id="refl" placeholder="두세 문장으로 써 보세요."></textarea>
         <div class="row-btns"><button class="btn primary" id="d-done">${win ? '배지 받기' : '저장하고 나가기'}</button><button class="btn" id="d-retry">다시 도전</button></div>`;
       body.scrollTop = 0; // 흡수 화면에서 내려간 채로 두면 별과 결과 안내가 화면 위로 가려진다
@@ -747,28 +732,40 @@
       $('d-retry').onclick = () => { save(); closePanel(); gymDigest(true); };
       $('d-done').onclick = async () => {
         save(); closePanel();
-        if (win) await say('관장 모아', ['좋은 소화였다! 융털 배지를 받아라.', '흡수된 영양소는 이제 혈액을 타고 온몸의 세포로 간다. 그 이야기는 다음 체육관(순환·호흡·배설)에서 이어진다!', '(다음 체육관은 준비 중입니다.)']);
+        if (win) await say('관장 모아', ['좋은 소화였다! 융털 배지를 받아라.', '흡수된 영양소는 이제 혈액을 타고 온몸의 세포로 간다. 그 이야기는 다음 체육관(순환·호흡·배설)에서 이어진다!', '(다음 체육관은 준비 중이다.)']);
       };
     }
     draw();
   }
 
   /* ---------------- 시작 ---------------- */
+  async function chooseAvatar() {
+    S.avatar = await ask('한결 선생님', '너는 누구니?', [{ label: '남학생', value: 'm' }, { label: '여학생', value: 'f' }]);
+    writeSave();
+  }
+  async function choosePartner() {
+    await say('한결 선생님', '탐사를 도와줄 파트너 요정을 한 명 골라 보렴.');
+    S.partner = await ask('한결 선생님', PARTNERS.map(p => `${p.name}: ${p.desc}`).join('\n'), PARTNERS.map(p => ({ label: p.name, value: p.id })));
+    writeSave();
+    const p = PARTNERS.find(x => x.id === S.partner);
+    await say(p.name, ['잘 부탁해! 같이 학교와 둘레를 탐사하자!']);
+  }
+  async function completeProfile() {
+    if (!S.avatar) await chooseAvatar();
+    if (!S.partner) await choosePartner();
+  }
   async function intro() {
-    await say('한결 박사', [
-      '어서 와! 나는 초록섬 생명 연구소의 한결 박사란다.',
-      '이 섬의 숲과 습지에는 수많은 생물이 살고 있어. 너에게 탐사 도감을 맡기고 싶구나.',
-      '탐사를 도와줄 파트너 요정을 한 명 골라 보렴.',
+    await say('한결 선생님', [
+      '어서 와! 나는 신항고 과학실의 한결 선생님이란다.',
+      '우리 학교와 둘레에는 수많은 생물이 살고 있어. 너에게 생태 도감을 맡기고 싶구나.',
     ]);
-    const pick = await ask('한결 박사', PARTNERS.map(p => `${p.name}: ${p.desc}`).join('\n'), PARTNERS.map(p => ({ label: p.name, value: p.id })));
-    S.partner = pick;
-    const p = PARTNERS.find(x => x.id === pick);
-    await say(p.name, ['잘 부탁해! 같이 섬을 탐사하자!']);
-    await say('한결 박사', [
+    await chooseAvatar();
+    await choosePartner();
+    await say('한결 선생님', [
       '도감은 “발견”만으로 채워지지 않아. 생물을 자세히 관찰하고 어느 무리인지 가려야 등록되지.',
-      '풀숲에 들어가면 생물을 만날 수 있어. 낮과 밤에 나오는 생물이 다르단다.',
-      '북쪽 숲길을 지나면 잎새마을이 나와. 그곳 광합성 체육관에 가려면 생물 4종 이상, 그중 생산자 1종 이상을 관찰해 오렴.',
-      '조작: 방향 버튼으로 이동, “확인”으로 말 걸기, “메뉴”로 도감을 연다. 집에 들어가면 저장된단다.',
+      '정원과 화단 풀숲에 들어가면 생물을 만날 수 있어. 낮과 밤에 나오는 생물이 다르단다.',
+      '북쪽 산길로 학교 뒷산에 오를 수 있고, 뒷산 동쪽 길로 나가면 저수지 생태공원이 나와. 그곳 광합성 체육관에 가려면 생물 4종 이상, 그중 생산자 1종 이상을 관찰해 오렴.',
+      '조작: 방향 버튼으로 이동, “확인”으로 말 걸기, “메뉴”로 도감을 연다. 교실에 들어가면 저장된단다.',
     ]);
     S.introDone = true;
     writeSave();
@@ -777,8 +774,10 @@
     $('title').hidden = true;
     player.x = player.fromX = S.x; player.y = player.fromY = S.y; player.dir = S.dir || 'down';
     mode = 'walk';
-    updateHUD();
+    updateHUD(); resizeMap();
+    writeSave();
     if (!fromSave || !S.introDone) intro();
+    else completeProfile();
   }
 
   /* ---------------- 입력 ---------------- */
@@ -820,15 +819,15 @@
   const saved = loadSave();
   if (saved && saved.v === 1) $('btn-continue').hidden = false;
   $('btn-new').addEventListener('click', () => {
-    if (saved && !confirm('저장된 기록을 지우고 처음부터 시작할까요?')) return;
+    if (saved && !confirm('저장된 기록을 지우고 처음부터 시작할까?')) return;
     saveInvalidated = false; hadSave = false;
     S = freshSave(); writeSave(); startGame(false);
   });
-  $('btn-continue').addEventListener('click', () => { S = Object.assign(freshSave(), saved); startGame(true); });
+  $('btn-continue').addEventListener('click', () => { S = normalizeSave(saved, MAPS); startGame(true); });
 
   // 오프라인 실행(PWA)
 
   // 테스트용 훅
-  window.__bq = { get S() { return S; }, get mode() { return mode; }, player, warp, encounter, observationQuestions, gymPhoto, gymDigest, openDex };
+  window.__bq = { get S() { return S; }, get mode() { return mode; }, get npcs() { return map().npcs; }, player, warp, encounter, observationQuestions, gymPhoto, gymDigest, openDex, openEcoMap };
   requestAnimationFrame(loop);
 })();

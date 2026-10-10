@@ -1,173 +1,83 @@
-/* 생명 탐사대 — 데이터: 생물, 지도, 인물
+/* 생명 탐사대 — 데이터: 생물, 서식지, 파트너, 체육관
  * 원작(포켓몬스터 레드·그린)의 구조만 빌렸다. 이름·캐릭터·상징은 모두 새로 만들었다.
  * 생물은 모두 한국에서 볼 수 있는 실제 생물이다.
  */
 (function (root) {
   // kind: 식물 | 동물 | 균류   role: 생산자 | 소비자 | 분해자   time: day | night | both
   // ask: 처음 만났을 때 낼 관찰 질문 — kind(어느 무리) | role(양분을 얻는 방법 = 생태계 역할) | vert(등뼈 유무, 동물만)
-  //   질문 종류만 보고 답을 짐작하지 못하게, 서식지·시간 풀(숲·습지 × 낮·밤)마다 세 종류가 모두 나오고
+  //   질문 종류만 보고 답을 짐작하지 못하게, 서식지·시간 풀(학교 단지·학교 뒷산·저수지 생태공원 × 낮·밤)마다 세 종류가 모두 나오고
   //   같은 종류의 질문끼리 정답이 갈리도록 배정했다. 생물을 더하거나 바꾸면 tests/quest-logic.js로 확인한다.
   //   배열이면 차례로 낸다. 앞 질문을 맞혀야 다음 질문이 나오고, 모두 맞혀야 관찰이 완성된다.
-  //   느타리는 무리 질문(버섯=식물 오개념)을 먼저 받고, 맞히면 역할 질문을 이어 받는다.
-  //   푸른곰팡이는 첫 질문부터 역할 질문이다. 느타리만으로는 첫 질문의 정답이 '분해자'인 생물이 없어서 더했다.
+  //   먹물버섯은 '버섯은 식물인가'를 짚는 무리 질문을 먼저 받고, 맞히면 역할 질문을 이어 받는다.
+  //   푸른곰팡이는 첫 질문부터 역할 질문이다. 먹물버섯만으로는 첫 질문의 정답이 '분해자'인 생물이 없어서 둔다.
   //   (생물마다 처음 받는 질문만 보면 역할 질문의 정답이 생산자·소비자로만 갈려, 분해자를 묻지 않는 셈이었다.)
   const SPECIES = [
-    // 숲길
-    { id: 'squirrel', name: '다람쥐', kind: '동물', cls: '척추동물 · 포유류', role: '소비자', ask: 'vert', time: 'day', habitat: 'forest', color: '#b7793f',
-      fact: '볼주머니에 도토리 같은 먹이를 담아 옮기고 땅속에 저장한다. 낮에 활동한다.' },
-    { id: 'sparrow', name: '참새', kind: '동물', cls: '척추동물 · 조류', role: '소비자', ask: 'role', time: 'day', habitat: 'forest', color: '#8d6e4c',
+    // 학교 단지
+    { id: 'dandelion', name: '서양민들레', kind: '식물', cls: '속씨식물 · 쌍떡잎식물', role: '생산자', ask: 'kind', time: 'both', habitat: 'campus', color: '#f2c14e',
+      fact: '잎에서 빛에너지로 양분을 만든다(광합성). 씨에 달린 갓털이 바람을 타고 멀리 퍼진다. 꽃 아래 초록 조각(총포) 가운데 바깥쪽 조각이 아래로 젖혀져 있으면 대개 서양민들레, 위로 붙어 있으면 토종 민들레다.' },
+    { id: 'cherrytree', name: '왕벚나무', kind: '식물', cls: '속씨식물 · 쌍떡잎식물', role: '생산자', ask: 'role', time: 'both', habitat: 'campus', color: '#f4c6d0',
+      fact: '봄에 잎보다 꽃이 먼저 피고, 열매(버찌)는 초여름에 검게 익는다. 학교와 길가에 많이 심는다.' },
+    { id: 'clover', name: '토끼풀', kind: '식물', cls: '속씨식물 · 쌍떡잎식물', role: '생산자', ask: 'role', time: 'both', habitat: 'campus', color: '#9bd27a',
+      fact: '잔디밭에 흔한 풀이다. 잎 하나가 보통 작은잎 세 장으로 되어 있고, 작은 꽃이 공 모양으로 모여 핀다.' },
+    { id: 'shaggymane', name: '먹물버섯', kind: '균류', cls: '균류 · 버섯', role: '분해자', ask: ['kind', 'role'], time: 'both', habitat: 'campus', color: '#d8d2c4',
+      fact: '비 온 뒤 잔디밭에 돋는다. 버섯이지만 엽록체가 없고 몸이 균사로 되어 있는 균류다. 땅속의 죽은 식물 조각 등을 분해해 양분을 얻고, 다 자라면 갓이 검은 먹물처럼 녹아내린다.' },
+    { id: 'sparrow', name: '참새', kind: '동물', cls: '척추동물 · 조류', role: '소비자', ask: 'role', time: 'day', habitat: 'campus', color: '#8d6e4c',
       fact: '곡식과 곤충을 모두 먹는 잡식성 텃새다. 새는 알을 낳고 깃털로 체온을 지킨다.' },
-    { id: 'cabbagebutterfly', name: '배추흰나비', kind: '동물', cls: '무척추동물 · 곤충', role: '소비자', ask: 'vert', time: 'day', habitat: 'forest', color: '#e9e4c9',
-      fact: '알 → 애벌레 → 번데기 → 어른벌레로 모습이 바뀐다(완전 탈바꿈). 한 개체의 모습이 바뀌는 것은 “진화”가 아니라 “발생”이다.' },
-    { id: 'dandelion', name: '민들레', kind: '식물', cls: '속씨식물 · 쌍떡잎식물', role: '생산자', ask: 'kind', time: 'day', habitat: 'forest', color: '#f2c14e',
-      fact: '잎에서 빛에너지로 양분을 만든다(광합성). 씨에 달린 갓털이 바람을 타고 멀리 퍼진다.' },
-    { id: 'pine', name: '소나무', kind: '식물', cls: '겉씨식물', role: '생산자', ask: 'role', time: 'both', habitat: 'forest', color: '#3f7d4e',
+    { id: 'magpie', name: '까치', kind: '동물', cls: '척추동물 · 조류', role: '소비자', ask: 'vert', time: 'day', habitat: 'campus', color: '#2f3b4a',
+      fact: '높은 나무나 전봇대에 나뭇가지로 큰 둥지를 짓는 잡식성 텃새다.' },
+    { id: 'cabbagebutterfly', name: '배추흰나비', kind: '동물', cls: '무척추동물 · 곤충', role: '소비자', ask: 'vert', time: 'day', habitat: 'campus', color: '#e9e4c9',
+      fact: '알 → 애벌레 → 번데기 → 어른벌레로 모습이 바뀐다(완전 탈바꿈). 한 개체가 자라며 모습이 바뀌는 탈바꿈은 여러 세대에 걸쳐 일어나는 “진화”와 다르다.' },
+    { id: 'housebat', name: '집박쥐', kind: '동물', cls: '척추동물 · 포유류', role: '소비자', ask: 'role', time: 'night', habitat: 'campus', color: '#5b5560',
+      fact: '건물 틈에 사는 작은 박쥐다. 해 질 녘부터 날며 모기 같은 작은 곤충을 잡아먹는다. 날개가 있지만 새끼를 낳아 젖을 먹이는 포유류다.' },
+    { id: 'cricket', name: '왕귀뚜라미', kind: '동물', cls: '무척추동물 · 곤충', role: '소비자', ask: 'vert', time: 'night', habitat: 'campus', color: '#6b4a2b',
+      fact: '가을밤 풀밭에서 수컷이 앞날개를 비벼 소리를 낸다.' },
+    { id: 'toad', name: '두꺼비', kind: '동물', cls: '척추동물 · 양서류', role: '소비자', ask: 'vert', time: 'night', habitat: 'campus', color: '#a07b4f',
+      fact: '주로 밤에 나와 곤충 등을 잡아먹는다. 살갗이 울퉁불퉁하고, 이른 봄에 저수지나 웅덩이로 모여 얕은 물속에 끈 모양의 알을 낳는다.' },
+    // 학교 뒷산
+    { id: 'mulberry', name: '뽕나무', kind: '식물', cls: '속씨식물 · 쌍떡잎식물', role: '생산자', ask: 'kind', time: 'both', habitat: 'hill', color: '#4f8a3c',
+      fact: '잎은 누에의 먹이이고, 초여름에 열매(오디)가 검붉게 익는다.' },
+    { id: 'pine', name: '소나무', kind: '식물', cls: '겉씨식물', role: '생산자', ask: 'role', time: 'both', habitat: 'hill', color: '#3f7d4e',
       fact: '바늘 모양 잎이 겨울에도 달려 있는 늘푸른나무다. 잎의 기공으로 이산화 탄소를 받아들인다.' },
-    { id: 'oyster', name: '느타리', kind: '균류', cls: '균류 · 버섯', role: '분해자', ask: ['kind', 'role'], time: 'both', habitat: 'forest', color: '#b8b1a6',
-      fact: '죽은 나무를 분해해 양분을 얻는다. 엽록체가 없어 광합성을 하지 못하므로 식물이 아니다.' },
-    { id: 'bluemold', name: '푸른곰팡이', kind: '균류', cls: '균류 · 곰팡이', role: '분해자', ask: 'role', time: 'both', habitat: 'forest', color: '#79b0a3',
-      fact: '몸이 가는 실 모양의 균사로 되어 있고, 푸른빛을 띠는 포자로 번식한다. 떨어진 열매나 낙엽 같은 죽은 생물의 몸을 분해해 양분을 얻는다.' },
-    { id: 'scopsowl', name: '소쩍새', kind: '동물', cls: '척추동물 · 조류', role: '소비자', ask: 'vert', time: 'night', habitat: 'forest', color: '#7a6a58',
-      fact: '밤에 “소쩍 소쩍” 하고 우는 올빼미 무리의 새다. 밤에 곤충 등을 사냥한다.' },
-    { id: 'firefly', name: '애반딧불이', kind: '동물', cls: '무척추동물 · 곤충', role: '소비자', ask: 'vert', time: 'night', habitat: 'forest', color: '#d9e36a',
-      fact: '배 끝의 발광 기관에서 빛을 내 짝을 찾는다. 애벌레는 물속에서 다슬기 등을 먹는다.' },
-    { id: 'raccoondog', name: '너구리', kind: '동물', cls: '척추동물 · 포유류', role: '소비자', ask: 'role', time: 'night', habitat: 'forest', color: '#6f6559',
-      fact: '열매·곤충·작은 동물을 두루 먹는 잡식성이다. 주로 해 질 녘과 밤에 활동한다. (미국너구리와는 다른 동물이다.)' },
-    { id: 'bat', name: '관박쥐', kind: '동물', cls: '척추동물 · 포유류', role: '소비자', ask: 'kind', time: 'night', habitat: 'forest', color: '#4f4a52',
-      fact: '초음파를 내고 되돌아오는 소리로 먹이와 장애물의 위치를 안다. 날개가 있지만 새끼를 낳아 젖을 먹이는 포유류다.' },
-    // 습지길
-    { id: 'treefrog', name: '청개구리', kind: '동물', cls: '척추동물 · 양서류', role: '소비자', ask: 'role', time: 'both', habitat: 'wetland', color: '#6cbf5b',
-      fact: '어릴 때(올챙이)는 아가미로, 자라면 폐와 피부로 호흡한다. 발가락 끝의 흡반으로 나무에 붙는다.' },
-    { id: 'heron', name: '왜가리', kind: '동물', cls: '척추동물 · 조류', role: '소비자', ask: 'vert', time: 'day', habitat: 'wetland', color: '#9aa6b2',
+    { id: 'turkeytail', name: '구름버섯', kind: '균류', cls: '균류 · 버섯', role: '분해자', ask: 'kind', time: 'both', habitat: 'hill', color: '#9a8f7a',
+      fact: '죽은 나무줄기나 그루터기에 구름처럼 겹겹이 붙어 자라며, 죽은 나무를 분해해 양분을 얻는다.' },
+    { id: 'bluemold', name: '푸른곰팡이', kind: '균류', cls: '균류 · 곰팡이', role: '분해자', ask: 'role', time: 'both', habitat: 'hill', color: '#79b0a3',
+      fact: '몸이 가는 실 모양의 균사로 되어 있고, 푸른빛을 띠는 포자로 번식한다. 떨어진 열매나 낙엽 같은 죽은 생물의 몸을 분해해 양분을 얻는다. 눈에 보이지 않는 세균도 죽은 생물을 분해하는 분해자다.' },
+    { id: 'joro', name: '무당거미', kind: '동물', cls: '무척추동물 · 거미류', role: '소비자', ask: 'vert', time: 'both', habitat: 'hill', color: '#e0b43a',
+      fact: '숲 가장자리에 큰 그물을 친다. 다리가 8개이고 몸이 머리가슴과 배 두 부분이라 곤충이 아니다.' },
+    { id: 'redsquirrel', name: '청설모', kind: '동물', cls: '척추동물 · 포유류', role: '소비자', ask: 'vert', time: 'day', habitat: 'hill', color: '#6e6259',
+      fact: '나무 위에서 살며 잣·도토리 같은 나무의 씨와 열매를 먹는다. 낮에 활동한다.' },
+    { id: 'jay', name: '어치', kind: '동물', cls: '척추동물 · 조류', role: '소비자', ask: 'role', time: 'day', habitat: 'hill', color: '#b08a6e',
+      fact: '도토리를 땅에 묻어 저장하는 습성이 있다. 다른 새의 소리를 흉내 내기도 한다.' },
+    { id: 'waterdeer', name: '고라니', kind: '동물', cls: '척추동물 · 포유류', role: '소비자', ask: 'vert', time: 'night', habitat: 'hill', color: '#b59a72',
+      fact: '뿔이 없고 수컷은 송곳니가 입 밖으로 길게 나온다. 주로 해 질 녘과 밤에 풀과 잎을 먹는다.' },
+    { id: 'weasel', name: '족제비', kind: '동물', cls: '척추동물 · 포유류', role: '소비자', ask: 'kind', time: 'night', habitat: 'hill', color: '#c4823f',
+      fact: '몸이 가늘고 길며 주로 밤에 쥐나 개구리를 사냥한다.' },
+    // 저수지 생태공원
+    { id: 'waterpepper', name: '여뀌', kind: '식물', cls: '속씨식물 · 쌍떡잎식물', role: '생산자', ask: 'kind', time: 'both', habitat: 'park', color: '#c46a7a',
+      fact: '물가나 축축한 땅에 자란다. 잎에 매운맛을 내는 물질이 들어 있다.' },
+    { id: 'birthwort', name: '쥐방울덩굴', kind: '식물', cls: '속씨식물 · 쌍떡잎식물', role: '생산자', ask: 'role', time: 'both', habitat: 'park', color: '#6f9e4a',
+      fact: '다른 물체를 감고 오르는 덩굴식물이다. 꼬리명주나비 애벌레가 주로 이 잎을 먹는다.' },
+    { id: 'carp', name: '잉어', kind: '동물', cls: '척추동물 · 어류', role: '소비자', ask: 'kind', time: 'both', habitat: 'park', color: '#c9873a',
+      fact: '입가에 수염이 두 쌍 있고, 아가미로 호흡한다. 물풀과 작은 동물을 두루 먹는다.' },
+    { id: 'spotbill', name: '흰뺨검둥오리', kind: '동물', cls: '척추동물 · 조류', role: '소비자', ask: 'role', time: 'both', habitat: 'park', color: '#6d5b4a',
+      fact: '부리 끝이 노랗다. 물에 떠서 물풀·씨앗·작은 동물을 먹으며 우리나라에 사계절 산다.' },
+    { id: 'mudsnail', name: '강우렁이', kind: '동물', cls: '무척추동물 · 연체동물', role: '소비자', ask: 'vert', time: 'both', habitat: 'park', color: '#7d7a5c',
+      fact: '단단한 껍데기가 있지만 등뼈는 없다. 물 바닥을 기며 돌이나 물풀 겉에 붙어 자라는 돌말 같은 작은 생물을 긁어 먹는다.' },
+    { id: 'heron', name: '왜가리', kind: '동물', cls: '척추동물 · 조류', role: '소비자', ask: 'vert', time: 'day', habitat: 'park', color: '#9aa6b2',
       fact: '긴 다리와 부리로 얕은 물에서 물고기와 개구리를 잡아먹는다.' },
-    { id: 'cattail', name: '부들', kind: '식물', cls: '속씨식물 · 외떡잎식물', role: '생산자', ask: 'role', time: 'both', habitat: 'wetland', color: '#8a6d3b',
-      fact: '물가에 자라며 소시지 모양의 이삭이 달린다. 습지의 생산자로 많은 동물의 먹이와 쉼터가 된다.' },
-    { id: 'divingbeetle', name: '물방개', kind: '동물', cls: '무척추동물 · 곤충', role: '소비자', ask: 'vert', time: 'both', habitat: 'wetland', color: '#3d4a3a',
-      fact: '딱지날개 아래에 공기 방울을 저장해 물속에서도 호흡한다.' },
-    { id: 'waterstrider', name: '소금쟁이', kind: '동물', cls: '무척추동물 · 곤충', role: '소비자', ask: 'kind', time: 'day', habitat: 'wetland', color: '#5a5048',
-      fact: '다리의 잔털과 물의 표면 장력 덕분에 물 위를 걷는다.' },
-    { id: 'duckweed', name: '개구리밥', kind: '식물', cls: '속씨식물 · 외떡잎식물', role: '생산자', ask: 'kind', time: 'both', habitat: 'wetland', color: '#7bc96f',
-      fact: '물 위에 떠서 사는 아주 작은 식물이다. 물 위에서 빛을 받아 광합성을 한다.' },
-    { id: 'otter', name: '수달', kind: '동물', cls: '척추동물 · 포유류', role: '소비자', ask: 'vert', time: 'night', habitat: 'wetland', color: '#6b4f3a',
-      fact: '물갈퀴가 있어 헤엄을 잘 치고 주로 밤에 물고기를 사냥한다. 천연기념물이자 멸종 위기 야생생물이다.' },
-    { id: 'blackspottedfrog', name: '참개구리', kind: '동물', cls: '척추동물 · 양서류', role: '소비자', ask: 'kind', time: 'night', habitat: 'wetland', color: '#7a9a5b',
-      fact: '여름밤 논에서 수컷이 볼의 울음주머니를 부풀려 운다. 알 → 올챙이 → 개구리로 탈바꿈한다.' },
+    { id: 'swallowtail', name: '꼬리명주나비', kind: '동물', cls: '무척추동물 · 곤충', role: '소비자', ask: 'vert', time: 'day', habitat: 'park', color: '#e8d9a8',
+      fact: '뒷날개 끝에 긴 꼬리 모양 돌기가 있다. 애벌레는 쥐방울덩굴 잎을 먹고 자라, 쥐방울덩굴이 사라지면 함께 사라진다.' },
+    { id: 'nightheron', name: '해오라기', kind: '동물', cls: '척추동물 · 조류', role: '소비자', ask: 'vert', time: 'night', habitat: 'park', color: '#5d6f80',
+      fact: '낮에는 나무 위에서 쉬다가 해 질 녘부터 물가에서 물고기나 개구리를 잡는 백로 무리의 새다.' },
+    { id: 'narrowfrog', name: '맹꽁이', kind: '동물', cls: '척추동물 · 양서류', role: '소비자', ask: 'role', time: 'night', habitat: 'park', color: '#8a9a5b', rare: true,
+      fact: '장마철 밤에 물웅덩이에 모여 수컷이 운다. 개미나 파리 같은 작은 곤충을 잡아먹는다. 멸종 위기 야생생물이라 잡거나 서식지를 해치지 않는다.' },
   ];
 
-  /* 지도 기호
-   * T 나무  . 길  f 꽃(장식)  , 숲 풀숲(조우)  ; 습지 풀숲(조우)  ~ 물  B 다리
-   * R 지붕  H 벽  D 집 문  L 연구소 문  G 1체육관 문  J 2체육관 문  S 표지판
-   * 막힌 칸: T ~ R H S 및 문(D L G J — 문은 밟으려 할 때 사건 발생)
-   */
-  const MAPS = {
-    town: {
-      name: '새싹마을', music: 'town',
-      rows: [
-        'TTTTTTTTT..TTTTTTTTT',
-        'Tf................fT',
-        'T.RRRR.......RRRRR.T',
-        'T.HHHH.......HHHHH.T',
-        'T.HDHH...S...HHLHH.T',
-        'T..................T',
-        'T..ff.........ff...T',
-        'T..................T',
-        'T...~~~~....ff.....T',
-        'T...~~~~...........T',
-        'T..................T',
-        'TTTTTTTTTTTTTTTTTTTT',
-      ],
-      exits: [
-        { x: 9, y: 0, to: 'route1', tx: 9, ty: 18 },
-        { x: 10, y: 0, to: 'route1', tx: 10, ty: 18 },
-      ],
-      signs: { '9,4': ['새싹마을', '“작은 생명도 자세히 보면 모두 다르다.”', '북쪽: 숲길 → 잎새마을'] },
-      npcs: [
-        { id: 'granny', x: 6, y: 7, color: '#c96f6f', lines: ['얘야, 숲길 풀숲에서는 생물을 만날 수 있단다.', '밤에 가면 낮과 다른 생물이 나오지. 박쥐나 반딧불이 같은 녀석들 말이야.'] },
-      ],
-    },
-    route1: {
-      name: '숲길',
-      rows: [
-        'TTTTTTTTT..TTTTTTTTT',
-        'T,,,,....,,....,,,,T',
-        'T,,,,....,,....,,,,T',
-        'T,,......,,......,,T',
-        'T....TTT....TTT....T',
-        'T,,..TTT.S..TTT..,,T',
-        'T,,,..............,T',
-        'T,,,,,.......,,,,,,T',
-        'TTTTT,,,,..,,,,TTTTT',
-        'T.....,,,..,,,.....T',
-        'T.ff.....,,.....ff.T',
-        'T..TTTT........TTTTT',
-        'T..TTTT..,,,,..TTTTT',
-        'T,,,,....,,,,....,,T',
-        'T,,,,,...,,,,...,,,T',
-        'T,,.............,,,T',
-        'T...ff.......ff....T',
-        'T..................T',
-        'T..................T',
-        'TTTTTTTTT..TTTTTTTTT',
-      ],
-      exits: [
-        { x: 9, y: 0, to: 'leaftown', tx: 9, ty: 10 },
-        { x: 10, y: 0, to: 'leaftown', tx: 10, ty: 10 },
-        { x: 9, y: 19, to: 'town', tx: 9, ty: 1 },
-        { x: 10, y: 19, to: 'town', tx: 10, ty: 1 },
-      ],
-      signs: { '9,5': ['숲길', '풀숲(진한 초록)에 들어가면 생물을 만날 수 있다.', '시간에 따라 만나는 생물이 달라진다.'] },
-      npcs: [
-        { id: 'senior', x: 3, y: 17, color: '#5b7fc9', lines: ['나는 탐사대 선배야. 도감은 “발견”이 아니라 “관찰”로 채우는 거야.', '생물을 만나면 무엇을 먹는지, 스스로 양분을 만드는지부터 살펴봐. 그게 생산자와 소비자를 가르는 기준이거든.'] },
-      ],
-    },
-    leaftown: {
-      name: '잎새마을',
-      rows: [
-        'TTTTTTTTTTTTTTTTTTTT',
-        'T..................T',
-        'T.RRRRRRR.....ff...T',
-        'T.HHHHHHH..........T',
-        'T.HHHGHHH..S.......T',
-        'T...................',
-        'T..ff..............T',
-        'T.............RRR..T',
-        'T.............HHH..T',
-        'T.............HDH..T',
-        'T..................T',
-        'TTTTTTTTT..TTTTTTTTT',
-      ],
-      exits: [
-        { x: 9, y: 11, to: 'route1', tx: 9, ty: 1 },
-        { x: 10, y: 11, to: 'route1', tx: 10, ty: 1 },
-        { x: 19, y: 5, to: 'route2', tx: 1, ty: 6 },
-      ],
-      signs: { '11,4': ['잎새마을', '광합성 체육관 — 관장: 초록', '“빛·물·이산화 탄소, 가장 모자란 것이 속도를 정한다.”'] },
-      npcs: [],
-    },
-    route2: {
-      name: '습지길',
-      rows: [
-        'TTTTTTTTTTTTTTTTTTTTTTTT',
-        'T;;;;;..~~~~~~..;;;;;;;T',
-        'T;;;;;..~~~~~~..;;;;;;;T',
-        'T;;.....~~~~~~.....;;;;T',
-        'T;;..;;;BBBBBB;;;......T',
-        'T....;;;~~~~~~;;;..RRRRT',
-        '.....;;;~~~~~~;;;..HHHHT',
-        'T;;.....~~~~~~.....HHJHT',
-        'T;;;;...~~~~~~...;;....T',
-        'T;;;;;;.~~~~~~.;;;;;;;.T',
-        'T..........S...........T',
-        'TTTTTTTTTTTTTTTTTTTTTTTT',
-      ],
-      exits: [
-        { x: 0, y: 6, to: 'leaftown', tx: 18, ty: 5 },
-      ],
-      signs: { '11,10': ['습지길', '동쪽: 소화 체육관 — 관장: 모아', '물가의 풀숲에서는 숲과 다른 생물이 산다.'] },
-      npcs: [
-        { id: 'angler', x: 3, y: 7, color: '#c9a25b', lines: ['쉿, 물고기가 도망가.', '밤이 되면 수달이 사냥하러 나온다더라. 낮에는 좀처럼 볼 수가 없어.'] },
-      ],
-    },
+  // 조우 칸 기호에서 서식지를 찾는다. 지도는 mapdata.js의 QuestMaps.MAPS에 둔다.
+  const HABITATS = {
+    campus: { name: '학교 단지', tile: ':' },
+    hill: { name: '학교 뒷산', tile: ',' },
+    park: { name: '저수지 생태공원', tile: ';' },
   };
 
   const PARTNERS = [
@@ -186,6 +96,6 @@
     { id: 'cell', name: '세포 체육관', leader: '?', badge: '?', unit: '통합과학1 (생명 시스템·물질대사·유전 정보)', ready: false },
   ];
 
-  root.GameData = { SPECIES, MAPS, PARTNERS, GYMS };
+  root.GameData = { SPECIES, PARTNERS, GYMS, HABITATS };
   if (typeof module !== 'undefined') module.exports = root.GameData;
 })(typeof window !== 'undefined' ? window : globalThis);
