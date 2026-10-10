@@ -648,48 +648,56 @@ test('E 바퀴 끝 안내는 심장을 두 번 지났다는 문장', () => {
 // 화면 코드를 메모리에서 그대로 실행한다. DOM 대역은 문자열·속성·분기만 검사하며 실측은 E2E가 맡는다.
 const screenPath = path.join(path.dirname(modulePath), 'game.js');
 const screenSource = fs.readFileSync(screenPath, 'utf8');
+const artPath = path.resolve(path.dirname(modulePath), '../../shared/art/symbols.js');
+const boardPath = path.join(path.dirname(modulePath), 'board.js');
+const boardSource = fs.readFileSync(boardPath, 'utf8');
+const artSource = fs.readFileSync(artPath, 'utf8');
 const screenMutations = {
-  toastPosition: ['row <= 2', 'row < 0'],
-  legendFrame: ['class="co2-legend"', 'class="old-legend"'],
-  reasonPrefix: ["feedback.kind === 'name' ? '고른 답: '", "true ? '고른 답: '"],
-  boardPlayback: ['const asked = C.pending(hudFrom || state).squares;', 'const asked = C.pending(state).squares;'],
-  routePlayback: ['const current = C.pending(hudFrom || state).slot', 'const current = C.pending(state).slot'],
-  lapEndRedraw: ['hudFrom = null; drawBoard(); drawRoute(); drawHud(); await toast(e.text);', 'hudFrom = null; drawHud(); await toast(e.text);'],
-  candidatePosition: ["sq.kind === 'capillary' ? 30 : 8", "sq.kind === 'capillary' ? 8 : 8"],
-  co2Spacing: ['[[9, 23], [19, 23], [14, 31]]', '[[8, 26], [14, 26], [20, 26]]'],
-  askedAria: ["'점선으로 표시한 칸, '", "''"],
-  routeAria: [' aria-current="true"', ''],
-  toastFade: ["$('toast').classList.remove('on');\n  }", "$('toast').classList.remove('on'); $('toast').textContent = '';\n  }"],
-  fillExplanation: ["feedback.at === 'fill' && feedback.kind === 'name'", 'false'],
-  fillDelay: ['Array.from(feedbackText(e)).length', 'Array.from(e.text).length'],
-  introOrder: ['온몸순환과 폐순환을 번갈아', '폐순환과 온몸순환을 차례로'],
-  introStop: ['모세 혈관 칸에 닿거나 출발 칸에 돌아오면', '모세 혈관 칸과, 출발 칸으로 돌아오는 곳에서는'],
+  toastPosition: ['game', 'row <= 2', 'row < 0'],
+  legendFrame: ['board', 'class="co2-legend"', 'class="old-legend"'],
+  reasonPrefix: ['game', "feedback.kind === 'name' ? '고른 답: '", "true ? '고른 답: '"],
+  boardPlayback: ['game', 'const asked = C.pending(hudFrom || state).squares;', 'const asked = C.pending(state).squares;'],
+  routePlayback: ['game', 'const current = C.pending(hudFrom || state).slot', 'const current = C.pending(state).slot'],
+  lapEndRedraw: ['game', 'hudFrom = null; drawBoard(); drawRoute(); drawHud(); await toast(e.text);', 'hudFrom = null; drawHud(); await toast(e.text);'],
+  candidatePosition: ['board', 'const p=layout[candidate.square], [x,y]=p.candidate;', 'const p=layout[candidate.square], [x,y]=[p.candidate[0],p.candidate[1]+30];'],
+  co2Spacing: ['board', '[[9,23],[19,23],[14,31]]', '[[8, 26], [14, 26], [20, 26]]'],
+  askedAria: ['board', "'점선으로 표시한 칸, '", "''"],
+  routeAria: ['game', ' aria-current="true"', ''],
+  toastFade: ['game', "$('toast').classList.remove('on');\n  }", "$('toast').classList.remove('on'); $('toast').textContent = '';\n  }"],
+  fillExplanation: ['game', "feedback.at === 'fill' && feedback.kind === 'name'", 'false'],
+  fillDelay: ['game', 'Array.from(feedbackText(e)).length', 'Array.from(e.text).length'],
+  introOrder: ['game', '온몸순환과 폐순환을 번갈아', '폐순환과 온몸순환을 차례로'],
+  introStop: ['game', '모세 혈관 칸에 닿거나 출발 칸에 돌아오면', '모세 혈관 칸과, 출발 칸으로 돌아오는 곳에서는'],
 };
 function screenView() {
-  let code = screenSource;
+  const sources = { game: screenSource, board: boardSource, art: artSource };
   if (screenMutant) {
-    const [before, after] = screenMutations[screenMutant];
-    assert.equal(code.split(before).length, 2, '화면 고의 변이 대상 한 곳'); code = code.replace(before, after);
+    const [file, before, after] = screenMutations[screenMutant];
+    assert.equal(sources[file].split(before).length, 2, '화면 고의 변이 대상 한 곳: ' + file);
+    sources[file] = sources[file].replace(before, after);
   }
+  let code = sources.game;
   const elements = new Map(), timers = [], delays = [];
   const element = id => {
     if (!elements.has(id)) {
       const classes = new Set();
-      elements.set(id, { innerHTML: '', textContent: '', hidden: true, dataset: {},
+      elements.set(id, { innerHTML: '', textContent: '', hidden: true, dataset: {}, style: {}, setAttribute: () => {}, insertBefore: child => elements.set(child.id, child),
         classList: { add: x => classes.add(x), remove: x => classes.delete(x), contains: x => classes.has(x), toggle: (x, on) => on ? classes.add(x) : classes.delete(x) },
         querySelectorAll: () => [], querySelector: () => null, appendChild: () => {} });
     }
     return elements.get(id);
   };
-  const context = vm.createContext({ window: { Circulation: C, Arcade: { intro: (el, options) => { context.rules = options.rules; } },
+  const context = vm.createContext({ window: { Circulation: C, Arcade: { data: () => ({ games: {} }), intro: (el, options) => { context.rules = options.rules; } },
     matchMedia: () => ({ matches: false }), addEventListener: () => {} },
-    document: { getElementById: element, body: element('body') }, setTimeout: (fn, ms) => { timers.push(fn); delays.push(ms); } }, { microtaskMode: 'afterEvaluate' });
+    document: { getElementById: id => id === 'art-symbols' ? elements.get(id) : element(id), querySelector: selector => selector === '.bar a' ? element('back') : null, createElementNS: () => ({ style: {}, setAttribute: () => {} }), body: element('body') }, setTimeout: (fn, ms) => { timers.push(fn); delays.push(ms); } }, { microtaskMode: 'afterEvaluate' });
   // 공개 게임에는 테스트용 위치 변경 훅을 더하지 않는다.
   code = code.replace('  state = C.newGame(1); draw();', `  window.__view = { drawBoard, drawRoute, drawCtrl, drawHud, toast, replay,
     set(s, h = null, sq = 'LV', fb = null, blood = 'high') { state = s; hudFrom = h; shownSquare = sq; feedback = fb; shownBlood = blood; } };
   state = C.newGame(1); draw();`);
+  vm.runInContext(sources.art, context, { filename: artPath });
+  vm.runInContext(sources.board, context, { filename: boardPath });
   vm.runInContext(code, context);
-  return { api: context.window.__view, el: element, rules: context.rules, delays,
+  return { api: context.window.__view, board: context.window.CirculationBoard, el: element, rules: context.rules, delays,
     run: code => vm.runInContext(code, context), tick: () => { assert(timers.length); timers.shift()(); vm.runInContext('void 0', context); } };
 }
 test('F 보충 전용 분기 뒤 닿지 않는 문항 종류 제거', () => {
@@ -746,8 +754,43 @@ test('F 이동 재생·바퀴 끝의 판과 경로 강조 동기화', () => {
 test('F 범례 분리·모세 혈관 후보·CO₂ 고리 좌표', () => {
   const v = screenView(); v.api.drawBoard();
   const svg = v.el('board').innerHTML;
-  assert(svg.includes('class="co2-legend"><rect x="212" y="61" width="70" height="93"'));
-  assert(svg.includes('y="171" text-anchor="middle" class="circuit-name">폐순환'));
+  const B = v.board, box = B.legend;
+  const overlap = (a, b) => a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+  assert(svg.includes(`class="co2-legend"><rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}"`));
+  const circuitNames = [...svg.matchAll(/<text[^>]*class="circuit-name"[^>]*data-circuit="([^"]+)"[^>]*>([^<]+)</g)].map(m => m.slice(1));
+  eq(circuitNames, [['pulmonary', '폐순환'], ['systemic', '온몸순환']]);
+  assert(!svg.includes('우심실→좌심방') && !svg.includes('좌심실→우심방') && !svg.includes('?→?'));
+  for (const [id, p] of Object.entries(B.layout)) {
+    if (square(id).kind !== 'chamber') assert(!overlap(box, p), '범례와 칸 ' + id);
+    for (const [cx,cy] of [p.candidate,p.candidateShared]) {
+      assert(!overlap(box, { x:cx-13.15,y:cy-13.15,w:26.3,h:26.3 }), '범례와 후보 ' + id);
+    }
+  }
+  // 문자열로 그린 실제 칸의 rect·O₂ 점과 짧은 화살표 상자도 비교한다.
+  const attr = (tag, key) => tag.match(new RegExp(key + '="([^\"]+)"'))?.[1];
+  for (const group of svg.matchAll(/<g class="square[^\"]*"[^>]*>(.*?)<\/g>/gs)) {
+    for (const m of group[1].matchAll(/<(rect|circle)\b[^>]*>/g)) {
+      const tag=m[0], rect=m[1]==='rect';
+      const x=+(attr(tag,rect ? 'x' : 'cx')), y=+(attr(tag,rect ? 'y' : 'cy')), r=rect ? 0 : +attr(tag,'r');
+      assert(!overlap(box,{x:x-r,y:y-r,w:rect ? +attr(tag,'width') : 2*r,h:rect ? +attr(tag,'height') : 2*r}), '범례와 실제 칸 도형');
+    }
+  }
+  for (const d of B.arrows) {
+    const tokens=d.match(/[MLHV]|-?\d*\.?\d+/g), xs=[], ys=[];
+    let x=0,y=0,i=0;
+    while (i<tokens.length) {
+      const cmd=tokens[i++];
+      if (cmd==='M' || cmd==='L') {x=+tokens[i++];y=+tokens[i++];}
+      else if (cmd==='H') x=+tokens[i++];
+      else if (cmd==='V') y=+tokens[i++];
+      else assert.fail('짧은 화살표의 지원하지 않는 명령');
+      xs.push(x);ys.push(y);
+    }
+    const left=Math.min(...xs),top=Math.min(...ys);
+    assert(!overlap(box,{x:left-1,y:top-1,w:Math.max(...xs)-left+2,h:Math.max(...ys)-top+2}), '범례와 화살표');
+  }
+  const start=B.layout.LV;
+  assert(!overlap(box,{x:start.drop[0],y:start.drop[1],w:28*.55,h:38*.55}), '범례와 출발 방울');
   let doubles = 0;
   C.simulate({ dice: 'first', visit: (s, p) => {
     if (p.type !== 'die') return;
@@ -755,11 +798,12 @@ test('F 범례 분리·모세 혈관 후보·CO₂ 고리 좌표', () => {
     v.api.set(s, null, s.square); v.api.drawBoard();
     const markers = [...v.el('board').innerHTML.matchAll(/class="candidate" cx="([^"]+)" cy="([^"]+)"/g)].map(x => x.slice(1).map(Number));
     for (const c of cap) {
-      const sq = square(c.square), x = 7 + sq.col * 70, y = 13 + sq.row * 56, w = sq.span * 70 - 12;
-      const [cx, cy] = markers[c.index], dx = cap.length === 2 && cap[0].square === cap[1].square ? c.index * 24 : 0;
-      assert.equal(cx, x + w - 30 - dx); assert.equal(cy, y + 30);
-      // O₂ 점은 위쪽 y+8, 후보 위쪽은 y+18. 화살표는 아래쪽 y+44부터다.
-      assert(cy - 12 > y + 8 + 2.5 && cy + 12 < y + 44);
+      const same = cap.length === 2 && cap[0].square === cap[1].square;
+      const p = B.layout[c.square], expected = c.index && same ? p.candidateShared : p.candidate;
+      eq(markers[c.index], expected);
+      const [cx,cy] = markers[c.index];
+      assert(!overlap(box, { x:cx-13.15,y:cy-13.15,w:26.3,h:26.3 }));
+      if (same) assert(Math.hypot(...markers[0].map((x,i) => x-markers[1][i])) > 26.3);
     }
     if (cap.length === 2 && cap[0].square === cap[1].square) doubles++;
   } }, 1);
@@ -853,6 +897,8 @@ if (!mutant) {
       console.log('화면 분기 고의 변이 ' + name + ': 목표 FAIL 확인, 종료 ' + run.status);
     }
     assert.equal(fs.readFileSync(screenPath, 'utf8'), screenSource);
+    assert.equal(fs.readFileSync(boardPath, 'utf8'), boardSource);
+    assert.equal(fs.readFileSync(artPath, 'utf8'), artSource);
     assert.equal(fs.readFileSync(modulePath, 'utf8'), source);
     eq(require(modulePath).simulate('first', 23), C.simulate('first', 23));
   });
