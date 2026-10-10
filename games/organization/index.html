@@ -15,6 +15,12 @@
     #stage { min-height: 0; gap: 6px; overflow: hidden; }
     .goal { flex: 0 0 auto; background: #fffaf0; border-radius: 12px; padding: 8px 10px; }
     .goal p { margin: 0; font-size: 14px; font-weight: 800; line-height: 1.4; }
+    .goal[hidden] { display: none; }
+    .coach { flex: 0 0 auto; background: #fffaf0; border-radius: 12px; border-left: 5px solid #e0a412; padding: 8px 10px; }
+    .coach[hidden] { display: none; }
+    #coach-label { margin: 0 0 4px; font-size: 12px; font-weight: 800; line-height: 1.4; }
+    #coach-question { margin: 0; font-size: 14px; font-weight: 800; line-height: 1.4; }
+    #coach-question:focus-visible { outline: 3px solid #e0a412; outline-offset: 2px; }
     .hudline { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; }
     .legend { margin-top: 4px; font-size: 12px; }
     .animal-key { color: #a33333; font-weight: 800; }
@@ -53,11 +59,16 @@
     .controls { flex: 0 0 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
     .controls[hidden] { display: none; }
     .controls .btn { min-height: 44px; padding: 8px 4px; font-size: 14px; }
+    #begin-main { grid-column: 1 / -1; }
     #selection { margin: 0; flex: 0 0 auto; color: #fff; font-size: 12px; line-height: 1.4; }
     .keyboard-hint { display: none; }
     .keyboard-hint[hidden] { display: none; }
     .keyboard-used .keyboard-hint { display: inline; }
     @media (hover: hover) and (pointer: fine) { .keyboard-hint { display: inline; } }
+    #overlay .rules > li:has(> details.more-rules) { list-style: none; margin-left: -18px; padding-left: 0; }
+    #overlay details.more-rules summary { min-height: 44px; padding: 10px 0; font-weight: 800; cursor: pointer; }
+    #overlay details.more-rules ul { margin: 4px 0; padding-left: 18px; font-size: 13px; }
+    #overlay details.more-rules li { margin-bottom: 3px; }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
   </style>
 </head>
@@ -69,13 +80,20 @@
       <div class="hudline"><span>남은 턴 <b id="turns">20</b></span><span>이번 턴 남은 시도 <b id="attempts">3</b></span><span id="completed">동물 미완성 · 식물 미완성</span></div>
       <div class="legend"><span class="animal-key">동물: 붉은색</span> · <span class="plant-key">식물: 초록색</span> · 패에는 숫자가 없다</div>
     </section>
-    <section class="panel board-panel"><h2>판 — 붙일 줄·묶음을 눌러 고르세요</h2><div id="board" tabindex="0" role="region" aria-label="내놓은 줄과 묶음"></div></section>
+    <section class="coach" id="coach" aria-label="함께 만드는 첫 줄" hidden>
+      <p id="coach-label"></p>
+      <p id="coach-question" tabindex="-1" aria-live="polite"></p>
+      <div class="legend"><span class="animal-key">붉은 패는 동물</span>, <span class="plant-key">초록 패는 식물</span>이다.</div>
+    </section>
+    <section class="panel board-panel"><h2 id="board-title">판 — 붙일 줄·묶음을 눌러 고르세요</h2><div id="board" tabindex="0" role="region" aria-label="내놓은 줄과 묶음"></div></section>
     <section class="panel hand-panel"><h2>손패 <span id="hand-count">14</span>장 — 위아래로 밀어 모두 보기</h2><div id="hand" tabindex="0" role="region" aria-label="고를 손패"></div></section>
     <p id="selection">패를 고른 뒤 할 일을 누르세요.</p>
     <p id="feedback" role="status" aria-live="polite" aria-atomic="true">줄은 앞 패가 뒤 패를 이루는 관계로 잇는다.</p>
     <div class="controls">
       <button class="btn" id="play-line">줄로 내기</button><button class="btn" id="play-group">묶음으로 내기</button>
       <button class="btn" id="attach">붙이기</button><button class="btn primary" id="draw">한 장 뽑기</button>
+      <button class="btn" id="skip-practice" hidden>연습 건너뛰기</button>
+      <button class="btn primary" id="begin-main" hidden>새 손패로 시작</button>
     </div>
   </main>
   <div class="overlay" id="overlay" hidden></div>
