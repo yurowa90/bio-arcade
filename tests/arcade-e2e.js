@@ -961,7 +961,7 @@ const root = path.resolve(__dirname, '..');
   await page.click('#play-line'); await orgReady();
   const scopeOrg = await orgState();
   check(scopeOrg.attemptsRemaining === 3 && scopeOrg.turns === 0 && scopeOrg.draws === 0 && scopeOrg.signals.outOfScope === 1 &&
-    await page.textContent('#feedback') === '신경 조직 → 심장: 심장에는 심장 박동의 빠르기를 조절하는 신경이 있다. 실제로는 맞지만 이 게임에서는 다루지 않는 연결이다. 시도는 줄지 않는다.', '구성 단계 범위 밖의 시도 보존·쌍 안내 실패');
+    await page.textContent('#feedback') === '신경 조직 → 심장: 심장에는 박동 빠르기를 조절하는 신경이 있다. 실제로 맞는 연결이지만, 이 게임에서는 다루지 않는다. 시도는 줄지 않는다.', '구성 단계 범위 밖의 시도 보존·쌍 안내 실패');
   await page.dblclick('#play-line');
   check(JSON.stringify(await orgState()) === JSON.stringify(scopeOrg), '구성 단계 범위 밖 같은 선택 재제출이 act를 호출함');
   await page.evaluate(() => window.__org.start(7));

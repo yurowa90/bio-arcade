@@ -61,11 +61,11 @@
   const OUT_OF_SCOPE = freeze({ epithelium: ['heart', 'brain'], muscle: ['brain'], nerve: ['heart', 'stomach'] });
   // 범위 밖 쌍마다 실제로 이어지는 근거를 보인다(M16 2안, D-081). 뇌의 두 쌍은 뇌가 주로 신경 조직임을 먼저 말한다.
   const OUT_OF_SCOPE_NOTES = freeze({
-    'epithelium>heart': '심장 안쪽 면은 얇은 상피 조직이 덮는다. 실제로는 맞지만 이 게임에서는 다루지 않는 연결이다.',
-    'epithelium>brain': '뇌는 주로 신경 조직으로 이루어진다. 뇌 속 혈관의 안쪽 면을 덮는 얇은 상피 조직이 조금 있지만, 이 게임에서는 다루지 않는 연결이다.',
-    'muscle>brain': '뇌는 주로 신경 조직으로 이루어진다. 뇌 속 혈관 벽에 근육 조직이 조금 있지만, 이 게임에서는 다루지 않는 연결이다.',
-    'nerve>heart': '심장에는 심장 박동의 빠르기를 조절하는 신경이 있다. 실제로는 맞지만 이 게임에서는 다루지 않는 연결이다.',
-    'nerve>stomach': '위벽에는 위의 운동을 조절하는 신경이 있다. 실제로는 맞지만 이 게임에서는 다루지 않는 연결이다.'
+    'epithelium>heart': '심장 안쪽 면은 얇은 상피 조직으로 덮여 있다. 실제로 맞는 연결이지만, 이 게임에서는 다루지 않는다.',
+    'epithelium>brain': '뇌는 주로 신경 조직으로 이루어진다. 뇌 속 혈관의 안쪽 면을 덮는 얇은 상피 조직이 조금 있지만, 이 게임에서는 다루지 않는다.',
+    'muscle>brain': '뇌는 주로 신경 조직으로 이루어진다. 뇌 속 혈관 벽에 근육 조직이 조금 있지만, 이 게임에서는 다루지 않는다.',
+    'nerve>heart': '심장에는 박동 빠르기를 조절하는 신경이 있다. 실제로 맞는 연결이지만, 이 게임에서는 다루지 않는다.',
+    'nerve>stomach': '위벽에는 위의 운동을 조절하는 신경이 있다. 실제로 맞는 연결이지만, 이 게임에서는 다루지 않는다.'
   });
   const LINE_CONSTRAINTS = freeze([
     { id: 'palisadeInLeaf', triggers: ['palisadeCell', 'palisade'], stage: 'organ', allowed: ['leaf'], message: '울타리 조직은 잎에 있다. 울타리 조직 세포나 울타리 조직이 든 줄의 기관은 잎이어야 한다.' },
@@ -76,7 +76,7 @@
     systemInPlant: '식물의 구성 단계에는 기관계가 없다.', tissueSystemInAnimal: '조직계는 식물의 구성 단계다. 동물의 기관과 같은 단계가 아니다.',
     tissueSystemInLine: '조직계는 식물에만 있는 구성 단계다. 동물은 조직 다음이 기관이다.',
     kingdomMix: '한 줄에는 동물과 식물 패를 섞을 수 없다.', stageGap: '줄은 중간 단계를 빠뜨리거나 같은 단계를 겹치지 않고 이어야 한다.',
-    relationError: '앞 패가 뒤 패를 이루는 관계가 아니다.', outOfScope: '실제로는 맞지만 이 게임에서는 다루지 않는 연결이다.', outOfScopeTail: '시도는 줄지 않는다.',
+    relationError: '앞 패가 뒤 패를 이루는 관계가 아니다.', outOfScope: '실제로 맞는 연결이지만, 이 게임에서는 다루지 않는다.', outOfScopeTail: '시도는 줄지 않는다.',
     duplicateGroup: '묶음에는 서로 다른 이름의 패를 놓으세요.', numberGroup: '기관계와 기관은 다른 단계다. 같은 구성 단계의 패를 묶으세요.',
     stageGroup: '묶음은 같은 구성 단계의 패로 만드세요.', tooShort: '줄과 묶음은 3장 이상이어야 한다.',
     invalidTile: '패를 확인하세요.', invalidAction: '놓을 패와 위치를 확인하세요.', notInHand: '손패에 있는 패만 놓을 수 있다.',

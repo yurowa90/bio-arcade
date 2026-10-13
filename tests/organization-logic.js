@@ -214,6 +214,7 @@ test('범위 밖 5쌍: 제출 맥락만 기록하고 오개념 합계에서 제�
     if (b === '뇌') assert(R.OUT_OF_SCOPE_NOTES[key].startsWith('뇌는 주로 신경 조직으로 이루어진다.'));
   }
   assert.equal(new Set(Object.values(R.OUT_OF_SCOPE_NOTES)).size, SCOPES.length);
+  for (const note of Object.values(R.OUT_OF_SCOPE_NOTES)) assert(note.endsWith('이 게임에서는 다루지 않는다.'), note);
   assert.equal(Object.keys(R.OUT_OF_SCOPE_NOTES).length, Object.values(R.OUT_OF_SCOPE).flat().length);
 });
 test('잘못된 제출 하나는 신호 하나, 중복 token은 집계하지 않음', () => {
@@ -509,7 +510,7 @@ test('화면 안내: 관계 오류 쌍·줄 제약 까닭·숨긴 숫자 없는 
   assert.equal(group.reason, 'numberGroup'); assert(group.message.includes('기관계와 기관은 다른 단계다.'));
   assert(!/숫자|[0-9]/.test(group.message));
   const report = R.result(draw(R.newGame(5, { turnLimit: 1 })).state);
-  assert(!/습니다|어요/.test([...Object.values(R.MESSAGES), ...R.LINE_CONSTRAINTS.map(r => r.message), ...report.lines, report.quiz.explain].join(' ')));
+  assert(!/습니다|어요/.test([...Object.values(R.MESSAGES), ...Object.values(R.OUT_OF_SCOPE_NOTES), ...R.LINE_CONSTRAINTS.map(r => r.message), ...report.lines, report.quiz.explain].join(' ')));
   assert(report.lines.join(' ').includes('부분 사슬은 세포부터 개체까지 다 잇지 못한 3~4장 줄이다.'));
   assert(report.quiz.explain.includes('식물의 기관(이 게임에서는 잎·줄기)은 세 조직계를 모두 가진다. 이 게임의 관계표는 대표 연결만 담았다.'));
 });
