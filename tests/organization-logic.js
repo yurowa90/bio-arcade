@@ -25,7 +25,10 @@ const mutations = {
   hiddenOrderSort: ["if (set.kind === 'line') ids.sort((a, b) => tile(a).number - tile(b).number);", ''],
   constraints: ['for (const rule of LINE_CONSTRAINTS)', 'for (const rule of [])'],
   duplicates: ['new Set(ts.map(t => t.id)).size !== ts.length', 'false'],
-  scope: ["if (outside.length) return reject('outOfScope'", "if (outside.length) return reject('relationError'"],
+  scope: ["return reject('outOfScope', { pair: [a.id, b.id]", "return reject('relationError', { pair: [a.id, b.id]"],
+  scopeNotes: ["(OUT_OF_SCOPE_NOTES[a.id + '>' + b.id] || MESSAGES.outOfScope)", 'MESSAGES.outOfScope'],
+  relationPeriod: ["falsePair.map(t => t.name).join(' → ') + ': ' + MESSAGES.relationError", "MESSAGES.relationError.slice(0, -1) + ' ' + falsePair.map(t => t.name).join(' → ')"],
+  tissueSystemLineMsg: ["return reject('tissueSystemInAnimal', { message: MESSAGES.tissueSystemInLine });", "return reject('tissueSystemInAnimal');"],
   stars: ['if (full.animal && full.plant) return 3;', 'if (full.animal || full.plant) return 3;'],
   attach: ['validateLine(ids) : validateGroup(ids)', "(move.type === 'attach' ? { ok: true } : validateLine(ids)) : validateGroup(ids)"],
   atomic: ['const failed = copy(state);', 'const failed = copy(s);'],
@@ -204,8 +207,14 @@ test('범위 밖 5쌍: 제출 맥락만 기록하고 오개념 합계에서 제�
     assert(!out.accepted); assert.equal(out.reason, 'outOfScope'); assert.equal(out.state.signals.outOfScope, 1);
     assert.equal(R.detail(out.state).misconceptionTotal, 0); eq(out.state.hand, s.hand); assert.equal(out.state.turns, 0);
     assert(!out.attemptCounted); assert.equal(out.state.attemptsRemaining, 3);
-    assert.equal(out.message, '실제로도 이어지지만 이 게임에서는 다루지 않는 연결: ' + a + ' → ' + b);
+    // M16 2안(D-081): 쌍마다 근거 문장, 쌍 먼저·마침표로 끝남, 뇌의 두 쌍은 뇌가 주로 신경 조직임을 먼저 말함
+    const key = R.tile(ids([a])[0]).id + '>' + R.tile(ids([b])[0]).id;
+    assert(R.OUT_OF_SCOPE_NOTES[key], key);
+    assert.equal(out.message, a + ' → ' + b + ': ' + R.OUT_OF_SCOPE_NOTES[key] + ' 시도는 줄지 않는다.');
+    if (b === '뇌') assert(R.OUT_OF_SCOPE_NOTES[key].startsWith('뇌는 주로 신경 조직으로 이루어진다.'));
   }
+  assert.equal(new Set(Object.values(R.OUT_OF_SCOPE_NOTES)).size, SCOPES.length);
+  assert.equal(Object.keys(R.OUT_OF_SCOPE_NOTES).length, Object.values(R.OUT_OF_SCOPE).flat().length);
 });
 test('잘못된 제출 하나는 신호 하나, 중복 token은 집계하지 않음', () => {
   let s = fixture(ids(['상피 조직', '기본 조직계', '잎', '순환계']));
@@ -421,7 +430,9 @@ test('시도 상한: 판정 실패 3번에만 뽑기·턴 전환, 앞 두 번은
     const out = submit(deepFreeze(s), [place('line', chosen)]);
     assert(!out.accepted && !out.ignored && out.attemptCounted);
     assert.equal(out.reason, 'relationError'); assert.equal(out.judgment.reason, 'relationError');
-    assert(out.message.includes('앞 패가 뒤 패를 이루는 관계가 아니다. 심장 근육 세포 → 신경 조직'));
+    assert(out.message.startsWith('심장 근육 세포 → 신경 조직: 앞 패가 뒤 패를 이루는 관계가 아니다.'));
+    // 세 번째 실패 문장은 마침표 뒤에 이어 붙어야 한다(검토 2026-10-13 #3)
+    if (n === 3) assert(out.message.includes('관계가 아니다. 이번 턴에 틀린 시도가 3번이다.'));
     assert.equal(out.failedMoveIndex, 0); assert.equal(out.turnAdvanced, n === 3); assert.equal(out.autoDrawn, n === 3);
     assert.equal(out.attemptsRemaining, n === 3 ? 3 : 3 - n);
     assert.equal(out.state.attemptsRemaining, out.attemptsRemaining);
@@ -481,7 +492,12 @@ test('D-059: 남은 시도 1에서 범위 밖·장수 부족은 세 번째 실�
 });
 test('화면 안내: 관계 오류 쌍·줄 제약 까닭·숨긴 숫자 없는 단계 안내·해라체', () => {
   const relation = R.validateLine(ids(['심장 근육 세포', '신경 조직', '뇌']));
-  assert.equal(relation.message, '앞 패가 뒤 패를 이루는 관계가 아니다. 심장 근육 세포 → 신경 조직');
+  assert.equal(relation.message, '심장 근육 세포 → 신경 조직: 앞 패가 뒤 패를 이루는 관계가 아니다.');
+  // 조직계 혼동: 줄에는 동물 기관이 없으므로 기관 비교 문장을 쓰지 않는다(검토 2026-10-13 #4)
+  const tsLine = R.validateLine(ids(['상피 세포', '상피 조직', '관다발 조직계']));
+  assert.equal(tsLine.reason, 'tissueSystemInAnimal');
+  assert.equal(tsLine.message, '조직계는 식물에만 있는 구성 단계다. 동물은 조직 다음이 기관이다.');
+  assert.equal(R.validateGroup(ids(['위', '표피 조직계', '잎'])).message, '조직계는 식물의 구성 단계다. 동물의 기관과 같은 단계가 아니다.');
   const leaf = R.validateLine(ids(['울타리 조직', '기본 조직계', '줄기']));
   assert(leaf.message.includes('울타리 조직은 잎에 있다.'));
   const heart = R.validateLine(ids(['심장 근육 세포', '근육 조직', '위']));
@@ -495,7 +511,7 @@ test('화면 안내: 관계 오류 쌍·줄 제약 까닭·숨긴 숫자 없는 
   const report = R.result(draw(R.newGame(5, { turnLimit: 1 })).state);
   assert(!/습니다|어요/.test([...Object.values(R.MESSAGES), ...R.LINE_CONSTRAINTS.map(r => r.message), ...report.lines, report.quiz.explain].join(' ')));
   assert(report.lines.join(' ').includes('부분 사슬은 세포부터 개체까지 다 잇지 못한 3~4장 줄이다.'));
-  assert(report.quiz.explain.includes('식물의 기관(잎·줄기)은 세 조직계를 모두 가진다. 이 게임의 관계표는 대표 연결만 담았다.'));
+  assert(report.quiz.explain.includes('식물의 기관(이 게임에서는 잎·줄기)은 세 조직계를 모두 가진다. 이 게임의 관계표는 대표 연결만 담았다.'));
 });
 test('토큰·무시·형식·손패 오류와 미리보기는 시도를 소모하지 않음', () => {
   let s = fixture(fullAnimal);
@@ -717,7 +733,7 @@ if (simulationReports && process.argv.includes('--acceptance')) {
   }
 }
 if (!mutant && !process.env.SKIP_MUTATIONS) {
-  test('고의 변이: 기존 19종·시도 상한 8종·시도 예외 2종 모두 단언 실패·종료1, 원본 보존', () => {
+  test('고의 변이: 기존 19종·시도 상한 8종·시도 예외 2종·문구 3종 모두 단언 실패·종료1, 원본 보존', () => {
     for (const name of Object.keys(mutations)) {
       const run = spawnSync(process.execPath, [__filename, '--mutant=' + name], { encoding: 'utf8', timeout: 30000 });
       assert.equal(run.status, 1, name + ': ' + run.stderr);

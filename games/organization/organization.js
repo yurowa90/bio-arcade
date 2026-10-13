@@ -59,6 +59,14 @@
     leaf: ['sunflower', 'bean', 'tomato'], stem: ['sunflower', 'bean', 'tomato']
   });
   const OUT_OF_SCOPE = freeze({ epithelium: ['heart', 'brain'], muscle: ['brain'], nerve: ['heart', 'stomach'] });
+  // 범위 밖 쌍마다 실제로 이어지는 근거를 보인다(M16 2안, D-081). 뇌의 두 쌍은 뇌가 주로 신경 조직임을 먼저 말한다.
+  const OUT_OF_SCOPE_NOTES = freeze({
+    'epithelium>heart': '심장 안쪽 면은 얇은 상피 조직이 덮는다. 실제로는 맞지만 이 게임에서는 다루지 않는 연결이다.',
+    'epithelium>brain': '뇌는 주로 신경 조직으로 이루어진다. 뇌 속 혈관의 안쪽 면을 덮는 얇은 상피 조직이 조금 있지만, 이 게임에서는 다루지 않는 연결이다.',
+    'muscle>brain': '뇌는 주로 신경 조직으로 이루어진다. 뇌 속 혈관 벽에 근육 조직이 조금 있지만, 이 게임에서는 다루지 않는 연결이다.',
+    'nerve>heart': '심장에는 심장 박동의 빠르기를 조절하는 신경이 있다. 실제로는 맞지만 이 게임에서는 다루지 않는 연결이다.',
+    'nerve>stomach': '위벽에는 위의 운동을 조절하는 신경이 있다. 실제로는 맞지만 이 게임에서는 다루지 않는 연결이다.'
+  });
   const LINE_CONSTRAINTS = freeze([
     { id: 'palisadeInLeaf', triggers: ['palisadeCell', 'palisade'], stage: 'organ', allowed: ['leaf'], message: '울타리 조직은 잎에 있다. 울타리 조직 세포나 울타리 조직이 든 줄의 기관은 잎이어야 한다.' },
     { id: 'cardiacInHeart', triggers: ['cardiacCell'], stage: 'organ', allowed: ['heart'], message: '심장 근육은 심장에만 있다. 심장 근육 세포가 든 줄의 기관은 심장이어야 한다.' }
@@ -66,8 +74,9 @@
   const SIGNALS = freeze(['systemInPlant', 'tissueSystemInAnimal', 'kingdomMix', 'relationError', 'lineConflict', 'duplicateGroup', 'numberGroup']);
   const MESSAGES = freeze({
     systemInPlant: '식물의 구성 단계에는 기관계가 없다.', tissueSystemInAnimal: '조직계는 식물의 구성 단계다. 동물의 기관과 같은 단계가 아니다.',
+    tissueSystemInLine: '조직계는 식물에만 있는 구성 단계다. 동물은 조직 다음이 기관이다.',
     kingdomMix: '한 줄에는 동물과 식물 패를 섞을 수 없다.', stageGap: '줄은 중간 단계를 빠뜨리거나 같은 단계를 겹치지 않고 이어야 한다.',
-    relationError: '앞 패가 뒤 패를 이루는 관계가 아니다.', outOfScope: '실제로도 이어지지만 이 게임에서는 다루지 않는 연결',
+    relationError: '앞 패가 뒤 패를 이루는 관계가 아니다.', outOfScope: '실제로는 맞지만 이 게임에서는 다루지 않는 연결이다.', outOfScopeTail: '시도는 줄지 않는다.',
     duplicateGroup: '묶음에는 서로 다른 이름의 패를 놓으세요.', numberGroup: '기관계와 기관은 다른 단계다. 같은 구성 단계의 패를 묶으세요.',
     stageGroup: '묶음은 같은 구성 단계의 패로 만드세요.', tooShort: '줄과 묶음은 3장 이상이어야 한다.',
     invalidTile: '패를 확인하세요.', invalidAction: '놓을 패와 위치를 확인하세요.', notInHand: '손패에 있는 패만 놓을 수 있다.',
@@ -90,16 +99,19 @@
     const pairs = ts.slice(1).map((b, i) => [ts[i], b]);
     // 우선 순위는 줄 전체에 적용한다. 앞쪽의 낮은 우선 신호가 뒤쪽 신호를 가리지 않는다.
     if (ts.some(a => ts.some(b => a.kingdom === 'plant' && a.stage === 'organ' && b.kingdom === 'animal' && b.stage === 'organSystem'))) return reject('systemInPlant');
-    if (ts.some(a => ts.some(b => a.kingdom === 'animal' && a.stage === 'tissue' && b.kingdom === 'plant' && b.stage === 'tissueSystem'))) return reject('tissueSystemInAnimal');
+    if (ts.some(a => ts.some(b => a.kingdom === 'animal' && a.stage === 'tissue' && b.kingdom === 'plant' && b.stage === 'tissueSystem'))) return reject('tissueSystemInAnimal', { message: MESSAGES.tissueSystemInLine });
     if (ts.some(t => t.kingdom !== ts[0].kingdom)) return reject('kingdomMix');
     if (pairs.some(([a, b]) => b.number !== a.number + 1)) return reject('stageGap');
     const outside = pairs.filter(([a, b]) => !(RELATIONS[a.id] || []).includes(b.id));
     const falsePair = outside.find(([a, b]) => !(OUT_OF_SCOPE[a.id] || []).includes(b.id));
-    if (falsePair) return reject('relationError', { pair: falsePair.map(t => t.id), message: MESSAGES.relationError + ' ' + falsePair.map(t => t.name).join(' → ') });
+    if (falsePair) return reject('relationError', { pair: falsePair.map(t => t.id), message: falsePair.map(t => t.name).join(' → ') + ': ' + MESSAGES.relationError });
     for (const rule of LINE_CONSTRAINTS) {
       if (ts.some(t => rule.triggers.includes(t.id)) && ts.some(t => t.stage === rule.stage && !rule.allowed.includes(t.id))) return reject('lineConflict', { constraint: rule.id, message: rule.message });
     }
-    if (outside.length) return reject('outOfScope', { pair: outside[0].map(t => t.id), message: MESSAGES.outOfScope + ': ' + outside[0].map(t => t.name).join(' → ') });
+    if (outside.length) {
+      const [a, b] = outside[0];
+      return reject('outOfScope', { pair: [a.id, b.id], message: a.name + ' → ' + b.name + ': ' + (OUT_OF_SCOPE_NOTES[a.id + '>' + b.id] || MESSAGES.outOfScope) + ' ' + MESSAGES.outOfScopeTail });
+    }
     return { ok: true, reason: null, misconception: false, kind: 'line', kingdom: ts[0].kingdom, complete: ts.length === 5, partial: ts.length < 5 };
   }
   function validateGroup(ids) {
@@ -231,10 +243,10 @@
   function result(state) {
     if (state.phase === 'playing') return null;
     return { id: 'organization', stars: stars(state), score: score(state), detail: detail(state), lines: resultLines(state),
-      quiz: { q: '식물의 구성 단계에는 있고 동물에는 없는 단계는?', options: ['조직계', '기관계'], answer: 0, explain: '식물에는 조직계가 있고, 동물에는 기관계가 있다. 식물의 기관(잎·줄기)은 세 조직계를 모두 가진다. 이 게임의 관계표는 대표 연결만 담았다.' },
+      quiz: { q: '식물의 구성 단계에는 있고 동물에는 없는 단계는?', options: ['조직계', '기관계'], answer: 0, explain: '식물에는 조직계가 있고, 동물에는 기관계가 있다. 식물의 기관(이 게임에서는 잎·줄기)은 세 조직계를 모두 가진다. 이 게임의 관계표는 대표 연결만 담았다.' },
       reflection: '사람과 해바라기의 구성 단계를 세포부터 개체까지 각각 쓰고, 두 생물에서 다른 단계를 예를 들어 비교하세요.' };
   }
-  const api = { STAGES, ORDERS, TILES, DECK, RELATIONS, OUT_OF_SCOPE, LINE_CONSTRAINTS, SIGNALS, MESSAGES, RULES,
+  const api = { STAGES, ORDERS, TILES, DECK, RELATIONS, OUT_OF_SCOPE, OUT_OF_SCOPE_NOTES, LINE_CONSTRAINTS, SIGNALS, MESSAGES, RULES,
     tile, rng, validateLine, validateGroup, newGame, act, completed, stars, score, detail, resultLines, result };
   root.Organization = api;
   if (typeof module !== 'undefined') module.exports = api;

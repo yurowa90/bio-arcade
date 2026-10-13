@@ -851,7 +851,7 @@ const root = path.resolve(__dirname, '..');
   await go('games/organization/index.html');
   await page.screenshot({ path: `${out}/organization-intro.png` });
   const orgIntro = await page.textContent('#overlay .card');
-  check(orgIntro.includes('식물의 기관(잎·줄기)은 세 조직계를 모두 가진다. 이 게임의 관계표는 대표 연결만 담았다.') &&
+  check(orgIntro.includes('식물의 기관(이 게임에서는 잎·줄기)은 세 조직계를 모두 가진다. 이 게임의 관계표는 대표 연결만 담았다.') &&
     orgIntro.includes('부분 사슬은 세포부터 개체까지 다 잇지 못한 3~4장 줄이다.') && !orgIntro.includes('두 계'), '구성 단계 인트로 과학 안내·부분 사슬 정의 누락');
   await page.click('#ar-start');
   await page.evaluate(() => window.__org.start(2));
@@ -886,7 +886,7 @@ const root = path.resolve(__dirname, '..');
       el.getAttribute('aria-label') === `${tile.name}, ${tile.kingdom === 'animal' ? '동물' : '식물'}, 고르지 않음`;
   }));
   check(tileNamesOnly && await page.locator('#hand .stage-name').count() === 0, '구성 단계 손패에 단계 숫자·이름이 보이거나 패 이름·계 접근성 표시 누락');
-  check(await page.textContent('#goal') === '동물과 식물의 완전한 줄(세포부터 개체까지)을 만드세요', '구성 단계 목표 문구 누락');
+  check(await page.textContent('#goal') === '동물과 식물의 완전한 줄(세포부터 개체까지)을 만드세요.', '구성 단계 목표 문구 누락');
   const wrongOrg = await page.evaluate(() => {
     const { hand } = window.__org.state(), R = window.Organization;
     const found = [];
@@ -961,12 +961,12 @@ const root = path.resolve(__dirname, '..');
   await page.click('#play-line'); await orgReady();
   const scopeOrg = await orgState();
   check(scopeOrg.attemptsRemaining === 3 && scopeOrg.turns === 0 && scopeOrg.draws === 0 && scopeOrg.signals.outOfScope === 1 &&
-    await page.textContent('#feedback') === '실제로도 이어지지만 이 게임에서는 다루지 않는 연결: 신경 조직 → 심장', '구성 단계 범위 밖의 시도 보존·쌍 안내 실패');
+    await page.textContent('#feedback') === '신경 조직 → 심장: 심장에는 심장 박동의 빠르기를 조절하는 신경이 있다. 실제로는 맞지만 이 게임에서는 다루지 않는 연결이다. 시도는 줄지 않는다.', '구성 단계 범위 밖의 시도 보존·쌍 안내 실패');
   await page.dblclick('#play-line');
   check(JSON.stringify(await orgState()) === JSON.stringify(scopeOrg), '구성 단계 범위 밖 같은 선택 재제출이 act를 호출함');
   await page.evaluate(() => window.__org.start(7));
   await chooseOrg(await orgKinds(['cardiacCell', 'nerve', 'brain'])); await page.click('#play-line');
-  check(await page.textContent('#feedback') === '앞 패가 뒤 패를 이루는 관계가 아니다. 심장 근육 세포 → 신경 조직', '구성 단계 관계 오류에서 틀린 쌍이 안 보임');
+  check(await page.textContent('#feedback') === '심장 근육 세포 → 신경 조직: 앞 패가 뒤 패를 이루는 관계가 아니다.', '구성 단계 관계 오류에서 틀린 쌍이 안 보임');
 
   await page.evaluate(() => window.__org.start(5, { turnLimit: 1 }));
   for (const kinds of [['stem', 'digestive', 'human'], ['stem', 'digestive', 'brain'], ['stem', 'digestive', 'stomach']]) {
